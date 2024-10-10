@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
@@ -29,13 +30,9 @@ def create_app(config_class=DevelopmentConfig):
     # Importa modelli per le migrazioni
     from app.models.device import Device
 
-    # Configura e avvia APScheduler con un executor che usa un pool di thread
-    executors = {
-        'default': ThreadPoolExecutor(10),  # Fino a 10 thread per eseguire job in parallelo
-    }
-
-    scheduler = BackgroundScheduler(executors=executors)
-    scheduler.add_job(scheduled_task, 'interval', minutes=1, max_instances=3)
+    # Configura APScheduler
+    scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
+    # scheduler.add_job(scheduled_task, 'interval', seconds=1, max_instances=10)
     scheduler.start()
 
     # Assicurati che lo scheduler venga chiuso correttamente quando l'app si arresta

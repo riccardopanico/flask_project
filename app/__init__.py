@@ -6,7 +6,7 @@ from flask_migrate import Migrate
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 import atexit
-from config.config import DevelopmentConfig
+from config.config import ProductionConfig, DevelopmentConfig
 from app.scheduler.jobs import scheduled_task
 
 # Inizializzazione delle estensioni Flask
@@ -14,7 +14,12 @@ db = SQLAlchemy()
 jwt = JWTManager()
 migrate = Migrate()
 
-def create_app(config_class=DevelopmentConfig):
+def create_app():
+    # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
+    env = os.getenv("FLASK_ENV", "production").lower()
+    print(f"L'ambiente di esecuzione corrente è: {env}")
+    # Imposta la configurazione in base all'ambiente
+    config_class = DevelopmentConfig if env == "development" else ProductionConfig
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -32,7 +37,7 @@ def create_app(config_class=DevelopmentConfig):
 
     # Configura APScheduler
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-    # scheduler.add_job(scheduled_task, 'interval', seconds=1, max_instances=10)
+    scheduler.add_job(scheduled_task, 'interval', seconds=60, max_instances=10)
     scheduler.start()
 
     # Assicurati che lo scheduler venga chiuso correttamente quando l'app si arresta

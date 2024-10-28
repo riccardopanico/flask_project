@@ -37,7 +37,7 @@ def create_app():
     # Importa modelli per le migrazioni
     from app.models.device import Device
 
-    # Configura APScheduler
+    # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
 
     # Carica dinamicamente tutti i job dalla cartella jobs e aggiungili al scheduler
@@ -60,7 +60,7 @@ def create_app():
         thread_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(thread_module)
         if hasattr(thread_module, 'run'):
-            thread = threading.Thread(target=thread_module.run)
+            thread = threading.Thread(target=thread_module.run, args=(app,))
             thread.daemon = True  # Il thread si chiuderà automaticamente quando l'app si chiude
             thread.start()
 

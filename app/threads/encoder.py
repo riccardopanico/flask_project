@@ -4,8 +4,8 @@ import RPi.GPIO as GPIO
 from app import db
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
-import os
 from datetime import datetime
+from flask import current_app
 
 # Disabilita gli avvisi GPIO
 GPIO.setwarnings(False)
@@ -88,45 +88,47 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
     print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
 
 # Funzione per monitorare l'encoder e salvare periodicamente i dati
-def run():
+def run(app):
     global lettura_precedente_encoder, lunghezza_totale_filo, inizio_operativita, encoder_fermo, ultimo_impulso_time
 
-    # Carica il fattore di taratura e configura l'encoder
-    load_fattore_taratura_from_db()
-    reset_registers()
-    configure_encoder_x4_mode()
+    # Usa il contesto dell'applicazione Flask per gestire correttamente le operazioni sul database
+    with app.app_context():
+        # Carica il fattore di taratura e configura l'encoder
+        load_fattore_taratura_from_db()
+        reset_registers()
+        configure_encoder_x4_mode()
 
-    try:
-        while True:
-            impulsi_totali = read_counter()
-            differenza_impulsi = impulsi_totali - lettura_precedente_encoder
-            lettura_precedente_encoder = impulsi_totali
+        try:
+            while True:
+                impulsi_totali = read_counter()
+                differenza_impulsi = impulsi_totali - lettura_precedente_encoder
+                lettura_precedente_encoder = impulsi_totali
 
-            if differenza_impulsi != 0:
-                # L'encoder è attivo
-                ultimo_impulso_time = time.time()
-                if encoder_fermo:
-                    # Se l'encoder era fermo, iniziamo a contare il tempo di operatività
-                    inizio_operativita = time.time()
-                    encoder_fermo = False
-            else:
-                # Se l'encoder non genera impulsi per più di TEMPO_FERMO secondi, fermiamo il timer
-                if time.time() - ultimo_impulso_time >= TEMPO_FERMO and not encoder_fermo:
-                    encoder_fermo = True
+                if differenza_impulsi != 0:
+                    # L'encoder è attivo
+                    ultimo_impulso_time = time.time()
+                    if encoder_fermo:
+                        # Se l'encoder era fermo, iniziamo a contare il tempo di operatività
+                        inizio_operativita = time.time()
+                        encoder_fermo = False
+                else:
+                    # Se l'encoder non genera impulsi per più di TEMPO_FERMO secondi, fermiamo il timer
+                    if time.time() - ultimo_impulso_time >= TEMPO_FERMO and not encoder_fermo:
+                        encoder_fermo = True
+                        tempo_operativita = int(time.time() - inizio_operativita)
+                        save_record_to_db(impulsi_totali, lunghezza_totale_filo, tempo_operativita)
+
+                lunghezza_aggiornata = differenza_impulsi * LUNGHEZZA_PER_IMPULSO * fattore_taratura
+                lunghezza_totale_filo += lunghezza_aggiornata
+
+                # Salva i dati ogni 10 secondi se l'encoder è attivo
+                if not encoder_fermo:
                     tempo_operativita = int(time.time() - inizio_operativita)
                     save_record_to_db(impulsi_totali, lunghezza_totale_filo, tempo_operativita)
 
-            lunghezza_aggiornata = differenza_impulsi * LUNGHEZZA_PER_IMPULSO * fattore_taratura
-            lunghezza_totale_filo += lunghezza_aggiornata
-
-            # Salva i dati ogni 10 secondi se l'encoder è attivo
-            if not encoder_fermo:
-                tempo_operativita = int(time.time() - inizio_operativita)
-                save_record_to_db(impulsi_totali, lunghezza_totale_filo, tempo_operativita)
-
-            time.sleep(10)
-    finally:
-        cleanup()
+                time.sleep(10)
+        finally:
+            cleanup()
 
 # Pulizia GPIO e SPI alla chiusura
 def cleanup():

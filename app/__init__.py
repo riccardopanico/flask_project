@@ -1,4 +1,5 @@
 import os
+import threading
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
@@ -7,7 +8,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 import atexit
 from config.config import ProductionConfig, DevelopmentConfig
-from app.scheduler.jobs import scheduled_task
+import importlib.util
+import glob
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -37,8 +39,30 @@ def create_app():
 
     # Configura APScheduler
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-    scheduler.add_job(scheduled_task, 'interval', seconds=60, max_instances=10)
+
+    # Carica dinamicamente tutti i job dalla cartella jobs e aggiungili al scheduler
+    jobs_path = os.path.join(os.path.dirname(__file__), 'jobs', '*.py')
+    for job_file in glob.glob(jobs_path):
+        module_name = os.path.basename(job_file)[:-3]
+        spec = importlib.util.spec_from_file_location(module_name, job_file)
+        job_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(job_module)
+        if hasattr(job_module, 'run'):
+            scheduler.add_job(job_module.run, 'interval', seconds=60, max_instances=10)
+
     scheduler.start()
+
+    # Avvio dei thread per ogni file nella cartella threads
+    threads_path = os.path.join(os.path.dirname(__file__), 'threads', '*.py')
+    for thread_file in glob.glob(threads_path):
+        module_name = os.path.basename(thread_file)[:-3]
+        spec = importlib.util.spec_from_file_location(module_name, thread_file)
+        thread_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(thread_module)
+        if hasattr(thread_module, 'run'):
+            thread = threading.Thread(target=thread_module.run)
+            thread.daemon = True  # Il thread si chiuderà automaticamente quando l'app si chiude
+            thread.start()
 
     # Assicurati che lo scheduler venga chiuso correttamente quando l'app si arresta
     atexit.register(lambda: scheduler.shutdown())

@@ -38,7 +38,7 @@ fattore_taratura = 1.0
 inizio_operativita = None
 encoder_fermo = True
 ultimo_impulso_time = 0.0
-TEMPO_FERMO = 2.0  # Tempo in secondi per considerare l'encoder fermo
+TEMPO_FERMO = 1.0  # Tempo in secondi per considerare l'encoder fermo
 
 # Funzione per scrivere un comando tramite SPI
 def write_byte(command, value=None):
@@ -73,14 +73,24 @@ def load_fattore_taratura_from_db():
     if impostazione:
         fattore_taratura = float(impostazione.valore)
 
+# Funzione per ottenere la commessa, l'id macchina e l'id operatore dal database
+def load_commessa_e_macchina_operatore():
+    impostazioni = Impostazioni.query.filter(Impostazioni.codice.in_(['id_macchina', 'commessa', 'id_operatore'])).all()
+    impostazioni_dict = {impostazione.codice: impostazione.valore for impostazione in impostazioni}
+    id_macchina = int(impostazioni_dict.get('id_macchina', 1))  # Default a 1 se non trovato
+    commessa = impostazioni_dict.get('commessa', 'Commessa1')
+    id_operatore = impostazioni_dict.get('id_operatore', '0010452223')  # Default se non trovato
+    return id_macchina, commessa, id_operatore
+
 # Funzione per salvare i record nel database
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
+    id_macchina, commessa, id_operatore = load_commessa_e_macchina_operatore()
     log = LogOrlatura(
-        id_macchina=1,
-        id_operatore='0010452223',
+        id_macchina=id_macchina,
+        id_operatore=id_operatore,
         consumo=lunghezza,
         tempo=tempo_operativita,
-        commessa='Commessa1',
+        commessa=commessa,
         data=datetime.utcnow()
     )
     db.session.add(log)
@@ -112,7 +122,7 @@ def run(app):
                         inizio_operativita = time.time()
                         encoder_fermo = False
                 else:
-                    # Se l'encoder non genera impulsi per più di TEMPO_FERMO secondi, fermiamo il timer
+                    # Se l'encoder non genera impulsi per più di TEMPO_FERMO secondi, fermiamo il timer e salviamo i dati
                     if time.time() - ultimo_impulso_time >= TEMPO_FERMO and not encoder_fermo:
                         encoder_fermo = True
                         tempo_operativita = int(time.time() - inizio_operativita)
@@ -121,16 +131,10 @@ def run(app):
                 lunghezza_aggiornata = differenza_impulsi * LUNGHEZZA_PER_IMPULSO * fattore_taratura
                 lunghezza_totale_filo += lunghezza_aggiornata
 
-                # Salva i dati ogni 10 secondi se l'encoder è attivo
-                if not encoder_fermo:
-                    tempo_operativita = int(time.time() - inizio_operativita)
-                    save_record_to_db(impulsi_totali, lunghezza_totale_filo, tempo_operativita)
-
-                time.sleep(10)
+                time.sleep(1)
         finally:
             cleanup()
 
-# Pulizia GPIO e SPI alla chiusura
 def cleanup():
     GPIO.cleanup()
     spi.close()

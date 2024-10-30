@@ -28,8 +28,8 @@ async def socket_handler(websocket, path):
                         subprocess.run(["clear"], shell=True)
                         subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
                         subprocess.run(["sudo", "poweroff", "--no-wall"], shell=False)
-                    elif action == "poweroff":
-                        print("Esecuzione comando poweroff...")
+                    elif action == "reboot":
+                        print("Esecuzione comando reboot...")
                         subprocess.run(["clear"], shell=True)
                         subprocess_result = subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
                         if subprocess_result.returncode == 0:

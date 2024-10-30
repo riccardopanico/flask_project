@@ -1,6 +1,8 @@
 import asyncio
 import websockets
 import threading
+import json
+import subprocess
 from flask import current_app
 
 # Configurazione
@@ -17,9 +19,28 @@ async def socket_handler(websocket, path):
     connected_clients.add(websocket)
     try:
         async for message in websocket:
-            print(f"Messaggio ricevuto: {message}")
-            # Rispondi al client con un'ack
-            await websocket.send("Messaggio ricevuto")
+            print(f"Ricevuto: {message}")
+            try:
+                # Tenta di decodificare il messaggio come JSON
+                try:
+                    data = json.loads(message)
+                except json.JSONDecodeError:
+                    print("Messaggio non in formato JSON, ignorato.")
+                    continue
+                
+                # Controlla e gestisci i comandi nel messaggio JSON
+                if "custom_msg" in data:
+                    await broadcast_message(json.dumps({
+                        "message": data.get("msg", ""),
+                        "autoclose": data.get("autoclose", False),
+                        "timer": data.get("timer", 0)
+                    }))
+                if "spegni" in data:
+                    subprocess.run(["clear", "&&", "sudo", "systemctl", "stop", "getty@tty1.service", "&&", "sudo", "poweroff", "--no-wall"], shell=True)
+                if "riavvia" in data:
+                    subprocess.run(["clear", "&&", "sudo", "systemctl", "stop", "getty@tty1.service", "&&", "sudo", "reboot", "--no-wall"], shell=True)
+            except Exception as e:
+                print(f"Errore nella gestione del messaggio: {e}")
     except websockets.exceptions.ConnectionClosed as e:
         print(f"Connessione chiusa: {e}")
     finally:

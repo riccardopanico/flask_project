@@ -1,9 +1,7 @@
 import asyncio
 import websockets
-import threading
 import json
 import subprocess
-from flask import current_app
 
 # Configurazione
 # HOST = 'localhost'  # IP locale della macchina
@@ -28,17 +26,28 @@ async def socket_handler(websocket, path):
                     print("Messaggio non in formato JSON, ignorato.")
                     continue
                 
-                # Controlla e gestisci i comandi nel messaggio JSON
-                if "custom_msg" in data:
-                    await broadcast_message(json.dumps({
-                        "message": data.get("msg", ""),
-                        "autoclose": data.get("autoclose", False),
-                        "timer": data.get("timer", 0)
-                    }))
-                if "spegni" in data:
-                    subprocess.run(["clear", "&&", "sudo", "systemctl", "stop", "getty@tty1.service", "&&", "sudo", "poweroff", "--no-wall"], shell=True)
-                if "riavvia" in data:
-                    subprocess.run(["clear", "&&", "sudo", "systemctl", "stop", "getty@tty1.service", "&&", "sudo", "reboot", "--no-wall"], shell=True)
+                # Verifica se il messaggio ha la chiave 'action'
+                if "action" in data:
+                    action = data["action"]
+                    # Gestione delle azioni specifiche
+                    if action == "ping":
+                        await websocket.send(json.dumps({"response": "pong"}))
+                    elif action == "spegni":
+                        print("Esecuzione comando spegni...")
+                        subprocess.run(["clear"], shell=True)
+                        subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
+                        subprocess.run(["sudo", "poweroff", "--no-wall"], shell=False)
+                    elif action == "riavvia":
+                        print("Esecuzione comando riavvia...")
+                        subprocess.run(["clear"], shell=True)
+                        subprocess_result = subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
+                        if subprocess_result.returncode == 0:
+                            subprocess_result = subprocess.run(["sudo", "reboot", "--no-wall"], shell=False)
+                        print(f"Subprocess terminato con codice di ritorno: {subprocess_result.returncode}")
+                    else:
+                        print(f"Azione non riconosciuta: {action}")
+                else:
+                    print("Messaggio JSON non valido, manca la chiave 'action'.")
             except Exception as e:
                 print(f"Errore nella gestione del messaggio: {e}")
     except websockets.exceptions.ConnectionClosed as e:

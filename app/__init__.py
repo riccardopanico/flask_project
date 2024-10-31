@@ -39,8 +39,6 @@ def create_app():
 
     # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-
-    # Carica dinamicamente tutti i job dalla cartella jobs e aggiungili al scheduler
     jobs_path = os.path.join(os.path.dirname(__file__), 'jobs', '*.py')
     for job_file in glob.glob(jobs_path):
         module_name = os.path.basename(job_file)[:-3]
@@ -49,8 +47,8 @@ def create_app():
         spec.loader.exec_module(job_module)
         if hasattr(job_module, 'run'):
             scheduler.add_job(job_module.run, 'interval', seconds=60, max_instances=10)
-
     scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
 
     # Avvio dei thread per ogni file nella cartella threads
     threads_path = os.path.join(os.path.dirname(__file__), 'threads', '*.py')
@@ -63,8 +61,5 @@ def create_app():
             thread = threading.Thread(target=thread_module.run, args=(app,))
             thread.daemon = True  # Il thread si chiuderà automaticamente quando l'app si chiude
             thread.start()
-
-    # Assicurati che lo scheduler venga chiuso correttamente quando l'app si arresta
-    atexit.register(lambda: scheduler.shutdown())
 
     return app

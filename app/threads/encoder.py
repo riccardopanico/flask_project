@@ -5,7 +5,6 @@ from app import db
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
-from flask import current_app
 
 # Disabilita gli avvisi GPIO
 GPIO.setwarnings(False)

@@ -1,5 +1,4 @@
 # import time
-# from flask import current_app
 
 # def run(app):
 #     # Utilizza il contesto dell'app Flask per accedere ai servizi dell'applicazione

@@ -8,7 +8,6 @@ PORT = 8765
 connected_clients = set()
 
 async def socket_handler(websocket, path):
-    
     connected_clients.add(websocket)
     try:
         async for message in websocket:
@@ -28,12 +27,14 @@ async def socket_handler(websocket, path):
                         subprocess.run(["clear"], shell=True)
                         subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
                         subprocess.run(["sudo", "poweroff", "--no-wall"], shell=False)
+                        await websocket.send(json.dumps({"action": "poweringOff"}))
                     elif action == "reboot":
                         print("Esecuzione comando reboot...")
                         subprocess.run(["clear"], shell=True)
                         subprocess_result = subprocess.run(["sudo", "systemctl", "stop", "getty@tty1.service"], shell=False)
                         if subprocess_result.returncode == 0:
                             subprocess_result = subprocess.run(["sudo", "reboot", "--no-wall"], shell=False)
+                        await websocket.send(json.dumps({"action": "rebooting"}))
                     else:
                         print(f"Azione non riconosciuta: {action}")
                     await websocket.send(json.dumps({"action": "readyForNext"}))

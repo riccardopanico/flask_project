@@ -57,7 +57,7 @@ async def socket_handler(websocket, path):
 async def check_alert_spola(app):
     with app.app_context():
         while True:
-            await asyncio.sleep(5)  # Controlla ogni 5 secondi
+            await asyncio.sleep(15)  # Controlla ogni 5 secondi
             try:
                 Session = sessionmaker(bind=db.engine)
                 session = Session()

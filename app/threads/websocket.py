@@ -22,6 +22,8 @@ async def socket_handler(websocket, path):
                     action = data["action"]
                     if action == "ping":
                         await websocket.send(json.dumps({"message": "pong"}))
+                    elif action == "alert_spola":
+                        broadcast_message(json.dumps({"action": "alert_spola"}))
                     elif action == "poweroff":
                         print("Esecuzione comando poweroff...")
                         subprocess.run(["clear"], shell=True)

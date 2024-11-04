@@ -10,10 +10,8 @@ from sqlalchemy.orm import sessionmaker
 def run(app):
     SLEEP_TIME = 30
     with app.app_context():
-        Session = sessionmaker(bind=db.engine)
-
-        # Mantieni la connessione persistente
         while True:
+            Session = sessionmaker(bind=db.engine)
             session = Session()
             try:
                 # Ottieni il valore del parametro spola dalle impostazioni

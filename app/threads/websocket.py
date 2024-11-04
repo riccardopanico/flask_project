@@ -12,6 +12,7 @@ connected_clients = set()
 
 # Handler per ogni connessione WebSocket
 async def socket_handler(websocket, path):
+    print(f"Client connesso: {websocket.remote_address}")
     connected_clients.add(websocket)
     try:
         async for message in websocket:
@@ -46,9 +47,11 @@ async def socket_handler(websocket, path):
                 print(f"Errore nella gestione del messaggio: {e}")
     except websockets.exceptions.ConnectionClosed as e:
         print(f"Connessione chiusa: {e}")
+    except Exception as e:
+        print(f"Connessione chiusa o errore generico: {e}")
     finally:
         connected_clients.remove(websocket)
-        print("Client disconnesso")
+        print(f"Client disconnesso: {websocket.remote_address}")
 
 # Controlla periodicamente se l'alert spola deve essere inviato
 async def check_alert_spola(app):
@@ -79,7 +82,14 @@ async def broadcast_message(message):
 
 # Avvia il server WebSocket
 async def start_websocket_server():
-    async with websockets.serve(socket_handler, HOST, PORT):
+    async with websockets.serve(
+        socket_handler, HOST, PORT,
+        ping_interval=None,  # Disabilita il ping di keepalive
+        ping_timeout=None,   # Disabilita il timeout per il ping
+        max_size=None,       # Nessun limite alla dimensione del messaggio
+        max_queue=100,       # Aumenta la dimensione della coda
+        compression=None     # Disabilita la compressione per migliorare la stabilità
+    ):
         print(f"Server WebSocket avviato su ws://{HOST}:{PORT}")
         await asyncio.Future()  # Mantiene il server in esecuzione
 

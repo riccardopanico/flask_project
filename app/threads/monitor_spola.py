@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Thread per monitorare il consumo di filo e confrontarlo con il parametro spola
 def run(app):
-    SLEEP_TIME = 5
+    SLEEP_TIME = 1
     with app.app_context():
         while True:
             try:

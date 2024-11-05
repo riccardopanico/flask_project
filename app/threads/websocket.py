@@ -2,7 +2,7 @@ import asyncio
 import websockets
 import json
 import subprocess
-from app import db
+from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
 from sqlalchemy.orm import sessionmaker
 
@@ -53,25 +53,25 @@ async def socket_handler(websocket, path):
         connected_clients.remove(websocket)
         print(f"Client disconnesso: {websocket.remote_address}")
 
-# Controlla periodicamente se l'alert spola deve essere inviato
 async def check_alert_spola(app):
     with app.app_context():
         while True:
-            await asyncio.sleep(15)  # Controlla ogni 5 secondi
             try:
-                Session = sessionmaker(bind=db.engine)
-                session = Session()
-                # Ottieni il valore dell'impostazione 'alert_spola'
-                alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
-                if alert_spola and alert_spola.valore == '1':
+                # Ottiene il messaggio dalla coda (bloccante finché non arriva un messaggio)
+                message = await asyncio.to_thread(websocket_queue.get)
+                if message == "alert_spola":
                     print("Alert spola attivato, invio messaggio ai client connessi...")
-                    message = json.dumps({"action": "alert_spola"})
-                    await broadcast_message(message)
-                    # Resetta l'impostazione alert_spola dopo l'invio
+                    await broadcast_message(json.dumps({"action": "alert_spola"}))
+                    
+                    Session = sessionmaker(bind=db.engine)
+                    session = Session()
+                    
+                    alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
+                    
                     alert_spola.valore = '0'
                     session.commit()
             except Exception as e:
-                print(f"Errore durante il controllo dell'alert spola: {e}")
+                print(f"Errore durante l'invio dell'alert spola: {e}")
             finally:
                 session.close()
 

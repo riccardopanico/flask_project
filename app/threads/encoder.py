@@ -68,7 +68,7 @@ def load_fattore_taratura_from_db():
     global fattore_taratura
     impostazione = Impostazioni.query.filter_by(codice='fattore_taratura').first()
     if impostazione:
-        fattore_taratura = float(impostazione.valore)
+        fattore_taratura = float(impostazione.valore) / 100
 
 # Funzione per ottenere la commessa, l'id macchina e l'id operatore dal database
 def load_commessa_e_macchina_operatore():

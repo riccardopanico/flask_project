@@ -1,19 +1,19 @@
 import time
 import json
 from datetime import datetime
-from app import db
+from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from sqlalchemy.orm import sessionmaker
 
 # Thread per monitorare il consumo di filo e confrontarlo con il parametro spola
 def run(app):
-    SLEEP_TIME = 60
+    SLEEP_TIME = 5
     with app.app_context():
         while True:
-            Session = sessionmaker(bind=db.engine)
-            session = Session()
             try:
+                Session = sessionmaker(bind=db.engine)
+                session = Session()
                 # Ottieni il valore del parametro spola dalle impostazioni
                 parametro_spola = session.query(Impostazioni).filter_by(codice='parametro_spola').first()
                 if parametro_spola:
@@ -43,11 +43,9 @@ def run(app):
                     alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
                     if alert_spola:
                         alert_spola.valore = '1'
-                    else:
-                        # Crea una nuova impostazione se non esiste
-                        alert_spola = Impostazioni(codice='alert_spola', valore='1')
-                        session.add(alert_spola)
+                        
                     session.commit()
+                    websocket_queue.put("alert_spola")
                 else:
                     print(f"Consumo totale: {consumo_totale} cm. Valore spola: {valore_spola} cm. Periodo di riferimento: dal {data_riferimento.strftime('%d/%m/%Y %H:%M:%S')} ad ora ({datetime.now().strftime('%d/%m/%Y %H:%M:%S')})")
 

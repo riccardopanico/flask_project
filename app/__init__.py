@@ -10,11 +10,14 @@ import atexit
 from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
+import queue
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
 jwt = JWTManager()
 migrate = Migrate()
+
+websocket_queue = queue.Queue()
 
 def create_app():
     # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
@@ -46,7 +49,7 @@ def create_app():
         job_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(job_module)
         if hasattr(job_module, 'run'):
-            scheduler.add_job(job_module.run, 'interval', seconds=60, max_instances=10)
+            scheduler.add_job(job_module.run, 'interval', seconds=5, max_instances=10)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 

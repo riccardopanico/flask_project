@@ -111,7 +111,7 @@ L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
 
 ## Esempi di API
 
-- **Registrazione Dispositivo**:
+### **Registrazione Dispositivo** :
   - **Endpoint**: `/api/device/register`
   - **Metodo**: `POST`
   - **Dati richiesti**:
@@ -125,11 +125,11 @@ L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
       "firmware_version": "1.0.0"
     }
     ```
-  - **Risposta**:
+  - **Risposta** :
     - `201 Created`: `{"msg": "Device registered successfully"}`
     - `400 Bad Request`: `{"msg": "Matricola already exists"}` o `{"msg": "Missing key: [nome_chiave]"}`
 
-- **Login Dispositivo**:
+### **Login Dispositivo** :
   - **Endpoint**: `/api/device/login`
   - **Metodo**: `POST`
   - **Dati richiesti**:
@@ -139,18 +139,18 @@ L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
       "password": "password123"
     }
     ```
-  - **Risposta**:
+  - **Risposta** :
     - `200 OK`: `{ "access_token": "token_di_accesso", "refresh_token": "token_di_refresh" }`
     - `401 Unauthorized`: `{"msg": "Bad matricola or password"}`
 
-- **Rinnovo del Token di Accesso**:
+### **Rinnovo del Token di Accesso** :
   - **Endpoint**: `/api/device/token/refresh`
   - **Metodo**: `POST`
   - **Headers richiesti**: `Authorization: Bearer [refresh_token]`
   - **Risposta**:
     - `200 OK`: `{ "access_token": "nuovo_token_di_accesso" }`
 
-- **Profilo del Dispositivo**:
+### **Profilo del Dispositivo** :
   - **Endpoint**: `/api/device/profile`
   - **Metodo**: `GET`
   - **Headers richiesti**: `Authorization: Bearer [access_token]`
@@ -165,8 +165,8 @@ I thread sono gestiti all'interno dell'applicazione per eseguire operazioni asin
 
 I thread permettono di gestire operazioni indipendenti che non devono bloccare il normale flusso dell'applicazione, come l'encoder, il monitoraggio di dispositivi o il websocket. 
 
-- **Inizializzazione**: Durante l'avvio dell'app, ogni file nella directory `threads/` viene importato e, se contiene una funzione `run`, viene eseguito come un thread separato. Questo meccanismo garantisce l'avvio automatico di ogni modulo di thread presente.
-- **Esempio**: La funzione `run` presente in ogni modulo di thread esegue operazioni specifiche e riceve l'istanza `app` come argomento, per garantire l'accesso alle configurazioni e alle risorse condivise dell'applicazione.
+- **Inizializzazione** : Durante l'avvio dell'app, ogni file nella directory `threads/` viene importato e, se contiene una funzione `run`, viene eseguito come un thread separato. Questo meccanismo garantisce l'avvio automatico di ogni modulo di thread presente.
+- **Esempio** : La funzione `run` presente in ogni modulo di thread esegue operazioni specifiche e riceve l'istanza `app` come argomento, per garantire l'accesso alle configurazioni e alle risorse condivise dell'applicazione.
 
 
 ## Licenza

@@ -6,6 +6,8 @@ from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
+from decimal import Decimal
 
 HOST = '0.0.0.0'  
 PORT = 8765  
@@ -87,8 +89,8 @@ async def check_queue_messages(app):
                         func.sum(LogOrlatura.tempo).label('tempo_totale')
                     ).filter(LogOrlatura.id_macchina == id_macchina).first()
 
-                    consumo_totale = round(dati_totali.consumo_totale or 0, 2)
-                    tempo_totale = round(dati_totali.tempo_totale or 0, 2)
+                    consumo_totale = float(round(dati_totali.consumo_totale or 0, 2))
+                    tempo_totale = float(round(dati_totali.tempo_totale or 0, 2))
 
                     # Query per dati commessa
                     dati_commessa = session.query(
@@ -99,8 +101,8 @@ async def check_queue_messages(app):
                         LogOrlatura.commessa == commessa
                     ).first()
 
-                    consumo_commessa = round(dati_commessa.consumo_commessa or 0, 2)
-                    tempo_commessa = round(dati_commessa.tempo_commessa or 0, 2)
+                    consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
+                    tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
 
                     # Prepara i dati da inviare
                     dati_orlatura = {

@@ -4,6 +4,7 @@ import json
 import subprocess
 from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
+from app.models.log_orlatura import LogOrlatura
 from sqlalchemy.orm import sessionmaker
 
 HOST = '0.0.0.0'  
@@ -53,7 +54,7 @@ async def socket_handler(websocket, path):
         connected_clients.remove(websocket)
         print(f"Client disconnesso: {websocket.remote_address}")
 
-async def check_alert_spola(app):
+async def check_queue_messages(app):
     with app.app_context():
         while True:
             try:
@@ -67,8 +68,50 @@ async def check_alert_spola(app):
                     session = Session()
                     
                     alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
-                    
+
                     alert_spola.valore = '0'
+                    session.commit()
+                elif message == "dati_orlatura":
+                    print("Ottengo dati orlatura, invio messaggio ai client connessi...")
+
+                    Session = sessionmaker(bind=db.engine)
+                    session = Session()
+
+                    # Adattamento delle query da Laravel a Python
+                    id_macchina = session.query(Impostazioni).filter_by(codice='id_macchina').first().valore
+                    commessa = session.query(Impostazioni).filter_by(codice='commessa').first().valore
+
+                    # Query per dati totali
+                    dati_totali = session.query(
+                        func.sum(LogOrlatura.consumo).label('consumo_totale'),
+                        func.sum(LogOrlatura.tempo).label('tempo_totale')
+                    ).filter(LogOrlatura.id_macchina == id_macchina).first()
+
+                    consumo_totale = round(dati_totali.consumo_totale or 0, 2)
+                    tempo_totale = round(dati_totali.tempo_totale or 0, 2)
+
+                    # Query per dati commessa
+                    dati_commessa = session.query(
+                        func.sum(LogOrlatura.consumo).label('consumo_commessa'),
+                        func.sum(LogOrlatura.tempo).label('tempo_commessa')
+                    ).filter(
+                        LogOrlatura.id_macchina == id_macchina,
+                        LogOrlatura.commessa == commessa
+                    ).first()
+
+                    consumo_commessa = round(dati_commessa.consumo_commessa or 0, 2)
+                    tempo_commessa = round(dati_commessa.tempo_commessa or 0, 2)
+
+                    # Prepara i dati da inviare
+                    dati_orlatura = {
+                        "consumo_totale": consumo_totale,
+                        "tempo_totale": tempo_totale,
+                        "consumo_commessa": consumo_commessa,
+                        "tempo_commessa": tempo_commessa
+                    }
+
+                    await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))
+
                     session.commit()
             except Exception as e:
                 print(f"Errore durante l'invio dell'alert spola: {e}")
@@ -98,5 +141,5 @@ def run(app):
     asyncio.set_event_loop(loop)
     # Avvia il server WebSocket e il task di controllo alert_spola
     loop.create_task(start_websocket_server())
-    loop.create_task(check_alert_spola(app))
+    loop.create_task(check_queue_messages(app))
     loop.run_forever()

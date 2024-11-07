@@ -1,7 +1,7 @@
 import spidev
 import time
 import RPi.GPIO as GPIO
-from app import db
+from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
@@ -92,6 +92,7 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
     )
     db.session.add(log)
     db.session.commit()
+    websocket_queue.put("dati_orlatura")
     print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
 
 # Funzione per monitorare l'encoder e salvare periodicamente i dati

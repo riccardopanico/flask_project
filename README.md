@@ -10,45 +10,50 @@ La struttura del progetto è la seguente:
 flask_project/
 │
 ├── app/
-│   ├── __init__.py
 │   ├── api/
 │   │   ├── __init__.py
 │   │   └── device.py
+│   ├── jobs/
+│   │   └── __init__.py
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── device.py
-│   └── scheduler/
+│   │   ├── device.py
+│   │   ├── impostazioni.py
+│   │   ├── log_operazioni.py
+│   │   ├── log_orlatura.py
+│   │   └── operatori.py
+│   └── threads/
 │       ├── __init__.py
-│       └── jobs.py
+│       ├── encoder.py
+│       ├── monitor_spola.py
+│       └── websocket.py
 │
 ├── config/
 │   ├── __init__.py
 │   └── config.py
 │
-├── instance/
-│   └── config.py
-│
-├── flask/
-│
+├── .gitignore
 ├── manage.py
+├── README.md
 └── requirements.txt
+
 ```
 
-- `app/`: Contiene l'applicazione principale Flask, con moduli per le API, i modelli e i task schedulati.
-  - `api/`: Contiene i blueprint delle API (es. gestione dei dispositivi).
-  - `models/`: Definisce i modelli del database.
-  - `scheduler/`: Contiene i task pianificati con APScheduler.
-- `config/`: Contiene la configurazione dell'applicazione.
-- `instance/`: Contiene la configurazione specifica dell'istanza (file `.env`, configurazioni locali).
-- `flask/`: La virtual environment (questa directory non è inclusa nel repository Git).
-- `manage.py`: Punto di ingresso per gestire il server Flask e le migrazioni.
+- `app/`: Contiene l'applicazione principale Flask, con moduli per le API, i modelli, i job e i thread.
+  - `api/`: Contiene i blueprint delle API (es. gestione dei dispositivi, operatori, ...) 
+  - `jobs/`: Modulo per definire i job o task schedulati, con l'inizializzazione in `__init__.py`.
+  - `models/`: Contiene i modelli del database, tra cui impostazioni, log operazioni, log orlatura e operatori.
+  - `threads/`: Gestisce i thread dedicati a specifiche operazioni asincrone (es. `encoder.py`, `monitor_spola.py`, `websocket.py`).
+- `config/`: Contiene la configurazione principale dell'applicazione.
+- `.gitignore`: File per escludere dal repository specifici file o cartelle, come configurazioni locali o file generati automaticamente.
+- `manage.py`: Punto di ingresso per gestire il server Flask e altre operazioni di amministrazione.
 - `requirements.txt`: Elenco delle dipendenze del progetto.
+
 
 ## Prerequisiti
 
 - Python 3.x
 - Virtualenv
-- Redis (se utilizzi Celery per task asincroni)
 
 ## Installazione
 
@@ -59,10 +64,19 @@ flask_project/
    ```
 
 2. **Crea un virtual environment**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+
+   - **Su Linux/MacOS:**
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+
+   - **Su Windows:**
+     ```bash
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+
 
 3. **Installa le dipendenze**
    ```bash
@@ -98,22 +112,62 @@ L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
 ## Esempi di API
 
 - **Registrazione Dispositivo**:
-  - Endpoint: `/api/device/register`
-  - Metodo: `POST`
-  - Dati richiesti: `{ "matricola": "12345", "password": "password123", "ip_address": "192.168.1.1" }`
+  - **Endpoint**: `/api/device/register`
+  - **Metodo**: `POST`
+  - **Dati richiesti**:
+    ```json
+    {
+      "matricola": "12345",
+      "password": "password123",
+      "ip_address": "192.168.1.1",
+      "device_type": "sensor",
+      "status": "active",
+      "firmware_version": "1.0.0"
+    }
+    ```
+  - **Risposta**:
+    - `201 Created`: `{"msg": "Device registered successfully"}`
+    - `400 Bad Request`: `{"msg": "Matricola already exists"}` o `{"msg": "Missing key: [nome_chiave]"}`
 
 - **Login Dispositivo**:
-  - Endpoint: `/api/device/login`
-  - Metodo: `POST`
-  - Dati richiesti: `{ "matricola": "12345", "password": "password123" }`
+  - **Endpoint**: `/api/device/login`
+  - **Metodo**: `POST`
+  - **Dati richiesti**:
+    ```json
+    {
+      "matricola": "12345",
+      "password": "password123"
+    }
+    ```
+  - **Risposta**:
+    - `200 OK`: `{ "access_token": "token_di_accesso", "refresh_token": "token_di_refresh" }`
+    - `401 Unauthorized`: `{"msg": "Bad matricola or password"}`
 
-## Schedulazione dei Task
+- **Rinnovo del Token di Accesso**:
+  - **Endpoint**: `/api/device/token/refresh`
+  - **Metodo**: `POST`
+  - **Headers richiesti**: `Authorization: Bearer [refresh_token]`
+  - **Risposta**:
+    - `200 OK`: `{ "access_token": "nuovo_token_di_accesso" }`
 
-I task sono pianificati utilizzando APScheduler. L'attuale esempio di job esegue un'azione ogni 5 minuti. Il job è definito in `app/scheduler/jobs.py` ed è avviato automaticamente quando l'applicazione Flask viene avviata.
+- **Profilo del Dispositivo**:
+  - **Endpoint**: `/api/device/profile`
+  - **Metodo**: `GET`
+  - **Headers richiesti**: `Authorization: Bearer [access_token]`
+  - **Risposta**:
+    - `200 OK`: `{"matricola": "12345", "ip_address": "192.168.1.1", "device_type": "sensor", "status": "active", "firmware_version": "1.0.0", ...}`
+    - `404 Not Found`: `{"msg": "Device not found"}`
 
-## Contributi
 
-Le richieste di pull sono benvenute. Per modifiche importanti, apri prima un problema per discutere cosa vorresti cambiare.
+## Gestione dei Thread
+
+I thread sono gestiti all'interno dell'applicazione per eseguire operazioni asincrone in background, separate dai job schedulati. Ogni file Python nella cartella `app/threads/` rappresenta un thread dedicato, avviato automaticamente all'avvio dell'applicazione Flask. 
+
+I thread permettono di gestire operazioni indipendenti che non devono bloccare il normale flusso dell'applicazione, come l'encoder, il monitoraggio di dispositivi o il websocket. 
+
+- **Inizializzazione**: Durante l'avvio dell'app, ogni file nella directory `threads/` viene importato e, se contiene una funzione `run`, viene eseguito come un thread separato. Questo meccanismo garantisce l'avvio automatico di ogni modulo di thread presente.
+- **Esempio**: La funzione `run` presente in ogni modulo di thread esegue operazioni specifiche e riceve l'istanza `app` come argomento, per garantire l'accesso alle configurazioni e alle risorse condivise dell'applicazione.
+
 
 ## Licenza
 

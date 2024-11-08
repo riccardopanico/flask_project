@@ -10,4 +10,4 @@ class LogOrlatura(db.Model):
     consumo = db.Column(db.Numeric(precision=11, scale=2), nullable=False, default=0.00)
     tempo = db.Column(db.Integer, nullable=False, default=0)
     commessa = db.Column(db.String(255), nullable=False)
-    data = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    data = db.Column(db.DateTime, nullable=False, default=datetime.now)

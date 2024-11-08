@@ -52,7 +52,7 @@ def login():
 
         if device and device.check_password(data['password']):
             # Aggiorna l'ultimo accesso del dispositivo
-            device.last_seen = datetime.utcnow()
+            device.last_seen = datetime.now()
             db.session.commit()
 
             # Genera i token JWT e refresh

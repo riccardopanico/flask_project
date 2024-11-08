@@ -5,6 +5,7 @@ import subprocess
 from app import db, websocket_queue
 from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
+from app.models.campionatura import Campionatura
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 from decimal import Decimal
@@ -103,6 +104,21 @@ async def check_queue_messages(app):
                         LogOrlatura.commessa == commessa
                     ).first()
 
+                    # Query per dati campionatura
+                    dati_campionatura = session.query(
+                        func.sum(LogOrlatura.consumo).label('consumo_campionatura'),
+                        func.sum(LogOrlatura.tempo).label('tempo_campionatura')
+                    ).filter(
+                        LogOrlatura.id_macchina == id_macchina,
+                        LogOrlatura.data.between(
+                            session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()[0],
+                            session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()[0]
+                        )
+                    ).first()
+
+                    consumo_campionatura = float(round(dati_campionatura.consumo_campionatura or 0, 2))
+                    tempo_campionatura = float(round(dati_campionatura.tempo_campionatura or 0, 2))
+
                     consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
                     tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
 
@@ -111,7 +127,9 @@ async def check_queue_messages(app):
                         "consumo_totale": consumo_totale,
                         "tempo_totale": tempo_totale,
                         "consumo_commessa": consumo_commessa,
-                        "tempo_commessa": tempo_commessa
+                        "tempo_commessa": tempo_commessa,
+                        "consumo_campionatura": consumo_campionatura,
+                        "tempo_campionatura": tempo_campionatura
                     }
 
                     await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))

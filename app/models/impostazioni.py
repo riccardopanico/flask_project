@@ -7,6 +7,6 @@ class Impostazioni(db.Model):
     codice = db.Column(db.String(100), primary_key=True)  # Definisce 'codice' come la chiave primaria
     descrizione = db.Column(db.String(255), nullable=True)
     valore = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.now)
     deleted_at = db.Column(db.DateTime, nullable=True)

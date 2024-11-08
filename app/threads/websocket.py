@@ -8,6 +8,7 @@ from app.models.log_orlatura import LogOrlatura
 from app.models.campionatura import Campionatura
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
+from decimal import Decimal
 from datetime import datetime
 
 HOST = '0.0.0.0'  
@@ -74,7 +75,7 @@ async def check_queue_messages(app):
                     alert_spola.valore = '0'
                     session.commit()
                 if message == "alert_olio":
-                    print("Alert spola attivato, invio messaggio ai client connessi...")
+                    print("Alert olio attivato, invio messaggio ai client connessi...")
                     await broadcast_message(json.dumps({"action": "alert_olio"}))
                     alert_olio = session.query(Impostazioni).filter_by(codice='alert_olio').first()
                     alert_olio.valore = '0'
@@ -104,6 +105,9 @@ async def check_queue_messages(app):
                         LogOrlatura.commessa == commessa
                     ).first()
 
+                    consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
+                    tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
+
                     # Query per dati campionatura
                     dati_campionatura = session.query(
                         func.sum(LogOrlatura.consumo).label('consumo_campionatura'),
@@ -118,9 +122,6 @@ async def check_queue_messages(app):
 
                     consumo_campionatura = float(round(dati_campionatura.consumo_campionatura or 0, 2))
                     tempo_campionatura = float(round(dati_campionatura.tempo_campionatura or 0, 2))
-
-                    consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
-                    tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
 
                     dati_orlatura = {
                         "consumo_totale": consumo_totale,

@@ -8,7 +8,7 @@ from app.models.log_orlatura import LogOrlatura
 from app.models.campionatura import Campionatura
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
-from decimal import Decimal
+from datetime import datetime
 
 HOST = '0.0.0.0'  
 PORT = 8765  
@@ -112,7 +112,7 @@ async def check_queue_messages(app):
                         LogOrlatura.id_macchina == id_macchina,
                         LogOrlatura.data.between(
                             session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()[0],
-                            session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()[0]
+                            db.func.coalesce(session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()[0], datetime.now())
                         )
                     ).first()
 
@@ -122,7 +122,6 @@ async def check_queue_messages(app):
                     consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
                     tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
 
-                    # Prepara i dati da inviare
                     dati_orlatura = {
                         "consumo_totale": consumo_totale,
                         "tempo_totale": tempo_totale,

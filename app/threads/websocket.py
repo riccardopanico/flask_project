@@ -62,23 +62,25 @@ async def check_queue_messages(app):
             try:
                 # Ottiene il messaggio dalla coda (bloccante finché non arriva un messaggio)
                 message = await asyncio.to_thread(websocket_queue.get)
+                
+                Session = sessionmaker(bind=db.engine)
+                session = Session()
+
                 if message == "alert_spola":
                     print("Alert spola attivato, invio messaggio ai client connessi...")
                     await broadcast_message(json.dumps({"action": "alert_spola"}))
-                    
-                    Session = sessionmaker(bind=db.engine)
-                    session = Session()
-                    
                     alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
-
                     alert_spola.valore = '0'
+                    session.commit()
+                if message == "alert_olio":
+                    print("Alert spola attivato, invio messaggio ai client connessi...")
+                    await broadcast_message(json.dumps({"action": "alert_olio"}))
+                    alert_olio = session.query(Impostazioni).filter_by(codice='alert_olio').first()
+                    alert_olio.valore = '0'
                     session.commit()
                 elif message == "dati_orlatura":
                     print("Ottengo dati orlatura, invio messaggio ai client connessi...")
-
-                    Session = sessionmaker(bind=db.engine)
-                    session = Session()
-
+                    
                     # Adattamento delle query da Laravel a Python
                     id_macchina = session.query(Impostazioni).filter_by(codice='id_macchina').first().valore
                     commessa = session.query(Impostazioni).filter_by(codice='commessa').first().valore
@@ -113,12 +115,12 @@ async def check_queue_messages(app):
                     }
 
                     await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))
-
                     session.commit()
             except Exception as e:
                 print(f"Errore durante l'invio dell'alert spola: {e}")
             finally:
-                session.close()
+                if 'session' in locals():
+                    session.close()
 
 # Invia un messaggio a tutti i client connessi
 async def broadcast_message(message):

@@ -173,16 +173,16 @@ async def start_websocket_server():
         print(f"Errore nel server WebSocket: {e}")
 
 # Definisci un metodo per gestire la chiusura pulita
-def cleanup_and_stop_loop():
+async def cleanup_and_stop_loop():
     print("Chiusura del loop di eventi...")
     tasks = [task for task in asyncio.all_tasks(loop)]
     for task in tasks:
         task.cancel()  # Cancella tutti i task
     if tasks:
-        loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        await asyncio.gather(*tasks, return_exceptions=True)
     if server:  # Chiude il server WebSocket se è attivo
         server.close()
-        loop.run_until_complete(asyncio.ensure_future(server.wait_closed()))
+        await server.wait_closed()
     loop.stop()
 
 # Funzione principale per avviare il servizio
@@ -198,4 +198,4 @@ def run(app):
     try:
         loop.run_forever()
     finally:
-        cleanup_and_stop_loop()
+        loop.run_until_complete(cleanup_and_stop_loop())

@@ -23,6 +23,7 @@ def create_app():
     # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
     env = os.getenv("FLASK_ENV", "production").lower()
     print(f"L'ambiente di esecuzione corrente è: {env}")
+    
     # Imposta la configurazione in base all'ambiente
     config_class = DevelopmentConfig if env == "development" else ProductionConfig
     app = Flask(__name__)
@@ -48,8 +49,10 @@ def create_app():
         spec = importlib.util.spec_from_file_location(module_name, job_file)
         job_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(job_module)
-        if hasattr(job_module, 'run'):
-            scheduler.add_job(job_module.run, 'interval', seconds=5, max_instances=10)
+        if getattr(job_module, '__ACTIVE__', True):
+            if hasattr(job_module, 'run'):
+                job_id = f"job_{module_name}"
+                scheduler.add_job(job_module.run, 'interval', seconds=5, id=job_id, max_instances=10)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 
@@ -60,9 +63,10 @@ def create_app():
         spec = importlib.util.spec_from_file_location(module_name, thread_file)
         thread_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(thread_module)
-        if hasattr(thread_module, 'run'):
-            thread = threading.Thread(target=thread_module.run, args=(app,))
-            thread.daemon = True  # Il thread si chiuderà automaticamente quando l'app si chiude
-            thread.start()
+        if getattr(thread_module, '__ACTIVE__', True):
+            if hasattr(thread_module, 'run'):
+                thread = threading.Thread(target=thread_module.run, args=(app,))
+                thread.daemon = True
+                thread.start()
 
     return app

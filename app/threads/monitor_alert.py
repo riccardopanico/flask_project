@@ -6,6 +6,8 @@ from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from sqlalchemy.orm import sessionmaker
 
+__ACTIVE__ = False
+
 # Thread per monitorare il consumo di filo e confrontarlo con il parametro spola e l'olio
 def run(app):
     SLEEP_TIME = 5

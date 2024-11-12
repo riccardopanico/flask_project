@@ -6,6 +6,8 @@ from app.models.impostazioni import Impostazioni
 from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
 
+__ACTIVE__ = False
+
 # Disabilita gli avvisi GPIO
 GPIO.setwarnings(False)
 

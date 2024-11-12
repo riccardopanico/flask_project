@@ -12,6 +12,8 @@ from datetime import datetime
 import signal
 import weakref
 
+__ACTIVE__ = False
+
 HOST = '0.0.0.0'  
 PORT = 8765  
 connected_clients = weakref.WeakSet()

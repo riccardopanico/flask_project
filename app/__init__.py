@@ -21,7 +21,7 @@ websocket_queue = queue.Queue()
 
 def create_app():
     # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
-    env = os.getenv("FLASK_ENV", "production").lower()
+    env = os.getenv("FLASK_ENV", "development").lower()
     print(f"L'ambiente di esecuzione corrente è: {env}")
     
     # Imposta la configurazione in base all'ambiente

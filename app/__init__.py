@@ -37,6 +37,8 @@ def create_app():
     # Registra blueprint delle API
     from app.api.device import device_blueprint
     app.register_blueprint(device_blueprint, url_prefix='/api/device')
+    from app.api.auth import auth_blueprint
+    app.register_blueprint(auth_blueprint, url_prefix='/api/auth')
 
     # Importa modelli per le migrazioni
     from app.models.device import Device

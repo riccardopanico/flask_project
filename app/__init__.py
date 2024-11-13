@@ -25,7 +25,7 @@ def create_app():
     print(f"L'ambiente di esecuzione corrente è: {env}")
     
     # Imposta la configurazione in base all'ambiente
-    config_class = DevelopmentConfig if env == "development" else ProductionConfig
+    config_class = ProductionConfig if env == "production" else DevelopmentConfig
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -42,6 +42,7 @@ def create_app():
 
     # Importa modelli per le migrazioni
     from app.models.device import Device
+    from app.models.user import User
 
     # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})

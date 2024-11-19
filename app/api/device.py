@@ -32,15 +32,7 @@ def device_profile():
             if not device:
                 return jsonify({"msg": "Device not found"}), 404
             
-            return jsonify({
-                'id': device.id,
-                'user_id': device.user_id,
-                'nome': device.nome,
-                'descrizione': device.descrizione,
-                'created_at': device.created_at.isoformat() if device.created_at else None,
-                'updated_at': device.updated_at.isoformat() if device.updated_at else None,
-                'deleted_at': device.deleted_at.isoformat() if device.deleted_at else None
-            }), 200
+            return jsonify(device.to_dict()), 200
 
     except (SQLAlchemyError, Exception) as e:
         debug_mode = current_app.debug

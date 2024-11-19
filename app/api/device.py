@@ -11,9 +11,9 @@ from app.models.log_orlatura import LogOrlatura  # Assuming there's a model to r
 # Create a blueprint for device-related routes
 device_blueprint = Blueprint('device', __name__)
 
-@device_blueprint.route('/device_profile', methods=['GET'])
+@device_blueprint.route('/profile', methods=['GET'])
 @jwt_required()
-def device_profile():
+def profile():
     # Configura il sessionmaker per l'uso delle sessioni
     Session = sessionmaker(bind=db.engine)
     

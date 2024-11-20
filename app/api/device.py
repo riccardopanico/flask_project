@@ -6,6 +6,7 @@ import requests
 from app import db
 from app.models.user import User
 from app.models.device import Device
+from app.models.tasks import Task
 from app.models.log_orlatura import LogOrlatura  # Assuming there's a model to represent the log_orlatura table
 
 # Create a blueprint for device-related routes
@@ -120,6 +121,50 @@ def log_orlatura_proxy():
         return (response.content, response.status_code, response.headers.items())
 
     except Exception as e:
+        debug_mode = current_app.debug
+        error_response = {"msg": "Errore interno del server"}
+        if debug_mode:
+            error_response["error"] = str(e)
+        return jsonify(error_response), 500
+    
+@device_blueprint.route('/task', methods=['POST'])
+@jwt_required()
+def create_task():
+    # Configura il sessionmaker per l'uso delle sessioni
+    Session = sessionmaker(bind=db.engine)
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"msg": "Invalid input"}), 400
+
+        id_dispositivo = data.get("id_dispositivo")
+        tipo_intervento = data.get("tipo_intervento")
+
+        if not id_dispositivo or not tipo_intervento:
+            return jsonify({"msg": "Missing required fields"}), 400
+
+        with Session() as session:
+            current_user = get_jwt_identity()
+
+            user = session.query(User).get(current_user['id'])
+            if not user:
+                return jsonify({"msg": "User not found"}), 404
+
+            if user.user_type != 'device':
+                return jsonify({"msg": "Unauthorized"}), 403
+
+            # Creazione del task
+            new_task = Task(
+                id_dispositivo=id_dispositivo,
+                tipo_intervento=tipo_intervento
+            )
+            session.add(new_task)
+            session.commit()
+
+            return jsonify(new_task.to_dict()), 201
+
+    except (SQLAlchemyError, Exception) as e:
         debug_mode = current_app.debug
         error_response = {"msg": "Errore interno del server"}
         if debug_mode:

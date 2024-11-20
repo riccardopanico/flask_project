@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from sqlalchemy import func
 
 class Campionatura(db.Model):
     __tablename__ = 'campionatura'
@@ -8,9 +9,7 @@ class Campionatura(db.Model):
     campione = db.Column(db.String(255), nullable=False)
     start = db.Column(db.DateTime, nullable=False, default=datetime.now)
     stop = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.now)
-    deleted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, server_default=func.now(), default=datetime.now)
 
     def to_dict(self):
         return {
@@ -18,7 +17,5 @@ class Campionatura(db.Model):
             'campione': self.campione,
             'start': self.start.isoformat(),
             'stop': self.stop.isoformat() if self.stop else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

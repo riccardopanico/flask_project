@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+from sqlalchemy import func
 
 class LogOrlatura(db.Model):
     __tablename__ = 'log_orlatura'
@@ -10,10 +11,7 @@ class LogOrlatura(db.Model):
     consumo = db.Column(db.Numeric(precision=11, scale=2), nullable=False, default=0.00)
     tempo = db.Column(db.Integer, nullable=False, default=0)
     commessa = db.Column(db.String(255), nullable=False)
-    data = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    created_at = db.Column(db.DateTime, default=datetime.now)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.now)
-    deleted_at = db.Column(db.DateTime, nullable=True)
+    data = db.Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
 
     def to_dict(self):
         return {

@@ -43,6 +43,12 @@ def create_app():
     # Importa modelli per le migrazioni
     from app.models.device import Device
     from app.models.user import User
+    from app.models.log_orlatura import LogOrlatura
+    from app.models.log_operazioni import LogOperazioni
+    from app.models.impostazioni import Impostazioni
+    from app.models.campionatura import Campionatura
+    from app.models.tasks import Task
+    from app.models.operatori import Operatori
 
     # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})

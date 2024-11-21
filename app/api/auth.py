@@ -25,8 +25,8 @@ def register():
                 return jsonify({"msg": "L'utente esiste già"}), 400
 
             # Validazione per il tipo di utente 'device'
-            if data['user_type'] == 'device' and 'ip_address' not in data:
-                required_keys = ['ip_address']
+            if data['user_type'] == 'device':
+                required_keys = [ 'device_id', 'ip_address' ]
                 for key in required_keys:
                     if key not in data:
                         return jsonify({"msg": f"Chiave mancante: {key}"}), 400
@@ -39,7 +39,11 @@ def register():
             if data['user_type'] == 'device':
                 new_device = Device(
                     user_id=new_user.id,
-                    indirizzo_ip=data['ip_address']
+                    ip_address=data.get('ip_address'),
+                    mac_address=data.get('mac_address'),
+                    gateway=data.get('gateway'),
+                    subnet_mask=data.get('subnet_mask'),
+                    dns_address=data.get('dns_address')
                 )
                 session.add(new_device)
 

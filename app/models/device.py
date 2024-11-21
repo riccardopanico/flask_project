@@ -6,24 +6,24 @@ class Device(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    device_id = db.Column(db.Integer, nullable=False)  # DEVICE_ID
-    ip_address = db.Column(db.String(45), nullable=False)  # IP_ADDRESS
-    mac_address = db.Column(db.String(17), nullable=False)  # MAC_ADDRESS
-    gateway = db.Column(db.String(45), nullable=False)  # GATEWAY
-    subnet_mask = db.Column(db.String(45), nullable=False)  # SUBNET_MASK
-    dns_address = db.Column(db.String(45), nullable=False)  # DNS_ADDRESS
-    communication_port = db.Column(db.Integer, nullable=False)  # COMMUNICATION_PORT
-    communication_protocol = db.Column(db.String(10), nullable=False)  # COMMUNICATION_PROTOCOL
-    asset_id = db.Column(db.Integer, nullable=False)  # ASSET_ID
-    registration_number = db.Column(db.String(50), nullable=False)  # REGISTRATION_NUMBER
-    inventory_number = db.Column(db.String(50), nullable=False)  # INVENTORY_NUMBER
-    test_date = db.Column(db.DateTime, nullable=False)  # TEST_DATE
-    last_maintenance_date = db.Column(db.DateTime, nullable=False)  # LAST_MAINTENANCE_DATE
-    installation_date = db.Column(db.DateTime, nullable=False)  # INSTALLATION_DATE
-    description = db.Column(db.String(255), nullable=True)  # DESCRIPTION
-    model = db.Column(db.String(50), nullable=False)  # MODEL
-    serial_number = db.Column(db.String(50), nullable=False)  # SERIAL_NUMBER
-    warranty_date = db.Column(db.DateTime, nullable=True)  # WARRANTY_DATE
+    device_id = db.Column(db.Integer, nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)
+    mac_address = db.Column(db.String(17), nullable=False)
+    gateway = db.Column(db.String(45), nullable=False)
+    subnet_mask = db.Column(db.String(45), nullable=False)
+    dns_address = db.Column(db.String(45), nullable=False)
+    communication_port = db.Column(db.Integer, nullable=False)
+    communication_protocol = db.Column(db.String(10), nullable=False)
+    asset_id = db.Column(db.Integer, nullable=False)
+    registration_number = db.Column(db.String(50), nullable=False)
+    inventory_number = db.Column(db.String(50), nullable=False)
+    test_date = db.Column(db.DateTime, nullable=False)
+    last_maintenance_date = db.Column(db.DateTime, nullable=False)
+    installation_date = db.Column(db.DateTime, nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    model = db.Column(db.String(50), nullable=False)
+    serial_number = db.Column(db.String(50), nullable=False)
+    warranty_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):

@@ -23,7 +23,7 @@ def create_app():
     # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
     env = os.getenv("FLASK_ENV", "development").lower()
     print(f"L'ambiente di esecuzione corrente è: {env}")
-    
+
     # Imposta la configurazione in base all'ambiente
     config_class = ProductionConfig if env == "production" else DevelopmentConfig
     app = Flask(__name__)
@@ -48,7 +48,6 @@ def create_app():
     from app.models.impostazioni import Impostazioni
     from app.models.campionatura import Campionatura
     from app.models.tasks import Task
-    from app.models.operatori import Operatori
 
     # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})

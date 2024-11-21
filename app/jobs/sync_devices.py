@@ -2,7 +2,7 @@ import os
 import time
 import requests
 from flask import current_app
-from app import db, websocket_queue
+from app import db
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app.models.user import User
@@ -11,7 +11,7 @@ from app.models.device import Device
 __ACTIVE__ = True
 
 def fetch_data():
-    API_BASE_URL = current_app.config.get('TAP_IN_RESTART_API_BASE_URL')
+    API_BASE_URL = os.getenv('TAP_IN_RESTART_API_BASE_URL')
     if not API_BASE_URL:
         raise ValueError("TAP_IN_RESTART_API_BASE_URL non è impostata nella configurazione dell'applicazione")
     API_ENDPOINT = f"{API_BASE_URL}/device"
@@ -65,9 +65,9 @@ def run(app):
                             device_id=record['device_id'],
                             mac_address=record['mac_address'],
                             ip_address=record['ip_address'],
-                            gateway=record.get('gateway', '192.168.0.1'),
-                            subnet_mask=record.get('subnet_mask', '255.255.255.0'),
-                            dns_address=record.get('dns_address', '8.8.8.8')
+                            gateway=record.get('gateway'),
+                            subnet_mask=record.get('subnet_mask'),
+                            dns_address=record.get('dns_address')
                         )
                         session.add(new_device)
 

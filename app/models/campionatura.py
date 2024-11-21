@@ -7,9 +7,9 @@ class Campionatura(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     campione = db.Column(db.String(255), nullable=False)
-    start = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    start = db.Column(db.DateTime, nullable=False)
     stop = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, server_default=func.now(), default=datetime.now)
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
         return {

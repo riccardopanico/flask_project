@@ -12,6 +12,7 @@ class LogOrlatura(db.Model):
     tempo = db.Column(db.Integer, nullable=False, default=0)
     commessa = db.Column(db.String(255), nullable=False)
     data = db.Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
         return {
@@ -22,7 +23,5 @@ class LogOrlatura(db.Model):
             'tempo': self.tempo,
             'commessa': self.commessa,
             'data': self.data.isoformat() if self.data else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

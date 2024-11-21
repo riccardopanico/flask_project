@@ -10,11 +10,13 @@ class Task(db.Model):
     id_dispositivo = Column(Integer, nullable=False)
     tipo_intervento = Column(String(50), nullable=False)
     data_intervento = Column(DateTime, nullable=False, server_default=func.now(), default=datetime.now)
+    created_at = db.Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
         return {
             "id": self.id,
             "id_dispositivo": self.id_dispositivo,
             "tipo_intervento": self.tipo_intervento,
-            "data_intervento": self.data_intervento.isoformat()
+            "data_intervento": self.data_intervento.isoformat(),
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

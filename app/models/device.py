@@ -1,4 +1,5 @@
 from app import db
+from sqlalchemy import func
 
 class Device(db.Model):
     __tablename__ = 'devices'
@@ -22,6 +23,7 @@ class Device(db.Model):
     descrizione = db.Column(db.String(255), nullable=True)
     modello = db.Column(db.String(50), nullable=False)
     data_garanzia = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, server_default=func.now())
     
     def to_dict(self):
         return {
@@ -43,5 +45,6 @@ class Device(db.Model):
             'data_installazione': self.data_installazione.isoformat() if self.data_installazione else None,
             'descrizione': self.descrizione,
             'modello': self.modello,
-            'data_garanzia': self.data_garanzia.isoformat() if self.data_garanzia else None
+            'data_garanzia': self.data_garanzia.isoformat() if self.data_garanzia else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

@@ -60,7 +60,7 @@ def create_app():
         if getattr(job_module, '__ACTIVE__', True):
             if hasattr(job_module, 'run'):
                 job_id = f"job_{module_name}"
-                scheduler.add_job(job_module.run, 'interval', seconds=5, id=job_id, max_instances=10)
+                scheduler.add_job(lambda: job_module.run(app), 'interval', seconds=5, id=job_id, max_instances=10)
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 

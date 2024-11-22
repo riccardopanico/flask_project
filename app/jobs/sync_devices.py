@@ -1,5 +1,4 @@
 import os
-import time
 import requests
 from flask import current_app
 from app import db
@@ -22,66 +21,52 @@ def fetch_data():
         raise Exception(f"Errore durante la richiesta: {response.status_code}")
 
 def run(app):
-    SLEEP_TIME = 10
     with app.app_context():
-        while True:
-            try:
-                Session = sessionmaker(bind=db.engine)
-                session = Session()
-                data_records = fetch_data()
+        try:
+            Session = sessionmaker(bind=db.engine)
+            session = Session()
+            data_records = fetch_data()
 
-                for record in data_records:
-                    # Validazione delle chiavi necessarie per l'utente
-                    required_keys_user = ['username', 'password', 'user_type']
-                    for key in required_keys_user:
-                        if key not in record:
-                            print(f"Chiave mancante: {key} nel record: {record}")
-                            continue
+            for record in data_records:
+                # Converti tutte le chiavi del record in minuscolo
+                record = {key.lower(): value for key, value in record.items()}
 
-                    # Controlla se l'utente esiste già
-                    if session.query(User).filter_by(username=record['username']).first():
-                        print(f"L'utente {record['username']} esiste già.")
-                        continue
+                # Trova o crea l'utente
+                user = session.query(User).filter_by(username=record['username']).first()
+                if not user:
+                    user = User(username=record['username'], user_type=record['user_type'])
+                    session.add(user)
+                    print(f"Creato nuovo utente: {record['username']}")
 
-                    # Crea un nuovo utente
-                    new_user = User(username=record['username'], user_type=record['user_type'])
-                    new_user.set_password(record['password'])
-                    new_user.name = record.get('name')
-                    new_user.last_name = record.get('last_name')
-                    new_user.email = record.get('email')
-                    session.add(new_user)
-                    session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
+                # Aggiorna i dati dell'utente se necessario
+                user.user_type = record.get('user_type', user.user_type)
+                user.set_password(record['password'])
+                user.name = record.get('name', user.name)
+                user.last_name = record.get('last_name', user.last_name)
+                user.email = record.get('email', user.email)
+                print(f"Dati utente aggiornati: {record['username']}")
+                session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
 
-                    # Se l'utente è un dispositivo, crea anche il dispositivo associato
-                    if record['user_type'] == 'device':
-                        required_keys_device = ['device_id', 'ip_address', 'mac_address']
-                        for key in required_keys_device:
-                            if key not in record:
-                                print(f"Chiave mancante per il dispositivo: {key} nel record: {record}")
-                                continue
+                # Sincronizza il dispositivo se l'utente è di tipo 'device'
+                if record['user_type'] == 'device':
+                    device = session.query(Device).filter_by(device_id=record['device_id']).first()
+                    if not device:
+                        device = Device(user_id=user.id, device_id=record['device_id'])
+                        session.add(device)
+                        print(f"Creato nuovo dispositivo per utente: {record['username']} con ID dispositivo: {record['device_id']}")
 
-                        new_device = Device(
-                            user_id=new_user.id,
-                            device_id=record['device_id'],
-                            mac_address=record['mac_address'],
-                            ip_address=record['ip_address'],
-                            gateway=record.get('gateway'),
-                            subnet_mask=record.get('subnet_mask'),
-                            dns_address=record.get('dns_address')
-                        )
-                        session.add(new_device)
+                    # Aggiorna i dati del dispositivo se necessario
+                    device.mac_address = record.get('mac_address', device.mac_address)
+                    device.ip_address = record.get('ip_address', device.ip_address)
+                    device.gateway = record.get('gateway', device.gateway)
+                    device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
+                    device.dns_address = record.get('dns_address', device.dns_address)
+                    print(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 
-                # Commit delle modifiche
-                session.commit()
-                print("Inserimento dei record completato con successo.")
-
-                # Attendi prima di ripetere il processo
-                time.sleep(SLEEP_TIME)
-
-            except (SQLAlchemyError, Exception) as e:
-                session.rollback()
-                print(f"Errore durante l'inserimento dei record: {str(e)}")
-                time.sleep(SLEEP_TIME)
-            finally:
-                # Chiudi la sessione per garantire che le modifiche vengano viste
-                session.close()
+            session.commit()
+            print("Sincronizzazione dei record completata con successo.")
+        except (SQLAlchemyError, Exception) as e:
+            session.rollback()
+            print(f"Errore durante la sincronizzazione dei record: {str(e)}")
+        finally:
+            session.close()

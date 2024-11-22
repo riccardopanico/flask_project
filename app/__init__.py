@@ -35,6 +35,8 @@ def create_app():
     migrate.init_app(app, db)
 
     # Registra blueprint delle API
+    from app.api.setting import setting_blueprint
+    app.register_blueprint(setting_blueprint, url_prefix='/api/setting')
     from app.api.device import device_blueprint
     app.register_blueprint(device_blueprint, url_prefix='/api/device')
     from app.api.auth import auth_blueprint

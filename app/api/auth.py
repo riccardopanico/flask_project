@@ -67,8 +67,8 @@ def login():
             user = session.query(User).filter_by(username=data['username']).first()
 
             if user and user.check_password(data['password']):
-                access_token = create_access_token(identity={'id': user.id, 'user_type': user.user_type})
-                refresh_token = create_refresh_token(identity={'id': user.id, 'user_type': user.user_type})
+                access_token = create_access_token(identity={'id': user.id, 'username': user.username})
+                refresh_token = create_refresh_token(identity={'id': user.id, 'username': user.username})
                 return jsonify(access_token=access_token, refresh_token=refresh_token), 200
             else:
                 return jsonify({"msg": "Utente o password non corretti"}), 401

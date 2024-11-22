@@ -17,23 +17,44 @@ device_blueprint = Blueprint('device', __name__)
 def profile():
     # Configura il sessionmaker per l'uso delle sessioni
     Session = sessionmaker(bind=db.engine)
-    
+
     try:
         with Session() as session:
             current_user = get_jwt_identity()
 
+            # Recupera l'utente corrente
             user = session.query(User).get(current_user['id'])
             if not user:
                 return jsonify({"msg": "User not found"}), 404
 
+            # Verifica che l'utente sia del tipo 'device'
             if user.user_type != 'device':
                 return jsonify({"msg": "Unauthorized"}), 403
 
+            # Recupera il dispositivo associato all'utente
             device = session.query(Device).filter_by(user_id=user.id).first()
             if not device:
                 return jsonify({"msg": "Device not found"}), 404
-            
-            return jsonify(device.to_dict()), 200
+
+            # Costruisce la risposta combinando le informazioni utente e dispositivo
+            response_data = {
+                "id": user.id,
+                "badge": user.badge,
+                "username": user.username,
+                "name": user.name,
+                "last_name": user.last_name,
+                "email": user.email,
+                "user_created_at": user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else None,
+                "device_id": device.device_id,
+                "mac_address": device.mac_address,
+                "ip_address": device.ip_address,
+                "gateway": device.gateway,
+                "subnet_mask": device.subnet_mask,
+                "dns_address": device.dns_address,
+                "device_created_at": device.created_at.strftime("%Y-%m-%d %H:%M:%S") if device.created_at else None
+            }
+
+            return jsonify(response_data), 200
 
     except (SQLAlchemyError, Exception) as e:
         debug_mode = current_app.debug
@@ -47,7 +68,7 @@ def profile():
 def log_orlatura():
     # Configura il sessionmaker per l'uso delle sessioni
     Session = sessionmaker(bind=db.engine)
-    
+
     try:
         with Session() as session:
             current_user = get_jwt_identity()
@@ -62,7 +83,7 @@ def log_orlatura():
             device = session.query(Device).filter_by(user_id=user.id).first()
             if not device:
                 return jsonify({"msg": "Device not found"}), 404
-            
+
             # Lettura dei dati dalla tabella log_orlatura per il dispositivo specifico
             query = session.query(LogOrlatura).filter_by(id_macchina=device.id)
 
@@ -82,7 +103,7 @@ def log_orlatura():
 
             # Serializza i dati per il ritorno come JSON
             log_data = [log.to_dict() for log in logs]
-            
+
             return jsonify(log_data), 200
 
     except (SQLAlchemyError, Exception) as e:
@@ -126,13 +147,13 @@ def log_orlatura_proxy():
         if debug_mode:
             error_response["error"] = str(e)
         return jsonify(error_response), 500
-    
+
 @device_blueprint.route('/task', methods=['POST'])
 @jwt_required()
 def create_task():
     # Configura il sessionmaker per l'uso delle sessioni
     Session = sessionmaker(bind=db.engine)
-    
+
     try:
         data = request.get_json()
         if not data:

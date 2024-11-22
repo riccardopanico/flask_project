@@ -5,7 +5,7 @@ class Device(db.Model):
     __tablename__ = 'devices'
 
     id = db.Column(db.Integer, primary_key=True)
-    device_id = db.Column(db.Integer, nullable=False)
+    device_id = db.Column(db.Integer, unique=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     mac_address = db.Column(db.String(17), nullable=False)
     ip_address = db.Column(db.String(45), nullable=False)

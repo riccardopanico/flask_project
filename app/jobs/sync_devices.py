@@ -43,7 +43,7 @@ def run(app):
                 # Aggiorna i dati dell'utente se necessario
                 user.user_type = record.get('user_type', user.user_type)
                 if 'password' in record and record['password']:
-                    if not user.check_password(record['password']):
+                    if user.password_hash is None or not user.check_password(record['password']):
                         user.set_password(record['password'])
                         print(f"Password aggiornata per utente: {record['username']}")
                 user.name = record.get('name', user.name)

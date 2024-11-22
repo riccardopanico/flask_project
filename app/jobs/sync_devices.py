@@ -37,12 +37,15 @@ def run(app):
                     user = User(username=record['username'], user_type=record['user_type'])
                     session.add(user)
                     print(f"Creato nuovo utente: {record['username']}")
+                else:
+                    print(f"Utente esistente trovato: {record['username']}")
 
                 # Aggiorna i dati dell'utente se necessario
                 user.user_type = record.get('user_type', user.user_type)
-                if not user.check_password(record['password']):
-                    user.set_password(record['password'])
-                    print(f"Password aggiornata per utente: {record['username']}")
+                if 'password' in record and record['password']:
+                    if not user.check_password(record['password']):
+                        user.set_password(record['password'])
+                        print(f"Password aggiornata per utente: {record['username']}")
                 user.name = record.get('name', user.name)
                 user.last_name = record.get('last_name', user.last_name)
                 user.email = record.get('email', user.email)
@@ -56,6 +59,8 @@ def run(app):
                         device = Device(user_id=user.id, device_id=record['device_id'])
                         session.add(device)
                         print(f"Creato nuovo dispositivo per utente: {record['username']} con ID dispositivo: {record['device_id']}")
+                    else:
+                        print(f"Dispositivo esistente trovato per utente: {record['username']} con ID dispositivo: {record['device_id']}")
 
                     # Aggiorna i dati del dispositivo se necessario
                     device.mac_address = record.get('mac_address', device.mac_address)

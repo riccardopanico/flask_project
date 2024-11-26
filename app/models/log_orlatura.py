@@ -1,18 +1,18 @@
 from app import db
+from sqlalchemy import Column, Integer, String, DateTime, func
 from datetime import datetime
-from sqlalchemy import func
 
 class LogOrlatura(db.Model):
     __tablename__ = 'log_orlatura'
 
-    id = db.Column(db.Integer, primary_key=True)
-    id_macchina = db.Column(db.Integer, nullable=False)
-    id_operatore = db.Column(db.String(50), nullable=False)
-    consumo = db.Column(db.Numeric(precision=11, scale=2), nullable=False, default=0.00)
-    tempo = db.Column(db.Integer, nullable=False, default=0)
-    commessa = db.Column(db.String(255), nullable=False)
-    data = db.Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
-    created_at = db.Column(db.DateTime, server_default=func.now())
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    id_macchina = Column(db.Integer, nullable=False)
+    id_operatore = Column(db.String(50), nullable=False)
+    consumo = Column(db.Numeric(precision=11, scale=2), nullable=False, default=0.00)
+    tempo = Column(db.Integer, nullable=False, default=0)
+    commessa = Column(db.String(255), nullable=False)
+    data = Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
+    created_at = Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
         return {

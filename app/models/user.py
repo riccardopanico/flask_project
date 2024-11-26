@@ -1,19 +1,19 @@
 from app import db
-from sqlalchemy import func
+from sqlalchemy import Column, Integer, String, DateTime, func
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(db.Model):
     __tablename__ = 'users'
 
-    id = db.Column(db.Integer, primary_key=True)
-    badge = db.Column(db.String(50), nullable=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    user_type = db.Column(db.String(50), nullable=False)
-    name = db.Column(db.String(100), nullable=True)
-    last_name = db.Column(db.String(100), nullable=True)
-    email = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, server_default=func.now())
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    badge = Column(db.String(50), nullable=True)
+    username = Column(db.String(100), unique=True, nullable=False)
+    password_hash = Column(db.String(255), nullable=False)
+    user_type = Column(db.String(50), nullable=False)
+    name = Column(db.String(100), nullable=True)
+    last_name = Column(db.String(100), nullable=True)
+    email = Column(db.String(100), nullable=True)
+    created_at = Column(db.DateTime, server_default=func.now())
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

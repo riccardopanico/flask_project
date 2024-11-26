@@ -1,17 +1,17 @@
 from app import db
+from sqlalchemy import Column, Integer, String, DateTime, func
 from datetime import datetime
-from sqlalchemy import func
 
 class LogOperazioni(db.Model):
     __tablename__ = 'log_operazioni'
 
-    id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
-    id_macchina = db.Column(db.Integer, nullable=False)
-    id_operatore = db.Column(db.String(50), nullable=False)
-    codice = db.Column(db.String(255), nullable=False)
-    valore = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, server_default=func.now())
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    data = Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
+    id_macchina = Column(db.Integer, nullable=False)
+    id_operatore = Column(db.String(50), nullable=False)
+    codice = Column(db.String(255), nullable=False)
+    valore = Column(db.String(255), nullable=False)
+    created_at = Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
         return {

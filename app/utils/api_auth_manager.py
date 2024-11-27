@@ -15,7 +15,6 @@ class ApiAuthManager:
         print(f"API_PASSWORD: {self.password}")
         if not self.api_base_url or not self.username or not self.password:
             raise ValueError("API_BASE_URL, API_USERNAME e API_PASSWORD devono essere impostati nella variabile d'ambiente.")
-        print(f"Stato iniziale dei token: access_token={self.access_token}, refresh_token={self.refresh_token}")
 
     def perform_login(self):
         url = f"{self.api_base_url}/auth/login"
@@ -28,16 +27,18 @@ class ApiAuthManager:
                 self.access_token = response_data['access_token']
                 self.refresh_token = response_data['refresh_token']
                 self.headers['Authorization'] = f"Bearer {self.access_token}"
-                print(f"Token dopo il login: access_token={self.access_token}, refresh_token={self.refresh_token}")
                 return {'success': True, 'data': response_data}
             else:
+                print(f"Errore durante il login: {response.text}")
                 return {'success': False, 'error': response.text}
         except RequestException as e:
+            print(f"Eccezione durante il login: {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def perform_refresh_token(self):
         if not self.refresh_token:
-            return {'success': False, 'error': 'Refresh token not available'}
+            print("Refresh token non disponibile.")
+            return self.perform_login()  # Effettua un nuovo login se il refresh token non è disponibile
 
         url = f"{self.api_base_url}/auth/token/refresh"
         headers = {'Authorization': f"Bearer {self.refresh_token}"}
@@ -48,12 +49,14 @@ class ApiAuthManager:
                 # Aggiorna il token di accesso
                 self.access_token = response_data['access_token']
                 self.headers['Authorization'] = f"Bearer {self.access_token}"
-                print(f"Token dopo il refresh: access_token={self.access_token}, refresh_token={self.refresh_token}")
                 return {'success': True, 'data': response_data}
             else:
-                return {'success': False, 'error': response.text}
+                print(f"Errore durante il refresh del token: {response.json().get('msg', 'Errore sconosciuto')}")
+                print(f"Tentativo di nuovo login.")
+                return self.perform_login()  # Effettua un nuovo login se il refresh fallisce
         except RequestException as e:
-            return {'success': False, 'error': str(e)}
+            print(f"Eccezione durante il refresh del token: {str(e)}")
+            return self.perform_login()  # Effettua un nuovo login in caso di errore
 
     def call_external_api(self, url, params=None, method='GET'):
         # Verifica se esiste un access token
@@ -78,8 +81,10 @@ class ApiAuthManager:
                 response = requests.get(full_url, params=params, headers=self.headers)
 
             if response.status_code == 200 or response.status_code == 201:
+                print("Chiamata API riuscita.")
                 return {'success': True, 'data': response.json()}
             elif response.status_code == 401:
+                print("Token scaduto, tentativo di refresh.")
                 # Token expired, prova a fare il refresh
                 refresh_response = self.perform_refresh_token()
                 if refresh_response['success']:
@@ -88,7 +93,9 @@ class ApiAuthManager:
                 else:
                     return {'success': False, 'status': 401, 'error': f"Unable to refresh or login: {refresh_response['error']}"}
             else:
+                print(f"Errore durante la chiamata API: {response.text}")
                 return {'success': False, 'status': response.status_code, 'error': response.text}
 
         except RequestException as e:
+            print(f"Eccezione durante la chiamata API: {str(e)}")
             return {'success': False, 'status': 500, 'error': str(e)}

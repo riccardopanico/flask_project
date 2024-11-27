@@ -10,7 +10,9 @@ def run(app):
     with app.app_context():
         Session = sessionmaker(bind=db.engine)
         session = Session()
-        api_manager = ApiAuthManager()
+
+        api_manager = app.api_manager
+        # api_manager = ApiAuthManager()
 
         try:
             # Recupera i task con la colonna "sent" impostata a 0

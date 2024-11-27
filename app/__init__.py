@@ -11,7 +11,7 @@ from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
 import queue
-import json
+from app.utils.api_auth_manager import ApiAuthManager
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -27,8 +27,11 @@ def create_app():
 
     # Imposta la configurazione in base all'ambiente
     config_class = ProductionConfig if env == "production" else DevelopmentConfig
+
+    # Inizializzazione dell'app Flask e delle estensioni
     app = Flask(__name__)
     app.config.from_object(config_class)
+    app.api_manager = ApiAuthManager()
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)
@@ -53,9 +56,6 @@ def create_app():
             if module_name not in enabled_modules:
                 continue
 
-            print(f"Importing module: {module_name}")
-
-            # Per API, modelli, jobs e threads carica diversamente
             if key == 'api':
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
@@ -64,18 +64,14 @@ def create_app():
                 if hasattr(module, blueprint_name):
                     blueprint = getattr(module, blueprint_name)
                     app.register_blueprint(blueprint, url_prefix=f'/api/{module_name}')
-
             elif key == 'models':
-                # Importa modelli direttamente per evitare conflitti
                 importlib.import_module(f'app.models.{module_name}')
-
             elif key == 'jobs':
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
                     scheduler.add_job(module.run, 'interval', seconds=5, id=module_name, max_instances=10, args=(app,))
-
             elif key == 'threads':
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)

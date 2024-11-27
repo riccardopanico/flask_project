@@ -25,5 +25,5 @@ class ProductionConfig(Config):
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    JWT_ACCESS_TOKEN_EXPIRES = False  # Nessuna scadenza
-    JWT_REFRESH_TOKEN_EXPIRES = False  # Nessuna scadenza
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=15)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=30)

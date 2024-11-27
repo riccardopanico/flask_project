@@ -15,6 +15,7 @@ class ApiAuthManager:
         print(f"API_PASSWORD: {self.password}")
         if not self.api_base_url or not self.username or not self.password:
             raise ValueError("API_BASE_URL, API_USERNAME e API_PASSWORD devono essere impostati nella variabile d'ambiente.")
+        print(f"Stato iniziale dei token: access_token={self.access_token}, refresh_token={self.refresh_token}")
 
     def perform_login(self):
         url = f"{self.api_base_url}/auth/login"
@@ -27,6 +28,7 @@ class ApiAuthManager:
                 self.access_token = response_data['access_token']
                 self.refresh_token = response_data['refresh_token']
                 self.headers['Authorization'] = f"Bearer {self.access_token}"
+                print(f"Token dopo il login: access_token={self.access_token}, refresh_token={self.refresh_token}")
                 return {'success': True, 'data': response_data}
             else:
                 return {'success': False, 'error': response.text}
@@ -46,6 +48,7 @@ class ApiAuthManager:
                 # Aggiorna il token di accesso
                 self.access_token = response_data['access_token']
                 self.headers['Authorization'] = f"Bearer {self.access_token}"
+                print(f"Token dopo il refresh: access_token={self.access_token}, refresh_token={self.refresh_token}")
                 return {'success': True, 'data': response_data}
             else:
                 return {'success': False, 'error': response.text}

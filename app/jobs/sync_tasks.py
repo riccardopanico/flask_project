@@ -26,7 +26,8 @@ def run(app):
             task_data = [task.to_dict() for task in unsent_tasks]
 
             # Invia i task all'API
-            response = api_manager.call_external_api('/task', params=task_data, method='POST')
+            response = api_manager.call_external_api('/task/list', params={'tasks': task_data}, method='GET')
+            # response = api_manager.call_external_api('/task/list', params=task_data, method='POST')
 
             if response['success']:
                 # Ottieni tutti gli ID dei task che sono stati inviati

@@ -42,13 +42,16 @@ def run(app):
                         user.email = record.get('email')
                         session.add(user)
                         session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
-                        print(f"Creato nuovo utente: {record['username']}")
+                        if current_app.debug:
+                            print(f"Creato nuovo utente: {record['username']}")
                     else:
-                        print(f"Utente esistente trovato: {record['username']}")
+                        if current_app.debug:
+                            print(f"Utente esistente trovato: {record['username']}")
 
                     device = Device(user_id=user.id, device_id=record['device_id'])
                     session.add(device)
-                    print(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
+                    if current_app.debug:
+                        print(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
                 else:
                     # Aggiorna i dati dell'utente associato al dispositivo
                     user = session.query(User).filter_by(id=device.user_id).first()
@@ -57,20 +60,24 @@ def run(app):
                             # Verifica se esiste un altro utente con lo stesso username
                             existing_user = session.query(User).filter_by(username=record['username']).first()
                             if existing_user and existing_user.id != user.id:
-                                print(f"Errore: L'username '{record['username']}' è già in uso da un altro utente.")
+                                if current_app.debug:
+                                    print(f"Errore: L'username '{record['username']}' è già in uso da un altro utente.")
                                 continue
                             user.username = record['username']
                         user.user_type = record.get('user_type', user.user_type)
                         if 'password' in record and record['password']:
                             if user.password_hash is None or not user.check_password(record['password']):
                                 user.set_password(record['password'])
-                                print(f"Password aggiornata per utente: {record['username']}")
+                                if current_app.debug:
+                                    print(f"Password aggiornata per utente: {record['username']}")
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)
                         user.email = record.get('email', user.email)
-                        print(f"Dati utente aggiornati: {record['username']}")
+                        if current_app.debug:
+                            print(f"Dati utente aggiornati: {record['username']}")
                     else:
-                        print(f"Errore: Utente associato al dispositivo {record['device_id']} non trovato.")
+                        if current_app.debug:
+                            print(f"Errore: Utente associato al dispositivo {record['device_id']} non trovato.")
 
                 # Aggiorna i dati del dispositivo se necessario
                 device.mac_address = record.get('mac_address', device.mac_address)
@@ -78,15 +85,19 @@ def run(app):
                 device.gateway = record.get('gateway', device.gateway)
                 device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
                 device.dns_address = record.get('dns_address', device.dns_address)
-                print(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
+                if current_app.debug:
+                    print(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 
             session.commit()
-            print("Sincronizzazione dei record completata con successo.")
+            if current_app.debug:
+                print("Sincronizzazione dei record completata con successo.")
         except IntegrityError as e:
             session.rollback()
-            print(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}")
+            if current_app.debug:
+                print(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}")
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            print(f"Errore durante la sincronizzazione dei record: {str(e)}")
+            if current_app.debug:
+                print(f"Errore durante la sincronizzazione dei record: {str(e)}")
         finally:
             session.close()

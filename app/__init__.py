@@ -53,21 +53,33 @@ def create_app():
             if module_name not in enabled_modules:
                 continue
 
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            print(f"Importing module: {module_name}")
 
+            # Per API, modelli, jobs e threads carica diversamente
             if key == 'api':
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
                 blueprint_name = f"{module_name}_blueprint"
                 if hasattr(module, blueprint_name):
                     blueprint = getattr(module, blueprint_name)
                     app.register_blueprint(blueprint, url_prefix=f'/api/{module_name}')
+
             elif key == 'models':
+                # Importa modelli direttamente per evitare conflitti
                 importlib.import_module(f'app.models.{module_name}')
+
             elif key == 'jobs':
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
                     scheduler.add_job(module.run, 'interval', seconds=5, id=module_name, max_instances=10, args=(app,))
+
             elif key == 'threads':
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
                     thread = threading.Thread(target=module.run, args=(app,))
                     thread.daemon = True

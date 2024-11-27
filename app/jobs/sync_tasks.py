@@ -1,4 +1,5 @@
 import os
+from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app import db
@@ -15,7 +16,8 @@ def run(app):
             # Recupera i task con la colonna "sent" impostata a 0
             unsent_tasks = session.query(Task).filter(Task.sent == 0).all()
             if not unsent_tasks:
-                print("Nessun task da sincronizzare.")
+                if current_app.debug:
+                    print("Nessun task da sincronizzare.")
                 return
 
             # Converti i task in un formato serializzabile in JSON
@@ -30,11 +32,14 @@ def run(app):
                 # Aggiorna tutti i task come inviati in un'unica operazione
                 session.query(Task).filter(Task.id.in_(task_ids)).update({Task.sent: 1}, synchronize_session=False)
                 session.commit()
-                print("I task sono stati inviati e aggiornati con successo.")
+                if current_app.debug:
+                    print("I task sono stati inviati e aggiornati con successo.")
             else:
-                print(f"Errore durante la sincronizzazione dei task: {response['error']}")
+                if current_app.debug:
+                    print(f"Errore durante la sincronizzazione dei task: {response['error']}")
         except SQLAlchemyError as e:
             session.rollback()
-            print(f"Errore durante la sincronizzazione dei task: {str(e)}")
+            if current_app.debug:
+                print(f"Errore durante la sincronizzazione dei task: {str(e)}")
         finally:
             session.close()

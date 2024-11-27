@@ -7,8 +7,6 @@ from sqlalchemy.orm import sessionmaker
 from app.models.user import User
 from app.models.device import Device
 
-__ACTIVE__ = True
-
 def fetch_data():
     API_BASE_URL = os.getenv('TAP_IN_RESTART_API_BASE_URL')
     if not API_BASE_URL:

@@ -12,10 +12,8 @@ from datetime import datetime
 import signal
 import weakref
 
-__ACTIVE__ = False
-
-HOST = '0.0.0.0'  
-PORT = 8765  
+HOST = '0.0.0.0'
+PORT = 8765
 connected_clients = weakref.WeakSet()
 loop = None
 server = None
@@ -78,7 +76,7 @@ async def check_queue_messages(app):
             try:
                 # Ottiene il messaggio dalla coda (bloccante finché non arriva un messaggio)
                 message = await asyncio.to_thread(websocket_queue.get)
-                
+
                 Session = sessionmaker(bind=db.engine)
                 with Session() as session:
                     if message == "alert_spola":
@@ -95,7 +93,7 @@ async def check_queue_messages(app):
                         session.commit()
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
-                        
+
                         # Adattamento delle query da Laravel a Python
                         id_macchina = session.query(Impostazioni).filter_by(codice='id_macchina').first().valore
                         commessa = session.query(Impostazioni).filter_by(codice='commessa').first().valore

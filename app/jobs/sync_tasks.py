@@ -5,8 +5,6 @@ from app import db
 from app.models.tasks import Task
 from app.utils.api_auth_manager import ApiAuthManager
 
-__ACTIVE__ = True
-
 def run(app):
     with app.app_context():
         Session = sessionmaker(bind=db.engine)

@@ -11,6 +11,7 @@ from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
 import queue
+import json
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -34,51 +35,45 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # Registra blueprint delle API
-    from app.api.setting import setting_blueprint
-    app.register_blueprint(setting_blueprint, url_prefix='/api/setting')
-    from app.api.device import device_blueprint
-    app.register_blueprint(device_blueprint, url_prefix='/api/device')
-    from app.api.auth import auth_blueprint
-    app.register_blueprint(auth_blueprint, url_prefix='/api/auth')
-    from app.api.task import task_blueprint
-    app.register_blueprint(task_blueprint, url_prefix='/api/task')
+    # Iterazione unica per registrare blueprint, importare modelli, configurare job e avviare thread
+    base_paths = {
+        'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),
+        'models': os.path.join(os.path.dirname(__file__), 'models', '*.py'),
+        'jobs': os.path.join(os.path.dirname(__file__), 'jobs', '*.py'),
+        'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py')
+    }
 
-    # Importa modelli per le migrazioni
-    from app.models.device import Device
-    from app.models.user import User
-    from app.models.log_orlatura import LogOrlatura
-    from app.models.log_operazioni import LogOperazioni
-    from app.models.impostazioni import Impostazioni
-    from app.models.campionatura import Campionatura
-    from app.models.tasks import Task
-
-    # Configura APScheduler per la gestione dei job
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-    jobs_path = os.path.join(os.path.dirname(__file__), 'jobs', '*.py')
-    for job_file in glob.glob(jobs_path):
-        module_name = os.path.basename(job_file)[:-3]
-        spec = importlib.util.spec_from_file_location(module_name, job_file)
-        job_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(job_module)
-        if getattr(job_module, '__ACTIVE__', True):
-            if hasattr(job_module, 'run'):
-                job_id = f"job_{module_name}"
-                scheduler.add_job(job_module.run, 'interval', seconds=5, id=job_id, max_instances=10, args=(app,))
+    for key, path in base_paths.items():
+        enabled_key = f'ENABLED_{key.upper()}'
+        enabled_modules = app.config.get(enabled_key, [])
+
+        for file_path in glob.glob(path):
+            module_name = os.path.basename(file_path)[:-3]
+            if module_name not in enabled_modules:
+                continue
+
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            if key == 'api':
+                blueprint_name = f"{module_name}_blueprint"
+                if hasattr(module, blueprint_name):
+                    blueprint = getattr(module, blueprint_name)
+                    app.register_blueprint(blueprint, url_prefix=f'/api/{module_name}')
+            elif key == 'models':
+                importlib.import_module(f'app.models.{module_name}')
+            elif key == 'jobs':
+                if hasattr(module, 'run'):
+                    scheduler.add_job(module.run, 'interval', seconds=5, id=module_name, max_instances=10, args=(app,))
+            elif key == 'threads':
+                if hasattr(module, 'run'):
+                    thread = threading.Thread(target=module.run, args=(app,))
+                    thread.daemon = True
+                    thread.start()
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-
-    # Avvio dei thread per ogni file nella cartella threads
-    threads_path = os.path.join(os.path.dirname(__file__), 'threads', '*.py')
-    for thread_file in glob.glob(threads_path):
-        module_name = os.path.basename(thread_file)[:-3]
-        spec = importlib.util.spec_from_file_location(module_name, thread_file)
-        thread_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(thread_module)
-        if getattr(thread_module, '__ACTIVE__', True):
-            if hasattr(thread_module, 'run'):
-                thread = threading.Thread(target=thread_module.run, args=(app,))
-                thread.daemon = True
-                thread.start()
 
     return app

@@ -1,22 +1,14 @@
-from flask_script import Manager, Server
-from flask_migrate import Migrate, MigrateCommand
+from flask_migrate import Migrate
 from app import create_app, db
+import sys
 
-# Creazione dell'applicazione
+# Crea l'applicazione utilizzando la funzione create_app
 app = create_app()
 
-# Inizializza Migrate
+# Inizializza Migrate con l'app Flask e il database
 migrate = Migrate(app, db)
 
-# Creazione del gestore per i comandi del terminale
-manager = Manager(app)
-
-# Aggiungi il comando per gestire le migrazioni
-manager.add_command('db', MigrateCommand)
-
-# Comando per avviare l'applicazione con parametri definiti
-server = Server(host='0.0.0.0', port=5000, threaded=True)
-manager.add_command("runserver", server)
-
+# Controlla se il comando da terminale è "flask" per evitare di avviare il server inutilmente
 if __name__ == '__main__':
-    manager.run()
+    if len(sys.argv) > 1 and sys.argv[1] == "runserver":
+        app.run(threaded=True, host='0.0.0.0', port=5000)

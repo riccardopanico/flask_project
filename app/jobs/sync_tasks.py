@@ -3,16 +3,19 @@ from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app import db
+from datetime import timedelta
 from app.models.tasks import Task
-from app.utils.api_auth_manager import ApiAuthManager
+
+JOB_INTERVAL = timedelta(seconds=5)
 
 def run(app):
+    if current_app.debug:
+        print("Sincronizzazione dei task in corso...")
     with app.app_context():
         Session = sessionmaker(bind=db.engine)
         session = Session()
 
         api_manager = app.api_manager
-        # api_manager = ApiAuthManager()
 
         try:
             # Recupera i task con la colonna "sent" impostata a 0

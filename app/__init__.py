@@ -6,12 +6,13 @@ from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
+from datetime import timedelta
 import atexit
 from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
 import queue
-from app.utils.api_auth_manager import ApiAuthManager
+from app.utils.api_device_manager import ApiDeviceManager
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -31,7 +32,7 @@ def create_app():
     # Inizializzazione dell'app Flask e delle estensioni
     app = Flask(__name__)
     app.config.from_object(config_class)
-    app.api_manager = ApiAuthManager()
+    app.api_manager = ApiDeviceManager()
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)
@@ -71,7 +72,8 @@ def create_app():
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
-                    scheduler.add_job(module.run, 'interval', seconds=5, id=module_name, max_instances=10, args=(app,))
+                    job_interval = getattr(module, 'JOB_INTERVAL', timedelta(minutes=15))
+                    scheduler.add_job(module.run, 'interval', seconds=job_interval.total_seconds(), id=module_name, max_instances=10, args=(app,))
             elif key == 'threads':
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)

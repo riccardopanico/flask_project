@@ -2,7 +2,7 @@ import os
 import requests
 from requests.exceptions import RequestException
 
-class ApiAuthManager:
+class ApiDeviceManager:
     def __init__(self):
         self.api_base_url = os.getenv('API_BASE_URL')
         self.username = os.getenv('API_USERNAME')

@@ -7,7 +7,7 @@ class LogOperazioni(db.Model):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     data = Column(db.DateTime, nullable=False, server_default=func.now(), default=datetime.now)
-    id_macchina = Column(db.Integer, nullable=False)
+    device_id = Column(db.Integer, nullable=False)
     id_operatore = Column(db.String(50), nullable=False)
     codice = Column(db.String(255), nullable=False)
     valore = Column(db.String(255), nullable=False)
@@ -17,7 +17,7 @@ class LogOperazioni(db.Model):
         return {
             'id': self.id,
             'data': self.data.isoformat() if self.data else None,
-            'id_macchina': self.id_macchina,
+            'device_id': self.device_id,
             'id_operatore': self.id_operatore,
             'codice': self.codice,
             'valore': self.valore,

@@ -1,4 +1,3 @@
-import os
 from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker

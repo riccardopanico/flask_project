@@ -8,7 +8,7 @@ from datetime import timedelta
 from app.models.user import User
 from app.models.device import Device
 
-JOB_INTERVAL = timedelta(seconds=15)
+JOB_INTERVAL = timedelta(minutes=1)
 
 def fetch_data():
     API_BASE_URL = os.getenv('TAP_IN_RESTART_API_BASE_URL')
@@ -22,10 +22,10 @@ def fetch_data():
         raise Exception(f"Errore durante la richiesta: {response.status_code}")
 
 def run(app):
-    if current_app.debug:
-        print("Sincronizzazione dei dispositivi in corso...")
     with app.app_context():
         try:
+            if current_app.debug:
+                print("Sincronizzazione dei dispositivi in corso...")
             Session = sessionmaker(bind=db.engine)
             session = Session()
             data_records = fetch_data()

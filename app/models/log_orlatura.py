@@ -6,7 +6,7 @@ class LogOrlatura(db.Model):
     __tablename__ = 'log_orlatura'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    id_macchina = Column(db.Integer, nullable=False)
+    device_id = Column(db.Integer, nullable=False)
     id_operatore = Column(db.String(50), nullable=False)
     consumo = Column(db.Numeric(precision=11, scale=2), nullable=False, default=0.00)
     tempo = Column(db.Integer, nullable=False, default=0)
@@ -17,7 +17,7 @@ class LogOrlatura(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'id_macchina': self.id_macchina,
+            'device_id': self.device_id,
             'id_operatore': self.id_operatore,
             'consumo': str(self.consumo),
             'tempo': self.tempo,

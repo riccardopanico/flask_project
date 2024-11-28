@@ -95,14 +95,14 @@ async def check_queue_messages(app):
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 
                         # Adattamento delle query da Laravel a Python
-                        id_macchina = session.query(Impostazioni).filter_by(codice='id_macchina').first().valore
+                        device_id = session.query(Impostazioni).filter_by(codice='device_id').first().valore
                         commessa = session.query(Impostazioni).filter_by(codice='commessa').first().valore
 
                         # Query per dati totali
                         dati_totali = session.query(
                             func.sum(LogOrlatura.consumo).label('consumo_totale'),
                             func.sum(LogOrlatura.tempo).label('tempo_totale')
-                        ).filter(LogOrlatura.id_macchina == id_macchina).first()
+                        ).filter(LogOrlatura.device_id == device_id).first()
 
                         consumo_totale = float(round(dati_totali.consumo_totale or 0, 2))
                         tempo_totale = float(round(dati_totali.tempo_totale or 0, 2))
@@ -112,7 +112,7 @@ async def check_queue_messages(app):
                             func.sum(LogOrlatura.consumo).label('consumo_commessa'),
                             func.sum(LogOrlatura.tempo).label('tempo_commessa')
                         ).filter(
-                            LogOrlatura.id_macchina == id_macchina,
+                            LogOrlatura.device_id == device_id,
                             LogOrlatura.commessa == commessa
                         ).first()
 
@@ -124,7 +124,7 @@ async def check_queue_messages(app):
                             func.sum(LogOrlatura.consumo).label('consumo_campionatura'),
                             func.sum(LogOrlatura.tempo).label('tempo_campionatura')
                         ).filter(
-                            LogOrlatura.id_macchina == id_macchina,
+                            LogOrlatura.device_id == device_id,
                             LogOrlatura.data.between(
                                 session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()[0],
                                 db.func.coalesce(session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()[0], datetime.now())

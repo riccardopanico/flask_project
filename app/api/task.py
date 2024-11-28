@@ -13,46 +13,29 @@ task_blueprint = Blueprint('task', __name__)
 @task_blueprint.route('/create', methods=['POST'])
 @jwt_required()
 def create():
-    # Configura il sessionmaker per l'uso delle sessioni
     Session = sessionmaker(bind=db.engine)
-
     try:
         with Session() as session:
-            # Ottieni l'utente corrente
             current_user = get_jwt_identity()
-
-            # Recupera l'utente corrente
             user = session.query(User).get(current_user['id'])
-            if not user:
-                return jsonify({"msg": "User not found"}), 404
-
-            # Verifica che l'utente sia del tipo 'device'
-            if user.user_type != 'device':
+            if not user or user.user_type != 'device':
                 return jsonify({"msg": "Unauthorized"}), 403
 
-            # Recupera il dispositivo associato all'utente
             device = session.query(Device).filter_by(user_id=user.id).first()
             if not device:
                 return jsonify({"msg": "Device not found"}), 404
 
-            # Ottieni i dati dalla richiesta JSON
             data = request.get_json()
-            if not data or 'task_type' not in data:
+            if not data or 'tasks' not in data or not isinstance(data['tasks'], list):
                 return jsonify({"msg": "Invalid input"}), 400
 
-            # Crea un nuovo task
-            new_task = Task(
-                device_id=device.device_id,
-                task_type=data['task_type'],
-                sent=data.get('sent', 0),
-                status=data.get('status', 'UNASSIGNED')
-            )
-            session.add(new_task)
+            tasks = [Task(device_id=device.device_id, task_type=task['task_type'],
+                          sent=task.get('sent', 0), status=task.get('status', 'UNASSIGNED'))
+                     for task in data['tasks']]
+
+            session.add_all(tasks)
             session.commit()
-
-            # Restituisci i dati del task creato
-            return jsonify({"msg": "Task created successfully", "task": new_task.to_dict()}), 201
-
+            return jsonify({"msg": "Tasks created successfully", "tasks": [task.to_dict() for task in tasks]}), 201
     except (SQLAlchemyError, Exception) as e:
         debug_mode = current_app.debug
         error_response = {"msg": "Errore interno del server"}

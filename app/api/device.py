@@ -85,7 +85,7 @@ def log_orlatura():
                 return jsonify({"msg": "Device not found"}), 404
 
             # Lettura dei dati dalla tabella log_orlatura per il dispositivo specifico
-            query = session.query(LogOrlatura).filter_by(id_macchina=device.id)
+            query = session.query(LogOrlatura).filter_by(device_id=device.id)
 
             # Aggiunta di filtri per range di date se forniti nel payload
             start_date = request.args.get('start_date')

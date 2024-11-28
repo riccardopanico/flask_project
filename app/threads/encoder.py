@@ -72,18 +72,18 @@ def load_fattore_taratura_from_db():
 
 # Funzione per ottenere la commessa, l'id macchina e l'id operatore dal database
 def load_commessa_e_macchina_operatore():
-    impostazioni = Impostazioni.query.filter(Impostazioni.codice.in_(['id_macchina', 'commessa', 'id_operatore'])).all()
+    impostazioni = Impostazioni.query.filter(Impostazioni.codice.in_(['device_id', 'commessa', 'id_operatore'])).all()
     impostazioni_dict = {impostazione.codice: impostazione.valore for impostazione in impostazioni}
-    id_macchina = int(impostazioni_dict.get('id_macchina', 1))  # Default a 1 se non trovato
+    device_id = int(impostazioni_dict.get('device_id', 1))  # Default a 1 se non trovato
     commessa = impostazioni_dict.get('commessa', 'Commessa1')
     id_operatore = impostazioni_dict.get('id_operatore', '0010452223')  # Default se non trovato
-    return id_macchina, commessa, id_operatore
+    return device_id, commessa, id_operatore
 
 # Funzione per salvare i record nel database
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
-    id_macchina, commessa, id_operatore = load_commessa_e_macchina_operatore()
+    device_id, commessa, id_operatore = load_commessa_e_macchina_operatore()
     log = LogOrlatura(
-        id_macchina=id_macchina,
+        device_id=device_id,
         id_operatore=id_operatore,
         consumo=lunghezza,
         tempo=tempo_operativita,

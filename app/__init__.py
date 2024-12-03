@@ -39,16 +39,23 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
+    # Controlla se l'app viene eseguita da un contesto CLI (ad esempio per migrazioni) o come server
+    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
+
     # Iterazione unica per registrare blueprint, importare modelli, configurare job e avviare thread
-    base_paths = {
-        'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),
-        'models': os.path.join(os.path.dirname(__file__), 'models', '*.py'),
-        'jobs': os.path.join(os.path.dirname(__file__), 'jobs', '*.py'),
-        'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py')
+    modules_to_import = {
+        'models': os.path.join(os.path.dirname(__file__), 'models', '*.py')
     }
 
+    if not run_from_cli:
+        modules_to_import.update({
+            'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),
+            'jobs': os.path.join(os.path.dirname(__file__), 'jobs', '*.py'),
+            'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py')
+        })
+
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-    for key, path in base_paths.items():
+    for key, path in modules_to_import.items():
         enabled_key = f'ENABLED_{key.upper()}'
         enabled_modules = app.config.get(enabled_key, [])
 

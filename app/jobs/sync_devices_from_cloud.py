@@ -8,7 +8,7 @@ from datetime import timedelta
 from app.models.user import User
 from app.models.device import Device
 
-JOB_INTERVAL = timedelta(minutes=1)
+JOB_INTERVAL = timedelta(seconds=10)
 
 def fetch_data():
     API_BASE_URL = os.getenv('TAP_IN_RESTART_API_BASE_URL')

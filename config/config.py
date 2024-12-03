@@ -17,16 +17,16 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # # DataCenter
-    # ENABLED_JOBS = ['send_new_tasks_cloud']
+    # ENABLED_JOBS = ['send_new_tasks_to_cloud.py', 'sync_devices_from_cloud.py']
     # ENABLED_THREADS = []
-    # ENABLED_MODELS = ['campionatura', 'device', 'impostazioni', 'log_operazioni', 'log_orlatura', 'tasks', 'user']
+    # ENABLED_MODELS = ['device', 'tasks', 'user']
     # ENABLED_API = ['auth', 'device', 'setting', 'task']
 
     # PiDevice
-    ENABLED_JOBS = ['send_new_tasks_data_center']
+    ENABLED_JOBS = ['send_new_tasks_to_data_center.py', 'sync_tasks_to_data_center.py']
     ENABLED_THREADS = ['encoder', 'monitor_alert', 'websocket']
     ENABLED_MODELS = ['campionatura', 'device', 'impostazioni', 'log_operazioni', 'log_orlatura', 'tasks', 'user']
-    ENABLED_API = ['auth', 'device', 'setting', 'task']
+    ENABLED_API = ['auth', 'device', 'setting']
 
 class ProductionConfig(Config):
     DEBUG = False

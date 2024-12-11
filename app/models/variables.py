@@ -1,18 +1,17 @@
 from app import db
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, DateTime
-from sqlalchemy.sql import func
+from app.models.log_data import LogData
 
 class Variables(db.Model):
     __tablename__ = 'variables'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    device_id = Column(Integer, ForeignKey('devices.id'))
-    variable_name = Column(String(255), nullable=False)
-    variable_code = Column(String(255), unique=True, nullable=False)
-    boolean_value = Column(Integer)
-    string_value = Column(String(255))
-    numeric_value = Column(Float)
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'))
+    variable_name = db.Column(db.String(255), nullable=False)
+    variable_code = db.Column(db.String(255), unique=True, nullable=False)
+    boolean_value = db.Column(db.Integer)
+    string_value = db.Column(db.String(255))
+    numeric_value = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     def to_dict(self):
         return {

@@ -1,18 +1,16 @@
 from app import db
-from sqlalchemy import Column, Integer, String, DateTime, func
-from datetime import datetime
 
 class LogData(db.Model):
     __tablename__ = 'log_data'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    device_id = Column(Integer, ForeignKey('devices.id'))
-    variable_id = Column(Integer, ForeignKey('variables.id'))
-    numeric_value = Column(Float)
-    boolean_value = Column(Integer)
-    string_value = Column(String(255))
-    created_at = Column(DateTime, server_default=func.now())
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'))
+    variable_id = db.Column(db.Integer, db.ForeignKey('variables.id'))
+    numeric_value = db.Column(db.Float)
+    boolean_value = db.Column(db.Integer)
+    string_value = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     @staticmethod
     def get_last_value(variable_id):

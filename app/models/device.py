@@ -12,6 +12,7 @@ class Device(db.Model):
     gateway = Column(db.String(45), nullable=False, default='192.168.1.1')
     subnet_mask = Column(db.String(45), nullable=False, default='255.255.255.0')
     dns_address = Column(db.String(45), nullable=False, default='8.8.8.8')
+    port_address = Column(db.Integer, nullable=False, default=80)
     created_at = Column(db.DateTime, server_default=func.now())
 
     def to_dict(self):
@@ -24,5 +25,6 @@ class Device(db.Model):
             'gateway': self.gateway,
             'subnet_mask': self.subnet_mask,
             'dns_address': self.dns_address,
+            'port_address': self.port_address,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

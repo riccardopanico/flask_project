@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
-from app.models.impostazioni import Impostazioni
+from app.models.variables import Variables
 from app import db
 
 setting_blueprint = Blueprint('setting', __name__)
@@ -17,19 +17,19 @@ def setting():
     try:
         with Session() as session:
             request_data = request.get_json()
-            setting = request_data.get('setting')
+            setting_code = request_data.get('setting')
 
-            if not setting:
+            if not setting_code:
                 return jsonify({"messaggio": "Parametro 'setting' mancante!"}), 400
 
             if request.method == 'GET':
                 # Recupera l'impostazione richiesta
-                impostazione = session.query(Impostazioni).filter_by(codice=setting).first()
+                impostazione = session.query(Variables).filter_by(variable_code=setting_code).first()
                 if impostazione:
                     response_data = {
-                        "codice": impostazione.codice,
-                        "descrizione": impostazione.descrizione,
-                        "valore": impostazione.valore
+                        "codice": impostazione.variable_code,
+                        "descrizione": impostazione.variable_name,
+                        "valore": impostazione.get_value()
                     }
                     return jsonify(response_data), 200
                 else:
@@ -37,14 +37,15 @@ def setting():
 
             elif request.method == 'POST':
                 valore = request_data.get('valore')
-                if not valore or len(valore) == 0:
+                if valore is None or len(str(valore)) == 0:
                     return jsonify({"messaggio": "Parametro 'valore' mancante!"}), 400
 
                 # Aggiorna l'impostazione nel database in modo generico
-                result = session.query(Impostazioni).filter_by(codice=setting).update({"valore": valore})
-                if not result:
+                impostazione = session.query(Variables).filter_by(variable_code=setting_code).first()
+                if not impostazione:
                     return jsonify({"messaggio": "Nessuna variabile trovata!"}), 404
                 else:
+                    impostazione.set_value(valore)
                     session.commit()
                     return jsonify({"messaggio": "Variabile impostata!"}), 200
 

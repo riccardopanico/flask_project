@@ -3,7 +3,7 @@ import websockets
 import json
 import subprocess
 from app import db, websocket_queue
-from app.models.impostazioni import Impostazioni
+from app.models.variables import Variables
 from app.models.log_orlatura import LogOrlatura
 from app.models.campionatura import Campionatura
 from sqlalchemy.orm import sessionmaker
@@ -82,21 +82,21 @@ async def check_queue_messages(app):
                     if message == "alert_spola":
                         print("Alert spola attivato, invio messaggio ai client connessi...")
                         await broadcast_message(json.dumps({"action": "alert_spola"}))
-                        alert_spola = session.query(Impostazioni).filter_by(codice='alert_spola').first()
-                        alert_spola.valore = '0'
+                        alert_spola = session.query(Variables).filter_by(variable_code='alert_spola').first()
+                        alert_spola.get_value()
                         session.commit()
-                    if message == "alert_olio":
+                    elif message == "alert_olio":
                         print("Alert olio attivato, invio messaggio ai client connessi...")
                         await broadcast_message(json.dumps({"action": "alert_olio"}))
-                        alert_olio = session.query(Impostazioni).filter_by(codice='alert_olio').first()
-                        alert_olio.valore = '0'
+                        alert_olio = session.query(Variables).filter_by(variable_code='alert_olio').first()
+                        alert_olio.get_value()
                         session.commit()
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 
                         # Adattamento delle query da Laravel a Python
-                        device_id = session.query(Impostazioni).filter_by(codice='device_id').first().valore
-                        commessa = session.query(Impostazioni).filter_by(codice='commessa').first().valore
+                        device_id = int(session.query(Variables).filter_by(variable_code='device_id').first().get_value())
+                        commessa = session.query(Variables).filter_by(variable_code='commessa').first().get_value()
 
                         # Query per dati totali
                         dati_totali = session.query(

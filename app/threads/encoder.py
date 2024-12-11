@@ -2,7 +2,7 @@ import spidev
 import time
 import RPi.GPIO as GPIO
 from app import db, websocket_queue
-from app.models.impostazioni import Impostazioni
+from app.models.variables import Variables
 from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
 
@@ -65,26 +65,28 @@ def read_counter():
 
 # Funzione per caricare il fattore di taratura dal database
 def load_fattore_taratura_from_db():
-    global fattore_taratura
-    impostazione = Impostazioni.query.filter_by(codice='fattore_taratura').first()
+    impostazione = Variables.query.filter_by(variable_code='fattore_taratura').first()
     if impostazione:
-        fattore_taratura = float(impostazione.valore) / 100
+        return float(impostazione.get_value()) / 100
+    return None
 
 # Funzione per ottenere la commessa, l'id macchina e l'id operatore dal database
 def load_commessa_e_macchina_operatore():
-    impostazioni = Impostazioni.query.filter(Impostazioni.codice.in_(['device_id', 'commessa', 'id_operatore'])).all()
-    impostazioni_dict = {impostazione.codice: impostazione.valore for impostazione in impostazioni}
-    device_id = int(impostazioni_dict.get('device_id', 1))  # Default a 1 se non trovato
-    commessa = impostazioni_dict.get('commessa', 'Commessa1')
-    id_operatore = impostazioni_dict.get('id_operatore', '0010452223')  # Default se non trovato
-    return device_id, commessa, id_operatore
+    variables = Variables.query.filter(Variables.variable_code.in_(['device_id', 'commessa', 'badge'])).all()
+    variables_dict = {var.variable_code: var.get_value() for var in variables}
+
+    device_id = int(variables_dict.get('device_id', 1))  # Default a 1 se non trovato
+    commessa = variables_dict.get('commessa', 'Commessa1')
+    badge = variables_dict.get('badge', '0010452223')  # Default se non trovato
+
+    return device_id, commessa, badge
 
 # Funzione per salvare i record nel database
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
-    device_id, commessa, id_operatore = load_commessa_e_macchina_operatore()
+    device_id, commessa, badge = load_commessa_e_macchina_operatore()
     log = LogOrlatura(
         device_id=device_id,
-        id_operatore=id_operatore,
+        badge=badge,
         consumo=lunghezza,
         tempo=tempo_operativita,
         commessa=commessa,

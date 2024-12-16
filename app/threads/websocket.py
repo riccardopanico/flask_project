@@ -88,10 +88,14 @@ async def check_queue_messages(app):
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 
-                        # Recupera device_id e commessa da Variables
+                        # Recupera device_id da Variables
                         device_id = int(session.query(Variables).filter_by(variable_code='device_id').first().get_value())
-                        commessa = session.query(Variables).filter_by(variable_code='commessa').first().get_value()
-                        print(f"Device ID: {device_id}, Commessa: {commessa}")
+
+                        # Recupera commessa_id e valore corrente
+                        commessa_var = session.query(Variables).filter_by(variable_code='commessa').first()
+                        commessa_id = commessa_var.id if commessa_var else None
+                        commessa_value = commessa_var.get_value() if commessa_var else None
+
                         # Recupera l'ID delle variabili per consumo e operatività
                         consumo_var_id = session.query(Variables).filter_by(variable_code='encoder_consumo').first().id
                         operativita_var_id = session.query(Variables).filter_by(variable_code='encoder_operativita').first().id
@@ -105,28 +109,44 @@ async def check_queue_messages(app):
                             LogData.device_id == device_id,
                             LogData.variable_id == operativita_var_id
                         ).scalar() or 0
-                        print(f"Consumo totale: {consumo_totale}")
-                        print(f"Operatività totale: {operativita_totale}")
 
-                        # Query per dati commessa
+                        # Trova i range di tempo per la commessa basato su variable_id e valore corrente
+                        commessa_range = session.query(LogData.created_at).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == commessa_id,
+                            LogData.string_value == commessa_value
+                        ).order_by(LogData.created_at.asc()).first(), session.query(LogData.created_at).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == commessa_id,
+                            LogData.string_value == commessa_value
+                        ).order_by(LogData.created_at.desc()).first()
+
+                        if commessa_range[0] and commessa_range[1]:
+                            start_commessa, stop_commessa = commessa_range[0][0], commessa_range[1][0]
+                        else:
+                            start_commessa, stop_commessa = None, None
+
+                        # Query per dati commessa usando il range di tempo
                         consumo_commessa = session.query(func.sum(LogData.numeric_value)).filter(
                             LogData.device_id == device_id,
                             LogData.variable_id == consumo_var_id,
-                            LogData.string_value == commessa
+                            LogData.created_at.between(start_commessa, stop_commessa)
                         ).scalar() or 0
                         operativita_commessa = session.query(func.sum(LogData.numeric_value)).filter(
                             LogData.device_id == device_id,
                             LogData.variable_id == operativita_var_id,
-                            LogData.string_value == commessa
+                            LogData.created_at.between(start_commessa, stop_commessa)
                         ).scalar() or 0
                         print(f"Consumo commessa: {consumo_commessa}")
                         print(f"Operatività commessa: {operativita_commessa}")
 
                         # Query per dati campionatura
-                        start_campionatura = session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()
-                        stop_campionatura = session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()
-                        if stop_campionatura is None:
-                            stop_campionatura = datetime.now()
+                        last_campionatura = session.query(Campionatura.start, Campionatura.stop).order_by(Campionatura.id.desc()).first()
+                        if last_campionatura:
+                            start_campionatura = last_campionatura.start
+                            stop_campionatura = last_campionatura.stop or datetime.now()
+                        else:
+                            start_campionatura, stop_campionatura = None, None
 
                         consumo_campionatura = session.query(func.sum(LogData.numeric_value)).filter(
                             LogData.device_id == device_id,

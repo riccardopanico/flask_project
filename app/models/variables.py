@@ -57,6 +57,7 @@ class Variables(db.Model):
         db.session.commit()
 
         log_entry = LogData(
+            user_id = Variables.query.filter_by(variable_code='user_id').first().get_value(),
             device_id=self.device_id,
             variable_id=self.id,
             numeric_value=self.numeric_value if isinstance(value, (int, float)) else None,

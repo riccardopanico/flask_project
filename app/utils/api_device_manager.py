@@ -13,7 +13,7 @@ class ApiDeviceManager:
         if not self.api_base_url or not self.username or not self.password:
             raise ValueError("API_BASE_URL, API_USERNAME e API_PASSWORD devono essere impostati nella variabile d'ambiente.")
 
-    def perform_login(self):
+    def _login(self):
         url = f"{self.api_base_url}/auth/login"
         credentials = {'username': self.username, 'password': self.password}
         try:
@@ -30,9 +30,9 @@ class ApiDeviceManager:
         except RequestException as e:
             return {'success': False, 'error': str(e)}
 
-    def perform_refresh_token(self):
+    def _refresh_token(self):
         if not self.refresh_token:
-            return self.perform_login()  # Effettua un nuovo login se il refresh token non è disponibile
+            return self._login()  # Effettua un nuovo login se il refresh token non è disponibile
 
         url = f"{self.api_base_url}/auth/token/refresh"
         headers = {'Authorization': f"Bearer {self.refresh_token}"}
@@ -45,14 +45,14 @@ class ApiDeviceManager:
                 self.headers['Authorization'] = f"Bearer {self.access_token}"
                 return {'success': True, 'data': response_data}
             else:
-                return self.perform_login()  # Effettua un nuovo login se il refresh fallisce
+                return self._login()  # Effettua un nuovo login se il refresh fallisce
         except RequestException as e:
-            return self.perform_login()  # Effettua un nuovo login in caso di errore
+            return self._login()  # Effettua un nuovo login in caso di errore
 
-    def call_external_api(self, url, params=None, method='GET'):
+    def call(self, url, params=None, method='GET'):
         # Verifica se esiste un access token
         if not self.access_token:
-            login_response = self.perform_login()
+            login_response = self._login()
             if not login_response['success']:
                 return {'success': False, 'status': 401, 'error': f"Unable to login: {login_response['error']}"}
 
@@ -74,10 +74,10 @@ class ApiDeviceManager:
                 return {'success': True, 'data': response.json()}
             elif response.status_code == 401:
                 # Token expired, prova a fare il refresh
-                refresh_response = self.perform_refresh_token()
+                refresh_response = self._refresh_token()
                 if refresh_response['success']:
                     # Prova a richiamare l'API con il nuovo token aggiornato
-                    return self.call_external_api(url, params, method)
+                    return self.call(url, params, method)
                 else:
                     return {'success': False, 'status': 401, 'error': f"Unable to refresh or login: {refresh_response['error']}"}
             else:

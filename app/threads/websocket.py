@@ -82,15 +82,9 @@ async def check_queue_messages(app):
                     if message == "alert_spola":
                         print("Alert spola attivato, invio messaggio ai client connessi...")
                         await broadcast_message(json.dumps({"action": "alert_spola"}))
-                        alert_spola = session.query(Variables).filter_by(variable_code='alert_spola').first()
-                        alert_spola.get_value()
-                        session.commit()
                     elif message == "alert_olio":
                         print("Alert olio attivato, invio messaggio ai client connessi...")
                         await broadcast_message(json.dumps({"action": "alert_olio"}))
-                        alert_olio = session.query(Variables).filter_by(variable_code='alert_olio').first()
-                        alert_olio.get_value()
-                        session.commit()
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 

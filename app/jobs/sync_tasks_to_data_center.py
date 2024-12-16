@@ -10,6 +10,8 @@ JOB_INTERVAL = timedelta(seconds=5)
 def run(app):
     with app.app_context():
         try:
+            if current_app.debug:
+                print("Sincronizzazione dei task in corso...")
             Session = sessionmaker(bind=db.engine)
             session = Session()
             api_manager = app.api_manager

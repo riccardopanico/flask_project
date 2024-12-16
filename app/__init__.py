@@ -13,6 +13,7 @@ import importlib.util
 import glob
 import queue
 from app.utils.api_device_manager import ApiDeviceManager
+from app.utils.api_oracle_manager import ApiOracleManager
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -32,7 +33,8 @@ def create_app():
     # Inizializzazione dell'app Flask e delle estensioni
     app = Flask(__name__)
     app.config.from_object(config_class)
-    app.api_manager = ApiDeviceManager()
+    app.api_device_manager = ApiDeviceManager()
+    app.api_oracle_manager = ApiOracleManager()
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)

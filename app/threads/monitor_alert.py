@@ -18,7 +18,7 @@ def run(app):
                 # Ottieni tutti i parametri necessari dalle variables in un'unica query
                 variable_codes = [
                     'parametro_spola', 'parametro_olio', 'data_cambio_spola', 'data_cambio_olio', 'livello_olio',
-                    'alert_spola', 'alert_olio', 'parametro_spola_attivo', 'parametro_olio_attivo'
+                    'alert_spola', 'parametro_spola_attivo', 'parametro_olio_attivo'
                 ]
                 variables = {var.variable_code: var for var in session.query(Variables).filter(Variables.variable_code.in_(variable_codes)).all()}
 

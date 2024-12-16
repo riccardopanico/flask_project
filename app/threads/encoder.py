@@ -81,19 +81,47 @@ def load_commessa_e_macchina_operatore():
 
     return device_id, commessa, badge
 
-# Funzione per salvare i record nel database
+# # Funzione per salvare i record nel database
+# def save_record_to_db(impulsi, lunghezza, tempo_operativita):
+#     device_id, commessa, badge = load_commessa_e_macchina_operatore()
+#     log = LogOrlatura(
+#         device_id=device_id,
+#         badge=badge,
+#         consumo=lunghezza,
+#         tempo=tempo_operativita,
+#         commessa=commessa,
+#         data=datetime.now()  # Utilizza ora locale
+#     )
+#     db.session.add(log)
+#     db.session.commit()
+#     websocket_queue.put("dati_orlatura")
+#     print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
+
+# Funzione per ottenere una variabile tramite il suo codice
+def get_variable_by_code(variable_code):
+    return Variables.query.filter_by(variable_code=variable_code).first()
+
+# Funzione per aggiornare i valori delle variabili
+def update_variable(variable_code, value):
+    variable = get_variable_by_code(variable_code)
+    if not variable:
+        raise ValueError(f"Variabile con codice '{variable_code}' non trovata.")
+    variable.set_value(value)
+
+# Funzione per salvare i record aggiornando le variabili
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
-    device_id, commessa, badge = load_commessa_e_macchina_operatore()
-    log = LogOrlatura(
-        device_id=device_id,
-        badge=badge,
-        consumo=lunghezza,
-        tempo=tempo_operativita,
-        commessa=commessa,
-        data=datetime.now()  # Utilizza ora locale
-    )
-    db.session.add(log)
-    db.session.commit()
+    device_id_var = get_variable_by_code("device_id")
+    commessa_var = get_variable_by_code("commessa")
+    badge_var = get_variable_by_code("badge")
+
+    if not (device_id_var and commessa_var and badge_var):
+        raise ValueError("Variabili device_id, commessa o badge non configurate correttamente.")
+
+    # Aggiorna i valori delle variabili
+    update_variable("consumo_lunghezza", lunghezza)  # Variabile per il consumo
+    update_variable("tempo_operativita", tempo_operativita)  # Variabile per il tempo operativo
+    update_variable("data_orlatura", datetime.now().isoformat())  # Variabile per la data corrente
+
     websocket_queue.put("dati_orlatura")
     print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
 

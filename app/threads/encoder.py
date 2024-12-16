@@ -5,6 +5,7 @@ from app import db, websocket_queue
 from app.models.variables import Variables
 from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
+from sqlalchemy.orm import sessionmaker
 
 # Disabilita gli avvisi GPIO
 GPIO.setwarnings(False)
@@ -70,60 +71,38 @@ def load_fattore_taratura_from_db():
         return float(impostazione.get_value()) / 100
     return None
 
-# Funzione per ottenere la commessa, l'id macchina e l'id operatore dal database
-def load_commessa_e_macchina_operatore():
-    variables = Variables.query.filter(Variables.variable_code.in_(['device_id', 'commessa', 'badge'])).all()
-    variables_dict = {var.variable_code: var.get_value() for var in variables}
-
-    device_id = int(variables_dict.get('device_id', 1))  # Default a 1 se non trovato
-    commessa = variables_dict.get('commessa', 'Commessa1')
-    badge = variables_dict.get('badge', '0010452223')  # Default se non trovato
-
-    return device_id, commessa, badge
-
-# # Funzione per salvare i record nel database
-# def save_record_to_db(impulsi, lunghezza, tempo_operativita):
-#     device_id, commessa, badge = load_commessa_e_macchina_operatore()
-#     log = LogOrlatura(
-#         device_id=device_id,
-#         badge=badge,
-#         consumo=lunghezza,
-#         tempo=tempo_operativita,
-#         commessa=commessa,
-#         data=datetime.now()  # Utilizza ora locale
-#     )
-#     db.session.add(log)
-#     db.session.commit()
-#     websocket_queue.put("dati_orlatura")
-#     print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
-
-# Funzione per ottenere una variabile tramite il suo codice
-def get_variable_by_code(variable_code):
-    return Variables.query.filter_by(variable_code=variable_code).first()
-
-# Funzione per aggiornare i valori delle variabili
-def update_variable(variable_code, value):
-    variable = get_variable_by_code(variable_code)
-    if not variable:
-        raise ValueError(f"Variabile con codice '{variable_code}' non trovata.")
-    variable.set_value(value)
-
 # Funzione per salvare i record aggiornando le variabili
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
-    device_id_var = get_variable_by_code("device_id")
-    commessa_var = get_variable_by_code("commessa")
-    badge_var = get_variable_by_code("badge")
+    try:
+        variables = db.session.query(Variables).filter(Variables.variable_code.in_(['device_id', 'commessa', 'badge'])).all()
+        variables_dict = {var.variable_code: var.get_value() for var in variables}
 
-    if not (device_id_var and commessa_var and badge_var):
-        raise ValueError("Variabili device_id, commessa o badge non configurate correttamente.")
+        device_id = variables_dict.get('device_id')
+        commessa = variables_dict.get('commessa')
+        badge = variables_dict.get('badge')
 
-    # Aggiorna i valori delle variabili
-    update_variable("consumo_lunghezza", lunghezza)  # Variabile per il consumo
-    update_variable("tempo_operativita", tempo_operativita)  # Variabile per il tempo operativo
-    update_variable("data_orlatura", datetime.now().isoformat())  # Variabile per la data corrente
+        if device_id is None or commessa is None or badge is None:
+            raise ValueError("Errore: variabili 'device_id', 'commessa' o 'badge' non trovate.")
 
-    websocket_queue.put("dati_orlatura")
-    print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
+        # Aggiorna i valori delle variabili
+        encoder_consumo = db.session.query(Variables).filter_by(variable_code='encoder_consumo').first()
+        if encoder_consumo:
+            encoder_consumo.set_value(lunghezza)
+
+        encoder_operativita = db.session.query(Variables).filter_by(variable_code='encoder_operativita').first()
+        if encoder_operativita:
+            encoder_operativita.set_value(tempo_operativita)
+
+        encoder_impulsi = db.session.query(Variables).filter_by(variable_code='encoder_impulsi').first()
+        if encoder_impulsi:
+            encoder_impulsi.set_value(impulsi)
+
+        websocket_queue.put("dati_orlatura")
+        print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Errore durante il salvataggio del record: {e}")
 
 # Funzione per monitorare l'encoder e salvare periodicamente i dati
 def run(app):

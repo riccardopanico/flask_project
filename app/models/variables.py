@@ -1,3 +1,4 @@
+from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.log_data import LogData
 
@@ -55,7 +56,6 @@ class Variables(db.Model):
         db.session.add(self)
         db.session.commit()
 
-        # Registra l'operazione in LogData
         log_entry = LogData(
             device_id=self.device_id,
             variable_id=self.id,

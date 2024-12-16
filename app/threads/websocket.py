@@ -4,7 +4,7 @@ import json
 import subprocess
 from app import db, websocket_queue
 from app.models.variables import Variables
-from app.models.log_orlatura import LogOrlatura
+from app.models.log_data import LogData
 from app.models.campionatura import Campionatura
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
@@ -88,55 +88,70 @@ async def check_queue_messages(app):
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 
-                        # Adattamento delle query da Laravel a Python
+                        # Recupera device_id e commessa da Variables
                         device_id = int(session.query(Variables).filter_by(variable_code='device_id').first().get_value())
                         commessa = session.query(Variables).filter_by(variable_code='commessa').first().get_value()
+                        print(f"Device ID: {device_id}, Commessa: {commessa}")
+                        # Recupera l'ID delle variabili per consumo e operatività
+                        consumo_var_id = session.query(Variables).filter_by(variable_code='encoder_consumo').first().id
+                        operativita_var_id = session.query(Variables).filter_by(variable_code='encoder_operativita').first().id
 
                         # Query per dati totali
-                        dati_totali = session.query(
-                            func.sum(LogOrlatura.consumo).label('consumo_totale'),
-                            func.sum(LogOrlatura.tempo).label('tempo_totale')
-                        ).filter(LogOrlatura.device_id == device_id).first()
-
-                        consumo_totale = float(round(dati_totali.consumo_totale or 0, 2))
-                        tempo_totale = float(round(dati_totali.tempo_totale or 0, 2))
+                        consumo_totale = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == consumo_var_id
+                        ).scalar() or 0
+                        operativita_totale = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == operativita_var_id
+                        ).scalar() or 0
+                        print(f"Consumo totale: {consumo_totale}")
+                        print(f"Operatività totale: {operativita_totale}")
 
                         # Query per dati commessa
-                        dati_commessa = session.query(
-                            func.sum(LogOrlatura.consumo).label('consumo_commessa'),
-                            func.sum(LogOrlatura.tempo).label('tempo_commessa')
-                        ).filter(
-                            LogOrlatura.device_id == device_id,
-                            LogOrlatura.commessa == commessa
-                        ).first()
-
-                        consumo_commessa = float(round(dati_commessa.consumo_commessa or 0, 2))
-                        tempo_commessa = float(round(dati_commessa.tempo_commessa or 0, 2))
+                        consumo_commessa = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == consumo_var_id,
+                            LogData.string_value == commessa
+                        ).scalar() or 0
+                        operativita_commessa = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == operativita_var_id,
+                            LogData.string_value == commessa
+                        ).scalar() or 0
+                        print(f"Consumo commessa: {consumo_commessa}")
+                        print(f"Operatività commessa: {operativita_commessa}")
 
                         # Query per dati campionatura
-                        dati_campionatura = session.query(
-                            func.sum(LogOrlatura.consumo).label('consumo_campionatura'),
-                            func.sum(LogOrlatura.tempo).label('tempo_campionatura')
-                        ).filter(
-                            LogOrlatura.device_id == device_id,
-                            LogOrlatura.data.between(
-                                session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()[0],
-                                db.func.coalesce(session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()[0], datetime.now())
-                            )
-                        ).first()
+                        start_campionatura = session.query(Campionatura.start).order_by(Campionatura.id.desc()).first()
+                        stop_campionatura = session.query(Campionatura.stop).order_by(Campionatura.id.desc()).first()
+                        if stop_campionatura is None:
+                            stop_campionatura = datetime.now()
 
-                        consumo_campionatura = float(round(dati_campionatura.consumo_campionatura or 0, 2))
-                        tempo_campionatura = float(round(dati_campionatura.tempo_campionatura or 0, 2))
+                        consumo_campionatura = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == consumo_var_id,
+                            LogData.created_at.between(start_campionatura, stop_campionatura)
+                        ).scalar() or 0
+                        operativita_campionatura = session.query(func.sum(LogData.numeric_value)).filter(
+                            LogData.device_id == device_id,
+                            LogData.variable_id == operativita_var_id,
+                            LogData.created_at.between(start_campionatura, stop_campionatura)
+                        ).scalar() or 0
+                        print(f"Consumo campionatura: {consumo_campionatura}")
+                        print(f"Operatività campionatura: {operativita_campionatura}")
 
+                        # Costruzione del dizionario dati orlatura
                         dati_orlatura = {
-                            "consumo_totale": consumo_totale,
-                            "tempo_totale": tempo_totale,
-                            "consumo_commessa": consumo_commessa,
-                            "tempo_commessa": tempo_commessa,
-                            "consumo_campionatura": consumo_campionatura,
-                            "tempo_campionatura": tempo_campionatura
+                            "consumo_totale": round(consumo_totale, 2),
+                            "tempo_totale": round(operativita_totale, 2),
+                            "consumo_commessa": round(consumo_commessa, 2),
+                            "tempo_commessa": round(operativita_commessa, 2),
+                            "consumo_campionatura": round(consumo_campionatura, 2),
+                            "tempo_campionatura": round(operativita_campionatura, 2)
                         }
 
+                        # Invio dei dati ai client
                         await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))
                         session.commit()
             except Exception as e:

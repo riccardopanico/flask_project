@@ -137,8 +137,6 @@ async def check_queue_messages(app):
                             LogData.variable_id == operativita_var_id,
                             LogData.created_at.between(start_commessa, stop_commessa)
                         ).scalar() or 0
-                        print(f"Consumo commessa: {consumo_commessa}")
-                        print(f"Operatività commessa: {operativita_commessa}")
 
                         # Query per dati campionatura
                         last_campionatura = session.query(Campionatura.start, Campionatura.stop).order_by(Campionatura.id.desc()).first()
@@ -158,8 +156,6 @@ async def check_queue_messages(app):
                             LogData.variable_id == operativita_var_id,
                             LogData.created_at.between(start_campionatura, stop_campionatura)
                         ).scalar() or 0
-                        print(f"Consumo campionatura: {consumo_campionatura}")
-                        print(f"Operatività campionatura: {operativita_campionatura}")
 
                         # Costruzione del dizionario dati orlatura
                         dati_orlatura = {

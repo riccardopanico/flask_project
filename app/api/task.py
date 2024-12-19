@@ -28,11 +28,50 @@ def create():
             data = request.get_json()
             if not data or 'tasks' not in data or not isinstance(data['tasks'], list):
                 return jsonify({"msg": "Invalid input"}), 400
+
             tasks = [Task(**task, device_id=device.device_id) for task in data['tasks']]
 
             session.add_all(tasks)
             session.commit()
+
             return jsonify({"msg": "Tasks created successfully", "tasks": [task.to_dict() for task in tasks]}), 201
+    except (SQLAlchemyError, Exception) as e:
+        debug_mode = current_app.debug
+        error_response = {"msg": "Errore interno del server"}
+        if debug_mode:
+            error_response["error"] = str(e)
+        return jsonify(error_response), 500
+
+@task_blueprint.route('/update', methods=['PUT'])
+@jwt_required()
+def update():
+    Session = sessionmaker(bind=db.engine)
+    try:
+        with Session() as session:
+            current_user = get_jwt_identity()
+            user = session.query(User).get(current_user['id'])
+            if not user or user.user_type != 'device':
+                return jsonify({"msg": "Unauthorized"}), 403
+
+            device = session.query(Device).filter_by(user_id=user.id).first()
+            if not device:
+                return jsonify({"msg": "Device not found"}), 404
+
+            data = request.get_json()
+            if not data or 'tasks' not in data or not isinstance(data['tasks'], list):
+                return jsonify({"msg": "Invalid input"}), 400
+
+            task_updates = data['tasks']
+            for update in task_updates:
+                task = session.query(Task).filter_by(id=update.get('id')).first()
+                if task:
+                    for key, value in update.items():
+                        if hasattr(task, key):
+                            setattr(task, key, value)
+
+            session.commit()
+
+            return jsonify({"msg": "Tasks updated successfully"}), 200
     except (SQLAlchemyError, Exception) as e:
         debug_mode = current_app.debug
         error_response = {"msg": "Errore interno del server"}

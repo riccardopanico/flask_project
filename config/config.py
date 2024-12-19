@@ -25,7 +25,7 @@ class Config:
     # PiDevice
     ENABLED_JOBS = ['send_new_tasks_to_data_center.py', 'sync_tasks_to_data_center.py']
     ENABLED_THREADS = ['encoder', 'monitor_alert', 'websocket']
-    ENABLED_MODELS = ['campionatura', 'device', 'variables', 'log_operazioni', 'log_orlatura', 'tasks', 'user', 'log_data']
+    ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
     ENABLED_API = ['auth', 'device', 'setting']
 
 class ProductionConfig(Config):

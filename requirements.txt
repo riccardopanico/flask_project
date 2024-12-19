@@ -36,9 +36,7 @@ python-dotenv==1.0.1
 pytz==2024.2
 redis==5.1.0
 requests==2.32.3
-RPi.GPIO==0.7.1
 six==1.16.0
-spidev==3.6
 SQLAlchemy==2.0.35
 typing_extensions==4.12.2
 tzdata==2024.2

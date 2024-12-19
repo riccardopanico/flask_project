@@ -9,7 +9,7 @@ class ApiOracleManager:
         self.client_id = os.getenv('API_CLIENT_ID')
         self.client_secret = os.getenv('API_CLIENT_SECRET')
         self.api_oracle_base_url = os.getenv('API_ORACLE_BASE_URL')
-        self.api_token_url = self.api_oracle_base_url + '/oauth/token'
+        self.api_token_url = f"{self.api_oracle_base_url}/oauth/token"
         if not all([self.api_base_url, self.client_id, self.client_secret, self.api_token_url]):
             raise ValueError("API_BASE_URL, API_CLIENT_ID e API_CLIENT_SECRET devono essere impostati nelle variabili d'ambiente.")
 

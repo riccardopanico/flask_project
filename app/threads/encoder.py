@@ -3,7 +3,6 @@ import time
 import RPi.GPIO as GPIO
 from app import db, websocket_queue
 from app.models.variables import Variables
-from app.models.log_orlatura import LogOrlatura
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
 

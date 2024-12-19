@@ -7,35 +7,26 @@ from sqlalchemy.orm import sessionmaker
 from datetime import timedelta
 from app.models.user import User
 from app.models.device import Device
-from app.utils.api_oracle_manager import ApiOracleManager
 
 JOB_INTERVAL = timedelta(seconds=3)
-api_oracle_manager = ApiOracleManager()
-
-def fetch_data():
-    API_BASE_URL = os.getenv('API_ORACLE_BASE_URL')
-    if not API_BASE_URL:
-        raise ValueError("API_ORACLE_BASE_URL non è impostata nella configurazione dell'applicazione")
-    
-    API_ENDPOINT = f"{API_BASE_URL}/device"
-    response = api_oracle_manager.call(API_ENDPOINT,method='GET')
-    # print(f"Response: {response}")
-    if response.get('success'):
-        print(f"Received data: {response.get('data')}")
-        return response.get('data', [])
-    else:
-        raise Exception(f"Errore durante la richiesta: {response.status_code}")
 
 def run(app):
-    
+
     with app.app_context():
         try:
             if current_app.debug:
                 print("Sincronizzazione dei dispositivi in corso...")
             Session = sessionmaker(bind=db.engine)
             session = Session()
-            data_records = fetch_data()
-            # print(f"Fetched data: {data_records}")
+
+            response = app.api_oracle_manager.call('device', method='GET')
+            if response.get('success'):
+                print(f"Received data: {response.get('data')}")
+                data_records = response.get('data', [])
+            else:
+                raise Exception(f"Errore durante la richiesta: {response.status_code}")
+
+            print(f"Fetched data: {data_records}")
             for record in data_records:
                 # Converti tutte le chiavi del record in minuscolo
                 record = {key.lower(): value for key, value in record.items()}

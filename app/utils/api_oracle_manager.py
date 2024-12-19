@@ -8,16 +8,18 @@ class ApiOracleManager:
         self.api_base_url = os.getenv('API_BASE_URL')
         self.client_id = os.getenv('API_CLIENT_ID')
         self.client_secret = os.getenv('API_CLIENT_SECRET')
-        self.token_url = os.getenv('API_TOKEN_URL')
-
-        if not all([self.api_base_url, self.client_id, self.client_secret, self.token_url]):
-            raise ValueError("API_BASE_URL, API_CLIENT_ID, API_CLIENT_SECRET e API_TOKEN_URL devono essere impostati nelle variabili d'ambiente.")
+        self.api_oracle_base_url = os.getenv('API_ORACLE_BASE_URL')
+        self.api_token_url = self.api_oracle_base_url + '/oauth/token'
+        if not all([self.api_base_url, self.client_id, self.client_secret, self.api_token_url]):
+            raise ValueError("API_BASE_URL, API_CLIENT_ID e API_CLIENT_SECRET devono essere impostati nelle variabili d'ambiente.")
 
         self.access_token = None
         self.headers = {'Content-Type': 'application/json'}
 
     def _get_access_token(self):
         """Ottiene un nuovo access token."""
+
+        print("into _get_access_token")
         credentials = f"{self.client_id}:{self.client_secret}"
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
 
@@ -28,15 +30,17 @@ class ApiOracleManager:
         }
 
         try:
-            response = requests.post(self.token_url, headers=headers, data=payload)
-
+            response = requests.post(self.api_token_url, headers=headers, data=payload)
+            print(f"Response: {response}")
+            print(f"Response.status_code: {response.status_code}")
+            print(f"Token response: {response.json().get('access_token')}")
             if response.status_code == 200:
                 data = response.json()
                 self.access_token = data['access_token']
                 self.headers['Authorization'] = f'Bearer {self.access_token}'
                 return {'success': True, 'data': data}
             else:
-                return {'success': False, 'error': response.text}
+                return {'success': False, 'error': response.text , 'status_code': response.status_code}
         except RequestException as e:
             return {'success': False, 'error': str(e)}
 
@@ -46,8 +50,9 @@ class ApiOracleManager:
             token_response = self._get_access_token()
             if not token_response['success']:
                 raise Exception(f"Errore nel recupero del token: {token_response['error']}")
-
-        full_url = f"{self.api_base_url}/{url.lstrip('/')}"
+        full_url = f"{self.api_oracle_base_url}/{url.lstrip('/')}"
+        full_url = url
+        print(f"Chiamata API: {full_url}")
         method = method.upper()
 
         try:

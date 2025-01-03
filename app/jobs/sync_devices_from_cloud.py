@@ -69,15 +69,16 @@ def run(app):
                                     print(f"Errore: L'username '{record['username']}' è già in uso da un altro utente.")
                                 continue
                             user.username = record['username']
-                        user.user_type = record.get('user_type', user.user_type)
                         if 'password' in record and record['password']:
                             if user.password_hash is None or not user.check_password(record['password']):
                                 user.set_password(record['password'])
+                                # TODO: Notificare l'utente che la password sia stata cambiata
                                 if current_app.debug:
                                     print(f"Password aggiornata per utente: {record['username']}")
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)
                         user.email = record.get('email', user.email)
+                        user.user_type = record.get('user_type', user.user_type)
                         if current_app.debug:
                             print(f"Dati utente aggiornati: {record['username']}")
                     else:
@@ -90,6 +91,7 @@ def run(app):
                 device.gateway = record.get('gateway', device.gateway)
                 device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
                 device.dns_address = record.get('dns_address', device.dns_address)
+                device.port_address = record.get('port_address', device.port_address)
                 if current_app.debug:
                     print(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 

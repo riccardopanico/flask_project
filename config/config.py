@@ -15,10 +15,10 @@ class Config:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    ENABLED_JOBS = ['sync_devices_from_cloud']#, 'send_new_tasks_to_cloud', 'sync_devices_from_cloud',sync_task_to_cloud
+    ENABLED_JOBS = ['sync_devices_from_cloud', 'sync_logs_from_device']
     ENABLED_THREADS = []
-    ENABLED_MODELS = ['device', 'tasks', 'user', 'variables', 'log_data']
-    ENABLED_API = ['auth', 'device', 'setting', 'task', 'variables']
+    ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
+    ENABLED_API = ['auth', 'device']
 
 class ProductionConfig(Config):
     DEBUG = False

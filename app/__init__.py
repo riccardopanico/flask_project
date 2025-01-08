@@ -53,13 +53,30 @@ def create_app():
     # Inizializzazione di ApiDeviceManager e ApiOracleManager
     with app.app_context():
         from app.models.device import Device  # Importa qui per evitare il ciclo
+        from app.models.user import User  # User contiene il tipo di utente
+
+        # Ottieni tutti i dispositivi associati a utenti di tipo 'device'
+        devices = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'device').all()
         app.api_device_manager = {
             device.username: ApiDeviceManager(
                 ip_address=device.ip_address,
                 username=device.username,
                 password=device.password
-            ) for device in Device.query.all()
+            ) for device in devices
         }
+
+        # # Ottieni il primo record associato a un utente di tipo 'datacenter'
+        # datacenter_device = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'datacenter').first()
+        # if datacenter_device:
+        #     app.api_datacenter_manager = ApiDeviceManager(
+        #         ip_address=datacenter_device.ip_address,
+        #         username=datacenter_device.username,
+        #         password=datacenter_device.password
+        #     )
+        # else:
+        #     app.api_datacenter_manager = None
+        #     app.logger.warning("Nessun dispositivo trovato per il tipo 'datacenter'.")
+
     app.api_oracle_manager = ApiOracleManager()
 
     run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"

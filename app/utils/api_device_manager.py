@@ -13,7 +13,7 @@ class ApiDeviceManager:
         self.headers = {'Content-Type': 'application/json'}
 
         if not self.ip_address or not self.username or not self.password:
-            raise ValueError("API_BASE_URL, IP_ADDRESS, USERNAME e PASSWORD devono essere impostati.")
+            raise ValueError("IP_ADDRESS, USERNAME e PASSWORD devono essere impostati.")
 
     def _login(self):
         """Effettua il login e ottiene i token di accesso."""

@@ -70,10 +70,10 @@ def run(app):
                         if 'password' in record and record['password']:
                             if user.password_hash is None or not user.check_password(record['password']):
                                 user.set_password(record['password'])
-                                # TODO: Aggiorna la password nel dispositivo utilizzando app.api_device_manager
-                                device_manager = app.api_device_manager.get(record['username'])
-                                if device_manager:
-                                    api_response = device_manager.call(
+
+                                api_manager = app.api_device_manager.get(record['username'])
+                                if api_manager:
+                                    api_response = api_manager.call(
                                         'auth/update_password',
                                         params={'new_password': record['password']},
                                         method='POST'

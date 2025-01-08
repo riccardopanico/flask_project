@@ -18,15 +18,15 @@ def run(app):
             with Session() as session:
                 for device in session.query(Device).all():
                     try:
-                        device_manager = app.api_device_manager.get(device.username)
-                        if not device_manager:
+                        api_manager = app.api_device_manager.get(device.username)
+                        if not api_manager:
                             current_app.logger.error(f"Device manager non trovato per il dispositivo {device.username}.")
                             continue
 
                         last_log = session.query(LogData).filter_by(device_id=device.id).order_by(LogData.created_at.desc()).first()
                         last_sync_date = last_log.created_at.isoformat() if last_log else None
 
-                        response = device_manager.call('log_data', method='GET', params={'last_sync_date': last_sync_date})
+                        response = api_manager.call('log_data', method='GET', params={'last_sync_date': last_sync_date})
 
                         if response['success']:
                             for log_dict in response['data']:

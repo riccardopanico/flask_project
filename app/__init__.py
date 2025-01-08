@@ -50,11 +50,11 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    app.api_device_manager = None
-    app.api_datacenter_manager = None
-    app.api_oracle_manager = None
     # Inizializzazione di ApiDeviceManager e ApiOracleManager
-    # with app.app_context():
+    with app.app_context():
+        app.api_device_manager = None
+        app.api_datacenter_manager = None
+        app.api_oracle_manager = None
     #     from app.models.device import Device  # Importa qui per evitare il ciclo
     #     from app.models.user import User  # User contiene il tipo di utente
 

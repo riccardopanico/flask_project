@@ -34,25 +34,9 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Recupero di tutti i dispositivi dal modello Device
-    devices = Device.query.all()
-
-    # Inizializzazione di ApiDeviceManager e ApiOracleManager come dizionari indicizzati per username
-    app.api_device_manager = {
-        device.username: ApiDeviceManager(
-            ip_address=device.ip_address,
-            username=device.username,
-            password=device.password
-        ) for device in devices
-    }
-
-    app.api_oracle_manager = {
-        device.username: ApiOracleManager(
-            ip_address=device.gateway,
-            username=device.username,
-            password=device.password
-        ) for device in devices
-    }
+    # Inizializzazione di ApiDeviceManager e ApiOracleManager
+    app.api_device_manager = {}
+    app.api_oracle_manager = {}
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)

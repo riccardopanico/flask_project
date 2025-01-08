@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.log_data import LogData
 from app.models.device import Device
+from app.utils.api_device_manager import ApiDeviceManager
 from datetime import timedelta
 
 JOB_INTERVAL = timedelta(seconds=5)
@@ -20,8 +21,13 @@ def run(app):
                     try:
                         api_manager = app.api_device_manager.get(device.username)
                         if not api_manager:
-                            current_app.logger.error(f"Device manager non trovato per il dispositivo {device.username}.")
-                            continue
+                            current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
+                            api_manager = ApiDeviceManager(
+                                ip_address=device.ip_address,
+                                username=device.username,
+                                password=device.password
+                            )
+                            app.api_device_manager[device.username] = api_manager
 
                         last_log = session.query(LogData).filter_by(device_id=device.id).order_by(LogData.created_at.desc()).first()
                         last_sync_date = last_log.created_at.isoformat() if last_log else None

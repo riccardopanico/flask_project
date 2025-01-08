@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from datetime import timedelta
 from app.models.user import User
 from app.models.device import Device
+from app.utils.api_device_manager import ApiDeviceManager
 
 JOB_INTERVAL = timedelta(seconds=3)
 
@@ -72,21 +73,26 @@ def run(app):
                                 user.set_password(record['password'])
 
                                 api_manager = app.api_device_manager.get(record['username'])
-                                if api_manager:
-                                    api_response = api_manager.call(
-                                        'auth/update_password',
-                                        params={'new_password': record['password']},
-                                        method='POST'
+                                if not api_manager:
+                                    current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
+                                    api_manager = ApiDeviceManager(
+                                        ip_address=device.ip_address,
+                                        username=device.username,
+                                        password=device.password
                                     )
-                                    if api_response.get('success'):
-                                        if current_app.debug:
-                                            print(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
-                                    else:
-                                        if current_app.debug:
-                                            print(f"Errore durante l'aggiornamento della password per dispositivo {record['device_id']}: {api_response.get('error')}")
+                                    app.api_device_manager[device.username] = api_manager
+
+                                api_response = api_manager.call(
+                                    'auth/update_password',
+                                    params={'new_password': record['password']},
+                                    method='POST'
+                                )
+                                if api_response.get('success'):
+                                    if current_app.debug:
+                                        print(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
                                 else:
                                     if current_app.debug:
-                                        print(f"Device manager non trovato per il dispositivo: {record['device_id']}")
+                                        print(f"Errore durante l'aggiornamento della password per dispositivo {record['device_id']}: {api_response.get('error')}")
 
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)

@@ -15,10 +15,10 @@ class Config:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    ENABLED_JOBS = ['send_new_tasks_to_data_center.py', 'sync_tasks_to_data_center.py']
+    ENABLED_JOBS = []
     ENABLED_THREADS = ['encoder', 'monitor_alert', 'websocket']
     ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
-    ENABLED_API = ['auth', 'device', 'setting']
+    ENABLED_API = ['auth', 'device']
 
 class ProductionConfig(Config):
     DEBUG = False

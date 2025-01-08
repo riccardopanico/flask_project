@@ -4,14 +4,16 @@ class Device(db.Model):
     __tablename__ = 'devices'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    device_id = db.Column(db.Integer, unique=True, nullable=False)
+    device_id = db.Column(db.Integer, unique=True, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     mac_address = db.Column(db.String(17), nullable=False)
     ip_address = db.Column(db.String(45), nullable=False)
     gateway = db.Column(db.String(45), nullable=False, default='192.168.1.1')
     subnet_mask = db.Column(db.String(45), nullable=False, default='255.255.255.0')
     dns_address = db.Column(db.String(45), nullable=False, default='8.8.8.8')
-    port_address = db.Column(db.Integer, nullable=False, default=80)
+    port_address = db.Column(db.String(5), nullable=False, default='80')
+    password = db.Column(db.String(255), nullable=True)
+    username = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     def to_dict(self):
@@ -25,5 +27,7 @@ class Device(db.Model):
             'subnet_mask': self.subnet_mask,
             'dns_address': self.dns_address,
             'port_address': self.port_address,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'password': self.password,  # Nota: evita di includere questa chiave nelle API!
+            'username': self.username  # Nota: evita di includere questa chiave nelle API!
         }

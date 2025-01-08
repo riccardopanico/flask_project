@@ -8,6 +8,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 from datetime import timedelta
 import atexit
+import logging
+from logging.handlers import RotatingFileHandler
 from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
@@ -33,22 +35,37 @@ def create_app():
     # Inizializzazione dell'app Flask e delle estensioni
     app = Flask(__name__)
     app.config.from_object(config_class)
-    app.api_device_manager = ApiDeviceManager()
-    app.api_oracle_manager = ApiOracleManager()
+
+    # Configurazione logger personalizzato
+    log_level = logging.DEBUG if app.debug else logging.INFO
+    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler = RotatingFileHandler('app.log', maxBytes=10 * 1024 * 1024, backupCount=5)
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(log_formatter)
+    app.logger.setLevel(log_level)
+    app.logger.addHandler(file_handler)
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # Controlla se l'app viene eseguita da un contesto CLI (ad esempio per migrazioni) o come server
-    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
+    # Inizializzazione di ApiDeviceManager e ApiOracleManager
+    with app.app_context():
+        from app.models.device import Device  # Importa qui per evitare il ciclo
+        app.api_device_manager = {
+            device.username: ApiDeviceManager(
+                ip_address=device.ip_address,
+                username=device.username,
+                password=device.password
+            ) for device in Device.query.all()
+        }
+    app.api_oracle_manager = ApiOracleManager()
 
-    # Iterazione unica per registrare blueprint, importare modelli, configurare job e avviare thread
+    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
     modules_to_import = {
         'models': os.path.join(os.path.dirname(__file__), 'models', '*.py')
     }
-
     if not run_from_cli:
         modules_to_import.update({
             'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),

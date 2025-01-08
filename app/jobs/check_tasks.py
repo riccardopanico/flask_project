@@ -22,10 +22,15 @@ def run(app):
 
                 task_data = [task.to_dict() for task in unsent_tasks]
 
-                api_manager = app.api_device_manager.get('default')
+                api_manager = app.api_device_manager.get(device.username)
                 if not api_manager:
-                    current_app.logger.error("Device manager predefinito non trovato.")
-                    return
+                    current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
+                    api_manager = ApiDeviceManager(
+                        ip_address=device.ip_address,
+                        username=device.username,
+                        password=device.password
+                    )
+                    app.api_device_manager[device.username] = api_manager
 
                 response = api_manager.call('/task', params={'tasks': task_data}, method='POST')
 

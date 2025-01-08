@@ -92,3 +92,36 @@ def refresh():
         if debug_mode:
             error_response["error"] = str(e)
         return jsonify(error_response), 500
+
+@auth_blueprint.route('/update_password', methods=['POST'])
+@jwt_required()
+def update_password():
+    Session = sessionmaker(bind=db.engine)
+    with Session() as session:
+        try:
+            current_user = get_jwt_identity()
+            data = request.get_json()
+
+            new_password = data.get('new_password')
+            if not new_password:
+                return jsonify({"msg": "La nuova password è obbligatoria."}), 400
+
+            user = session.query(User).filter_by(id=current_user['id']).first()
+            if not user:
+                return jsonify({"msg": "Utente non trovato."}), 404
+
+            user.set_password(new_password)
+            session.commit()
+
+            if current_app.debug:
+                print(f"Password aggiornata con successo per l'utente: {user.username}")
+
+            return jsonify({"msg": "Password aggiornata con successo."}), 200
+
+        except (SQLAlchemyError, Exception) as e:
+            session.rollback()
+            debug_mode = current_app.debug
+            error_response = {"msg": "Errore interno del server"}
+            if debug_mode:
+                error_response["error"] = str(e)
+            return jsonify(error_response), 500

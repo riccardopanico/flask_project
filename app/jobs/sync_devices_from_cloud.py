@@ -24,7 +24,7 @@ def run(app):
                 print(f"Received data: {response.get('data')}")
                 data_records = response.get('data', [])
             else:
-                raise Exception(f"Errore durante la richiesta: {response.status_code}")
+                raise Exception(f"Errore durante la richiesta: {response.get('error')}")
 
             print(f"Fetched data: {data_records}")
             for record in data_records:
@@ -70,8 +70,24 @@ def run(app):
                         if 'password' in record and record['password']:
                             if user.password_hash is None or not user.check_password(record['password']):
                                 user.set_password(record['password'])
-                                if current_app.debug:
-                                    print(f"Password aggiornata per utente: {record['username']}")
+                                # TODO: Aggiorna la password nel dispositivo utilizzando app.api_device_manager
+                                device_manager = app.api_device_manager.get(record['username'])
+                                if device_manager:
+                                    api_response = device_manager.call(
+                                        'auth/update_password',
+                                        params={'new_password': record['password']},
+                                        method='POST'
+                                    )
+                                    if api_response.get('success'):
+                                        if current_app.debug:
+                                            print(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
+                                    else:
+                                        if current_app.debug:
+                                            print(f"Errore durante l'aggiornamento della password per dispositivo {record['device_id']}: {api_response.get('error')}")
+                                else:
+                                    if current_app.debug:
+                                        print(f"Device manager non trovato per il dispositivo: {record['device_id']}")
+
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)
                         user.email = record.get('email', user.email)

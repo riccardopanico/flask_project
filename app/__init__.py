@@ -8,6 +8,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 from datetime import timedelta
 import atexit
+import logging
+from logging.handlers import RotatingFileHandler
 from config.config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
@@ -34,23 +36,53 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Inizializzazione di ApiDeviceManager e ApiOracleManager
-    app.api_device_manager = {}
-    app.api_oracle_manager = {}
+    # Configurazione logger personalizzato
+    log_level = logging.DEBUG if app.debug else logging.INFO
+    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler = RotatingFileHandler('app.log', maxBytes=10 * 1024 * 1024, backupCount=5)
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(log_formatter)
+    app.logger.setLevel(log_level)
+    app.logger.addHandler(file_handler)
 
     # Inizializza estensioni con l'app Flask
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # Controlla se l'app viene eseguita da un contesto CLI (ad esempio per migrazioni) o come server
-    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
+    # Inizializzazione di ApiDeviceManager e ApiOracleManager
+    with app.app_context():
+        from app.models.device import Device  # Importa qui per evitare il ciclo
+        from app.models.user import User  # User contiene il tipo di utente
 
-    # Iterazione unica per registrare blueprint, importare modelli, configurare job e avviare thread
+        # Ottieni tutti i dispositivi associati a utenti di tipo 'device'
+        devices = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'device').all()
+        app.api_device_manager = {
+            device.username: ApiDeviceManager(
+                ip_address=device.ip_address,
+                username=device.username,
+                password=device.password
+            ) for device in devices
+        }
+
+        # # Ottieni il primo record associato a un utente di tipo 'datacenter'
+        # datacenter_device = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'datacenter').first()
+        # if datacenter_device:
+        #     app.api_datacenter_manager = ApiDeviceManager(
+        #         ip_address=datacenter_device.ip_address,
+        #         username=datacenter_device.username,
+        #         password=datacenter_device.password
+        #     )
+        # else:
+        #     app.api_datacenter_manager = None
+        #     app.logger.warning("Nessun dispositivo trovato per il tipo 'datacenter'.")
+
+    app.api_oracle_manager = ApiOracleManager()
+
+    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
     modules_to_import = {
         'models': os.path.join(os.path.dirname(__file__), 'models', '*.py')
     }
-
     if not run_from_cli:
         modules_to_import.update({
             'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),

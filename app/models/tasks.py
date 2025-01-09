@@ -4,7 +4,7 @@ class Task(db.Model):
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    device_id = db.Column(db.Integer, nullable=False)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'))  # Relazione con Device: task associato a un dispositivo
     task_type = db.Column(db.String(50), nullable=False)
     sent = db.Column(db.Integer, nullable=True, server_default='0')
     status = db.Column(db.String(50), nullable=True)

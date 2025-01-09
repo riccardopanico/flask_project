@@ -1,7 +1,7 @@
 from app import db
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models.log_data import LogData
-from app.models.device import Device
+# from app.models.log_data import LogData
+# from app.models.device import Device
 
 class User(db.Model):
     __tablename__ = 'users'

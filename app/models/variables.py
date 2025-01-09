@@ -1,6 +1,6 @@
-from sqlalchemy.orm import sessionmaker
 from app import db
-from app.models.log_data import LogData
+from sqlalchemy.orm import sessionmaker
+# from app.models.log_data import LogData
 
 class Variables(db.Model):
     __tablename__ = 'variables'

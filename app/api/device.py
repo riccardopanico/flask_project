@@ -16,11 +16,11 @@ def get_device_variables(device_id):
     try:
         variables = Variables.query.filter_by(device_id=device_id).all()
         if not variables:
-            return jsonify({"error": "No variables found for this device."}), 404
-        return jsonify([variable.to_dict() for variable in variables]), 200
+            return jsonify({"success": False, "error": "Nessuna variabile trovata per questo dispositivo."}), 404
+        return jsonify({"success": True, "data": [variable.to_dict() for variable in variables]}), 200
     except SQLAlchemyError as e:
-        current_app.logger.error(f"Database error: {str(e)}")
-        return jsonify({"error": "An error occurred while fetching device variables."}), 500
+        current_app.logger.error(f"Errore del database: {str(e)}")
+        return jsonify({"success": False, "error": "Si è verificato un errore durante il recupero delle variabili del dispositivo."}), 500
 
 @device_blueprint.route('/<int:device_id>/log_data', methods=['GET'])
 @jwt_required()
@@ -32,7 +32,7 @@ def get_device_logs(device_id):
         with Session() as session:
             device = session.query(Device).filter_by(id=device_id).first()
             if not device:
-                return jsonify({"error": "Device not found."}), 404
+                return jsonify({"success": False, "error": "Dispositivo non trovato."}), 404
 
             logs_query = session.query(LogData).filter_by(device_id=device_id)
             if last_sync_date:
@@ -41,11 +41,11 @@ def get_device_logs(device_id):
             logs = logs_query.order_by(LogData.created_at.asc()).all()
             logs_data = [log.to_dict() for log in logs]
 
-            return jsonify({"message": "Logs fetched successfully.", "data": logs_data}), 200
+            return jsonify({"success": True, "message": "Log recuperati con successo.", "data": logs_data}), 200
 
     except SQLAlchemyError as e:
-        current_app.logger.error(f"Database error while processing logs for device {device_id}: {str(e)}")
-        return jsonify({"error": "A database error occurred."}), 500
+        current_app.logger.error(f"Errore del database durante l'elaborazione dei log per il dispositivo {device_id}: {str(e)}")
+        return jsonify({"success": False, "error": "Si è verificato un errore del database."}), 500
     except Exception as e:
-        current_app.logger.error(f"Error processing logs for device {device_id}: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred while processing the logs."}), 500
+        current_app.logger.error(f"Errore durante l'elaborazione dei log per il dispositivo {device_id}: {str(e)}")
+        return jsonify({"success": False, "error": "Si è verificato un errore imprevisto durante l'elaborazione dei log."}), 500

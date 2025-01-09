@@ -5,7 +5,6 @@ from app.models.user import User
 from app.models.device import Device
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime
 
 auth_blueprint = Blueprint('auth', __name__)
 
@@ -19,17 +18,17 @@ def register():
             required_keys = ['username', 'password', 'user_type']
             for key in required_keys:
                 if key not in data:
-                    return jsonify({"msg": f"Chiave mancante: {key}"}), 400
+                    return jsonify({"success": False, "message": f"Chiave mancante: {key}"}), 400
 
             if session.query(User).filter_by(username=data['username']).first():
-                return jsonify({"msg": "L'utente esiste già"}), 400
+                return jsonify({"success": False, "message": "L'utente esiste già"}), 400
 
             # Validazione per il tipo di utente 'device'
             if data['user_type'] == 'device':
                 required_keys = ['device_id', 'ip_address']
                 for key in required_keys:
                     if key not in data:
-                        return jsonify({"msg": f"Chiave mancante: {key}"}), 400
+                        return jsonify({"success": False, "message": f"Chiave mancante: {key}"}), 400
 
             new_user = User(username=data['username'], user_type=data['user_type'])
             new_user.set_password(data['password'])
@@ -43,7 +42,7 @@ def register():
                     mac_address=data.get('mac_address'),
                     gateway=data.get('gateway'),
                     subnet_mask=data.get('subnet_mask'),
-                    dns_address=data.get('dns_address')
+                    dns_address=data.get('dns_address'),
                     username=data.get('username'),
                     password=data.get('password'),
                 )
@@ -51,10 +50,10 @@ def register():
 
             session.commit()
 
-            return jsonify({"msg": "Utente creato con successo"}), 201
+            return jsonify({"success": True, "message": "Utente creato con successo"}), 201
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            error_response = {"msg": "Errore interno del server"}
+            error_response = {"success": False, "message": "Errore interno del server"}
             current_app.logger.error(f"Errore durante la registrazione: {str(e)}")
             if current_app.debug:
                 error_response["error"] = str(e)
@@ -71,11 +70,11 @@ def login():
             if user and user.check_password(data['password']):
                 access_token = create_access_token(identity={'id': user.id, 'username': user.username})
                 refresh_token = create_refresh_token(identity={'id': user.id, 'username': user.username})
-                return jsonify(access_token=access_token, refresh_token=refresh_token), 200
+                return jsonify({"success": True, "access_token": access_token, "refresh_token": refresh_token}), 200
             else:
-                return jsonify({"msg": "Utente o password non corretti"}), 401
+                return jsonify({"success": False, "message": "Utente o password non corretti"}), 401
         except Exception as e:
-            error_response = {"msg": "Errore interno del server"}
+            error_response = {"success": False, "message": "Errore interno del server"}
             current_app.logger.error(f"Errore durante il login: {str(e)}")
             if current_app.debug:
                 error_response["error"] = str(e)
@@ -87,9 +86,9 @@ def refresh():
     try:
         current_user = get_jwt_identity()
         new_access_token = create_access_token(identity=current_user)
-        return jsonify(access_token=new_access_token), 200
+        return jsonify({"success": True, "access_token": new_access_token}), 200
     except Exception as e:
-        error_response = {"msg": "Errore interno del server"}
+        error_response = {"success": False, "message": "Errore interno del server"}
         current_app.logger.error(f"Errore durante il refresh del token: {str(e)}")
         if current_app.debug:
             error_response["error"] = str(e)
@@ -108,11 +107,11 @@ def update_credentials():
             new_username = data.get('new_username')
 
             if not new_password and not new_username:
-                return jsonify({"msg": "È necessario fornire almeno una nuova credenziale."}), 400
+                return jsonify({"success": False, "message": "È necessario fornire almeno una nuova credenziale."}), 400
 
             user = session.query(User).filter_by(id=current_user['id']).first()
             if not user:
-                return jsonify({"msg": "Utente non trovato."}), 404
+                return jsonify({"success": False, "message": "Utente non trovato."}), 404
 
             # Aggiorna la password se fornita
             if new_password:
@@ -123,7 +122,7 @@ def update_credentials():
             if new_username:
                 existing_user = session.query(User).filter_by(username=new_username).first()
                 if existing_user:
-                    return jsonify({"msg": "Il nuovo username è già in uso."}), 400
+                    return jsonify({"success": False, "message": "Il nuovo username è già in uso."}), 400
                 user.username = new_username
                 current_app.logger.info(f"Username aggiornato per l'utente: {user.username}")
 
@@ -138,11 +137,11 @@ def update_credentials():
 
             session.commit()
 
-            return jsonify({"msg": "Credenziali aggiornate con successo."}), 200
+            return jsonify({"success": True, "message": "Credenziali aggiornate con successo."}), 200
 
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            error_response = {"msg": "Errore interno del server"}
+            error_response = {"success": False, "message": "Errore interno del server"}
             current_app.logger.error(f"Errore durante l'aggiornamento delle credenziali: {str(e)}")
             if current_app.debug:
                 error_response["error"] = str(e)

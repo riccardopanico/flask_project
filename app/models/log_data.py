@@ -4,14 +4,17 @@ class LogData(db.Model):
     __tablename__ = 'log_data'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'))
-    variable_id = db.Column(db.Integer, db.ForeignKey('variables.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))  # Relazione con User: log generato da un utente
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'))  # Relazione con Device: log relativo a un dispositivo
+    variable_id = db.Column(db.Integer, db.ForeignKey('variables.id', ondelete='CASCADE'))  # Relazione con Variables: log relativo a una variabile
     numeric_value = db.Column(db.Float)
     boolean_value = db.Column(db.Integer)
     string_value = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     sent = db.Column(db.Integer, nullable=True, server_default='0')
+
+    # Relazione con Variables: accesso bidirezionale ai log relativi
+    variable = db.relationship('Variables', back_populates='log_data')
 
     def to_dict(self):
         return {

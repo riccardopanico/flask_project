@@ -7,12 +7,18 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     badge = db.Column(db.String(50), nullable=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)  # Password sempre hashata
+    password_hash = db.Column(db.String(255), nullable=False)
     user_type = db.Column(db.String(50), nullable=False)  # "device" o "human"
-    name = db.Column(db.String(100), nullable=True)  # Solo per utenti umani
-    last_name = db.Column(db.String(100), nullable=True)  # Solo per utenti umani
-    email = db.Column(db.String(100), nullable=True)  # Solo per utenti umani
+    name = db.Column(db.String(100), nullable=True)
+    last_name = db.Column(db.String(100), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    # Relazione con Device: un utente può avere molti dispositivi
+    devices = db.relationship('Device', back_populates='user', passive_deletes=True)
+
+    # Relazione con LogData: un utente può avere molti log
+    log_data = db.relationship('LogData', backref='user', passive_deletes=True)
 
     def set_password(self, password):
         """Hash della password."""

@@ -12,7 +12,6 @@ from app.utils.api_device_manager import ApiDeviceManager
 JOB_INTERVAL = timedelta(seconds=5)
 
 def run(app):
-
     with app.app_context():
         try:
             if current_app.debug:
@@ -29,9 +28,15 @@ def run(app):
             else:
                 raise Exception(f"Errore durante la richiesta: {response.get('error')}")
 
+            # Lista per tracciare gli ID dei dispositivi sincronizzati
+            synchronized_device_ids = []
+
             for record in data_records:
                 # Converti tutte le chiavi del record in minuscolo
                 record = {key.lower(): value for key, value in record.items()}
+
+                # Aggiungi il device_id alla lista dei dispositivi sincronizzati
+                synchronized_device_ids.append(record['device_id'])
 
                 # Sincronizza il dispositivo basato sul device_id
                 device = session.query(Device).filter_by(device_id=record['device_id']).first()
@@ -48,20 +53,16 @@ def run(app):
                         session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
                         if current_app.debug:
                             current_app.logger.debug(f"Creato nuovo utente: {record['username']}")
-                    else:
-                        if current_app.debug:
-                            current_app.logger.debug(f"Utente esistente trovato: {record['username']}")
 
                     device = Device(user_id=user.id, device_id=record['device_id'])
                     session.add(device)
                     if current_app.debug:
                         current_app.logger.debug(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
                 else:
-                    # Aggiorna i dati dell'utente associato al dispositivo
+                    # Aggiorna i dati del dispositivo e dell'utente associato
                     user = session.query(User).filter_by(id=device.user_id).first()
                     if user:
                         if user.username != record['username']:
-                            # Verifica se esiste un altro utente con lo stesso username
                             existing_user = session.query(User).filter_by(username=record['username']).first()
                             if existing_user and existing_user.id != user.id:
                                 if current_app.debug:
@@ -104,9 +105,6 @@ def run(app):
                         user.email = record.get('email', user.email)
                         if current_app.debug:
                             current_app.logger.debug(f"Dati utente aggiornati: {record['username']}")
-                    else:
-                        if current_app.debug:
-                            current_app.logger.error(f"Errore: Utente associato al dispositivo {record['device_id']} non trovato.")
 
                 # Aggiorna i dati del dispositivo se necessario
                 device.mac_address = record.get('mac_address', device.mac_address)
@@ -116,6 +114,29 @@ def run(app):
                 device.dns_address = record.get('dns_address', device.dns_address)
                 if current_app.debug:
                     current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
+
+            # Rimuovi i dispositivi e utenti di tipo "device" non sincronizzati
+            devices_to_remove = session.query(Device).join(User).filter(
+                Device.device_id.notin_(synchronized_device_ids),
+                User.user_type == 'device'
+            ).all()
+            for device in devices_to_remove:
+                if current_app.debug:
+                    current_app.logger.debug(f"Rimozione dispositivo non sincronizzato: {device.device_id}")
+                # Rimuovi il manager API associato, se presente
+                if device.username in app.api_device_manager:
+                    del app.api_device_manager[device.username]
+                    if current_app.debug:
+                        current_app.logger.debug(f"Rimosso ApiDeviceManager per dispositivo: {device.device_id}")
+                # Rimuovi il dispositivo
+                session.delete(device)
+
+                # Rimuovi l'utente associato, se di tipo "device"
+                user = session.query(User).filter_by(id=device.user_id, user_type='device').first()
+                if user:
+                    session.delete(user)
+                    if current_app.debug:
+                        current_app.logger.debug(f"Rimosso utente associato al dispositivo: {device.device_id}")
 
             session.commit()
             if current_app.debug:

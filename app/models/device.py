@@ -5,16 +5,28 @@ class Device(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     device_id = db.Column(db.Integer, unique=True, nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Ora opzionale
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     mac_address = db.Column(db.String(17), nullable=False)
     ip_address = db.Column(db.String(45), nullable=False)
     gateway = db.Column(db.String(45), nullable=False, default='192.168.1.1')
     subnet_mask = db.Column(db.String(45), nullable=False, default='255.255.255.0')
     dns_address = db.Column(db.String(45), nullable=False, default='8.8.8.8')
     port_address = db.Column(db.String(5), nullable=False, default='80')
-    username = db.Column(db.String(255), nullable=True)  # Credenziale per autenticazione su altri dispositivi
-    password = db.Column(db.String(255), nullable=True)  # Credenziale in chiaro per autenticazione su altri dispositivi
+    username = db.Column(db.String(255), nullable=True)
+    password = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    # Relazione con LogData: ogni dispositivo può avere molti dati di log
+    log_data = db.relationship('LogData', backref='device', passive_deletes=True)
+
+    # Relazione con Task: ogni dispositivo può avere molti task associati
+    tasks = db.relationship('Task', backref='device', passive_deletes=True)
+
+    # Relazione con Variables: ogni dispositivo può avere molte variabili
+    variables = db.relationship('Variables', backref='device', passive_deletes=True)
+
+    # Relazione con User: ogni dispositivo appartiene a un utente
+    user = db.relationship('User', back_populates='devices')
 
     def to_dict(self):
         """Rappresentazione del modello come dizionario."""

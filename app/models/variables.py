@@ -6,13 +6,16 @@ class Variables(db.Model):
     __tablename__ = 'variables'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    device_id = db.Column(db.Integer, db.ForeignKey('devices.id'))
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'))  # Relazione con Device: variabile associata a un dispositivo
     variable_name = db.Column(db.String(255), nullable=False)
     variable_code = db.Column(db.String(255), unique=True, nullable=False)
     boolean_value = db.Column(db.Integer)
     string_value = db.Column(db.String(255))
     numeric_value = db.Column(db.Float)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    # Relazione con LogData: una variabile può avere molti log
+    log_data = db.relationship('LogData', back_populates='variable', passive_deletes=True)
 
     def to_dict(self):
         return {

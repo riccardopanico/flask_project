@@ -1,8 +1,4 @@
 from app import db
-# from app.models.log_data import LogData
-# from app.models.tasks import Task
-# from app.models.variables import Variables
-# from app.models.user import User
 
 class Device(db.Model):
     __tablename__ = 'devices'

@@ -1,5 +1,4 @@
 from app import db
-# from app.models.variables import Variables
 
 class LogData(db.Model):
     __tablename__ = 'log_data'

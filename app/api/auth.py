@@ -26,7 +26,7 @@ def register():
 
             # Validazione per il tipo di utente 'device'
             if data['user_type'] == 'device':
-                required_keys = [ 'device_id', 'ip_address' ]
+                required_keys = ['device_id', 'ip_address']
                 for key in required_keys:
                     if key not in data:
                         return jsonify({"msg": f"Chiave mancante: {key}"}), 400
@@ -44,6 +44,8 @@ def register():
                     gateway=data.get('gateway'),
                     subnet_mask=data.get('subnet_mask'),
                     dns_address=data.get('dns_address')
+                    username=data.get('username'),
+                    password=data.get('password'),
                 )
                 session.add(new_device)
 
@@ -52,9 +54,9 @@ def register():
             return jsonify({"msg": "Utente creato con successo"}), 201
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            debug_mode = current_app.debug
             error_response = {"msg": "Errore interno del server"}
-            if debug_mode:
+            current_app.logger.error(f"Errore durante la registrazione: {str(e)}")
+            if current_app.debug:
                 error_response["error"] = str(e)
             return jsonify(error_response), 500
 
@@ -73,9 +75,9 @@ def login():
             else:
                 return jsonify({"msg": "Utente o password non corretti"}), 401
         except Exception as e:
-            debug_mode = current_app.debug
             error_response = {"msg": "Errore interno del server"}
-            if debug_mode:
+            current_app.logger.error(f"Errore durante il login: {str(e)}")
+            if current_app.debug:
                 error_response["error"] = str(e)
             return jsonify(error_response), 500
 
@@ -87,15 +89,15 @@ def refresh():
         new_access_token = create_access_token(identity=current_user)
         return jsonify(access_token=new_access_token), 200
     except Exception as e:
-        debug_mode = current_app.debug
         error_response = {"msg": "Errore interno del server"}
-        if debug_mode:
+        current_app.logger.error(f"Errore durante il refresh del token: {str(e)}")
+        if current_app.debug:
             error_response["error"] = str(e)
         return jsonify(error_response), 500
 
-@auth_blueprint.route('/update_password', methods=['POST'])
+@auth_blueprint.route('/update_credentials', methods=['POST'])
 @jwt_required()
-def update_password():
+def update_credentials():
     Session = sessionmaker(bind=db.engine)
     with Session() as session:
         try:
@@ -103,25 +105,45 @@ def update_password():
             data = request.get_json()
 
             new_password = data.get('new_password')
-            if not new_password:
-                return jsonify({"msg": "La nuova password è obbligatoria."}), 400
+            new_username = data.get('new_username')
+
+            if not new_password and not new_username:
+                return jsonify({"msg": "È necessario fornire almeno una nuova credenziale."}), 400
 
             user = session.query(User).filter_by(id=current_user['id']).first()
             if not user:
                 return jsonify({"msg": "Utente non trovato."}), 404
 
-            user.set_password(new_password)
+            # Aggiorna la password se fornita
+            if new_password:
+                user.set_password(new_password)
+                current_app.logger.info(f"Password aggiornata per l'utente: {user.username}")
+
+            # Aggiorna lo username se fornito
+            if new_username:
+                existing_user = session.query(User).filter_by(username=new_username).first()
+                if existing_user:
+                    return jsonify({"msg": "Il nuovo username è già in uso."}), 400
+                user.username = new_username
+                current_app.logger.info(f"Username aggiornato per l'utente: {user.username}")
+
+            # Aggiorna i dispositivi associati
+            devices = session.query(Device).filter_by(user_id=user.id).all()
+            for device in devices:
+                if new_username:
+                    device.username = new_username
+                if new_password:
+                    device.password = new_password
+                current_app.logger.info(f"Credenziali aggiornate per il dispositivo: {device.device_id}")
+
             session.commit()
 
-            if current_app.debug:
-                print(f"Password aggiornata con successo per l'utente: {user.username}")
-
-            return jsonify({"msg": "Password aggiornata con successo."}), 200
+            return jsonify({"msg": "Credenziali aggiornate con successo."}), 200
 
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            debug_mode = current_app.debug
             error_response = {"msg": "Errore interno del server"}
-            if debug_mode:
+            current_app.logger.error(f"Errore durante l'aggiornamento delle credenziali: {str(e)}")
+            if current_app.debug:
                 error_response["error"] = str(e)
             return jsonify(error_response), 500

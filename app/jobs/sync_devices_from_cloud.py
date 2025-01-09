@@ -40,6 +40,22 @@ def run(app):
 
                 # Sincronizza il dispositivo basato sul device_id
                 device = session.query(Device).filter_by(device_id=record['device_id']).first()
+
+                # Ottieni l'API manager associato al dispositivo
+                api_manager = app.api_device_manager.get(record['username'])
+                if api_manager:
+                    api_manager.ip_address = device.ip_address
+                    api_manager.username = device.username
+                    api_manager.password = device.password
+                else:
+                    current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
+                    api_manager = ApiDeviceManager(
+                        ip_address=device.ip_address,
+                        username=device.username,
+                        password=device.password
+                    )
+                    app.api_device_manager[device.username] = api_manager
+
                 if not device:
                     # Crea un nuovo dispositivo e utente associato
                     user = session.query(User).filter_by(username=record['username']).first()
@@ -56,6 +72,25 @@ def run(app):
                     device = Device(user_id=user.id, device_id=record['device_id'])
                     session.add(device)
                     current_app.logger.debug(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
+
+                    api_response = api_manager.call(
+                        'auth/register',
+                        params={
+                            'username': record['username'],
+                            'password': record['password'],
+                            'user_type': record['user_type'],
+                            'device_id': record['device_id'],
+                            'ip_address': record['ip_address']
+                        },
+                        method='POST'
+                    )
+
+                    if api_response.get('success'):
+                        if current_app.debug:
+                            current_app.logger.debug(f"Aggiornamento delle credenziali per il dispositivo {device.username} avvenuto con successo.")
+                    else:
+                        current_app.logger.warning(f"Aggiornamento delle credenziali per il dispositivo {device.username} fallito: {api_response.get('error')}")
+
                 else:
                     # Aggiorna i dati del dispositivo e dell'utente associato
                     user = session.query(User).filter_by(id=device.user_id).first()
@@ -72,23 +107,9 @@ def run(app):
                             if user.password_hash is None or not user.check_password(record['password']):
                                 user.set_password(record['password'])
 
-                                api_manager = app.api_device_manager.get(record['username'])
-                                if api_manager:
-                                    api_manager.ip_address = device.ip_address
-                                    api_manager.username = device.username
-                                    api_manager.password = device.password
-                                else:
-                                    current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
-                                    api_manager = ApiDeviceManager(
-                                        ip_address=device.ip_address,
-                                        username=device.username,
-                                        password=device.password
-                                    )
-                                    app.api_device_manager[device.username] = api_manager
-
                                 api_response = api_manager.call(
                                     'auth/update_credentials',
-                                    params={'new_password': record['password']},
+                                    params={'new_password': record['password'], 'new_username': record['username']},
                                     method='POST'
                                 )
                                 if api_response.get('success'):
@@ -110,6 +131,8 @@ def run(app):
                 device.gateway = record.get('gateway', device.gateway)
                 device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
                 device.dns_address = record.get('dns_address', device.dns_address)
+                device.username = record.get('username', device.username)
+                device.password = record.get('password', device.password)
 
                 current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 

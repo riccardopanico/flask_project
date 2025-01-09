@@ -5,13 +5,12 @@ from requests.exceptions import RequestException
 
 class ApiOracleManager:
     def __init__(self):
-        self.api_base_url = os.getenv('API_BASE_URL')
-        self.client_id = os.getenv('API_CLIENT_ID')
-        self.client_secret = os.getenv('API_CLIENT_SECRET')
-        self.api_oracle_base_url = os.getenv('API_ORACLE_BASE_URL')
-        self.api_token_url = f"{self.api_oracle_base_url}/oauth/token"
-        if not all([self.api_base_url, self.client_id, self.client_secret, self.api_token_url]):
-            raise ValueError("API_BASE_URL, API_CLIENT_ID e API_CLIENT_SECRET devono essere impostati nelle variabili d'ambiente.")
+        self.api_base_url = os.getenv('API_ORACLE_BASE_URL')
+        self.client_id = os.getenv('API_ORACLE_CLIENT_ID')
+        self.client_secret = os.getenv('API_ORACLE_CLIENT_SECRET')
+        self.api_token_url = f"{self.api_base_url}/oauth/token"
+        if not all([self.api_base_url, self.client_id, self.client_secret]):
+            raise ValueError("API_BASE_URL, API_ORACLE_CLIENT_ID e API_ORACLE_CLIENT_SECRET devono essere impostati nelle variabili d'ambiente.")
 
         self.access_token = None
         self.headers = {'Content-Type': 'application/json'}
@@ -50,7 +49,7 @@ class ApiOracleManager:
             token_response = self._get_access_token()
             if not token_response['success']:
                 raise Exception(f"Errore nel recupero del token: {token_response['error']}")
-        full_url = f"{self.api_oracle_base_url}/{url.lstrip('/')}"
+        full_url = f"{self.api_base_url}/{url.lstrip('/')}"
         full_url = url
         print(f"Chiamata API: {full_url}")
         method = method.upper()

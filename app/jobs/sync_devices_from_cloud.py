@@ -9,25 +9,26 @@ from app.models.user import User
 from app.models.device import Device
 from app.utils.api_device_manager import ApiDeviceManager
 
-JOB_INTERVAL = timedelta(seconds=3)
+JOB_INTERVAL = timedelta(seconds=5)
 
 def run(app):
 
     with app.app_context():
         try:
             if current_app.debug:
-                print("Sincronizzazione dei dispositivi in corso...")
+                current_app.logger.debug("Sincronizzazione dei dispositivi in corso...")
             Session = sessionmaker(bind=db.engine)
             session = Session()
 
             response = app.api_oracle_manager.call('device', method='GET')
+            if not isinstance(response, dict):
+                raise ValueError(f"Risposta non valida: {response}")
+
             if response.get('success'):
-                print(f"Received data: {response.get('data')}")
                 data_records = response.get('data', [])
             else:
                 raise Exception(f"Errore durante la richiesta: {response.get('error')}")
 
-            print(f"Fetched data: {data_records}")
             for record in data_records:
                 # Converti tutte le chiavi del record in minuscolo
                 record = {key.lower(): value for key, value in record.items()}
@@ -46,15 +47,15 @@ def run(app):
                         session.add(user)
                         session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
                         if current_app.debug:
-                            print(f"Creato nuovo utente: {record['username']}")
+                            current_app.logger.debug(f"Creato nuovo utente: {record['username']}")
                     else:
                         if current_app.debug:
-                            print(f"Utente esistente trovato: {record['username']}")
+                            current_app.logger.debug(f"Utente esistente trovato: {record['username']}")
 
                     device = Device(user_id=user.id, device_id=record['device_id'])
                     session.add(device)
                     if current_app.debug:
-                        print(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
+                        current_app.logger.debug(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
                 else:
                     # Aggiorna i dati dell'utente associato al dispositivo
                     user = session.query(User).filter_by(id=device.user_id).first()
@@ -64,7 +65,7 @@ def run(app):
                             existing_user = session.query(User).filter_by(username=record['username']).first()
                             if existing_user and existing_user.id != user.id:
                                 if current_app.debug:
-                                    print(f"Errore: L'username '{record['username']}' è già in uso da un altro utente.")
+                                    current_app.logger.warning(f"Errore: L'username '{record['username']}' è già in uso da un altro utente.")
                                 continue
                             user.username = record['username']
                         user.user_type = record.get('user_type', user.user_type)
@@ -73,7 +74,11 @@ def run(app):
                                 user.set_password(record['password'])
 
                                 api_manager = app.api_device_manager.get(record['username'])
-                                if not api_manager:
+                                if api_manager:
+                                    api_manager.ip_address = device.ip_address
+                                    api_manager.username = device.username
+                                    api_manager.password = device.password
+                                else:
                                     current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
                                     api_manager = ApiDeviceManager(
                                         ip_address=device.ip_address,
@@ -89,19 +94,19 @@ def run(app):
                                 )
                                 if api_response.get('success'):
                                     if current_app.debug:
-                                        print(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
+                                        current_app.logger.info(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
                                 else:
                                     if current_app.debug:
-                                        print(f"Errore durante l'aggiornamento della password per dispositivo {record['device_id']}: {api_response.get('error')}")
+                                        current_app.logger.error(f"Errore durante l'aggiornamento della password per dispositivo {record['device_id']}: {api_response.get('error')}")
 
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)
                         user.email = record.get('email', user.email)
                         if current_app.debug:
-                            print(f"Dati utente aggiornati: {record['username']}")
+                            current_app.logger.debug(f"Dati utente aggiornati: {record['username']}")
                     else:
                         if current_app.debug:
-                            print(f"Errore: Utente associato al dispositivo {record['device_id']} non trovato.")
+                            current_app.logger.error(f"Errore: Utente associato al dispositivo {record['device_id']} non trovato.")
 
                 # Aggiorna i dati del dispositivo se necessario
                 device.mac_address = record.get('mac_address', device.mac_address)
@@ -110,18 +115,18 @@ def run(app):
                 device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
                 device.dns_address = record.get('dns_address', device.dns_address)
                 if current_app.debug:
-                    print(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
+                    current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 
             session.commit()
             if current_app.debug:
-                print("Sincronizzazione dei record completata con successo.")
+                current_app.logger.info("Sincronizzazione dei record completata con successo.")
         except IntegrityError as e:
             session.rollback()
             if current_app.debug:
-                print(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}")
+                current_app.logger.error(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}")
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
             if current_app.debug:
-                print(f"Errore durante la sincronizzazione dei record: {str(e)}")
+                current_app.logger.error(f"Errore durante la sincronizzazione dei record: {str(e)}")
         finally:
             session.close()

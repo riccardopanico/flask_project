@@ -63,12 +63,9 @@ def create_app():
         })
 
         # Inizializzazione di ApiDeviceManager e ApiOracleManager
-        app.api_device_manager = None
-        app.api_datacenter_manager = None
-        app.api_oracle_manager = None
         with app.app_context():
-            from app.models.device import Device  # Importa qui per evitare il ciclo
-            from app.models.user import User  # User contiene il tipo di utente
+            from app.models.device import Device
+            from app.models.user import User
 
             # Ottieni tutti i dispositivi associati a utenti di tipo 'device'
             devices = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'device').all()

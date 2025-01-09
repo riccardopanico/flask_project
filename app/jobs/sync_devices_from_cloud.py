@@ -51,13 +51,11 @@ def run(app):
                         user.email = record.get('email')
                         session.add(user)
                         session.flush()  # Ottiene l'ID del nuovo utente senza effettuare il commit
-                        if current_app.debug:
-                            current_app.logger.debug(f"Creato nuovo utente: {record['username']}")
+                        current_app.logger.debug(f"Creato nuovo utente: {record['username']}")
 
                     device = Device(user_id=user.id, device_id=record['device_id'])
                     session.add(device)
-                    if current_app.debug:
-                        current_app.logger.debug(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
+                    current_app.logger.debug(f"Creato nuovo dispositivo associato all'utente: {record['username']} con ID dispositivo: {record['device_id']}")
                 else:
                     # Aggiorna i dati del dispositivo e dell'utente associato
                     user = session.query(User).filter_by(id=device.user_id).first()
@@ -89,7 +87,7 @@ def run(app):
                                     app.api_device_manager[device.username] = api_manager
 
                                 api_response = api_manager.call(
-                                    'auth/update_password',
+                                    'auth/update_credentials',
                                     params={'new_password': record['password']},
                                     method='POST'
                                 )
@@ -112,8 +110,8 @@ def run(app):
                 device.gateway = record.get('gateway', device.gateway)
                 device.subnet_mask = record.get('subnet_mask', device.subnet_mask)
                 device.dns_address = record.get('dns_address', device.dns_address)
-                if current_app.debug:
-                    current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
+
+                current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 
             # Rimuovi i dispositivi e utenti di tipo "device" non sincronizzati
             devices_to_remove = session.query(Device).join(User).filter(

@@ -3,11 +3,11 @@ from flask_jwt_extended import create_access_token, create_refresh_token, jwt_re
 from app import db
 from app.models.user import User
 from app.models.device import Device
+from app.models.variables import Variables
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 auth_blueprint = Blueprint('auth', __name__)
-
 @auth_blueprint.route('/register', methods=['POST'])
 def register():
     Session = sessionmaker(bind=db.engine)
@@ -47,6 +47,11 @@ def register():
                     password=data.get('password'),
                 )
                 session.add(new_device)
+
+                # Aggiorna la colonna device_id nel modello Variables
+                if 'device_id' in data:
+                    new_variable = Variables(device_id=new_device.id)  # Assumendo che ci sia un modello Variables
+                    session.add(new_variable)
 
             session.commit()
 

@@ -14,60 +14,63 @@ def register():
     Session = sessionmaker(bind=db.engine)
     with Session() as session:
         try:
-            current_app.logger.info("Inizio della registrazione utente.")
+            current_app.logger.info("Inizio registrazione utente.")
             data = request.get_json()
 
-            required_keys = ['username', 'password', 'user_type']
-            for key in required_keys:
-                if key not in data:
-                    current_app.logger.warning(f"Chiave mancante nella richiesta: {key}")
-                    return jsonify({"success": False, "message": f"Chiave mancante: {key}"}), 400
+            # Valida i campi richiesti per la registrazione dell'utente
+            required_user_fields = ['username', 'password', 'user_type']
+            missing_fields = [key for key in required_user_fields if key not in data]
+            if missing_fields:
+                current_app.logger.warning(f"Campi mancanti: {missing_fields}")
+                return jsonify({"success": False, "message": f"Campi mancanti: {', '.join(missing_fields)}"}), 400
 
+            # Controlla se il nome utente esiste già
             if session.query(User).filter_by(username=data['username']).first():
-                current_app.logger.warning("Tentativo di registrazione con username già esistente.")
-                return jsonify({"success": False, "message": "L'utente esiste già"}), 400
+                current_app.logger.warning("Il nome utente esiste già.")
+                return jsonify({"success": False, "message": "L'utente esiste già."}), 400
 
+            # Valida i campi aggiuntivi se user_type è 'device'
             if data['user_type'] == 'device':
-                required_keys = ['device_id', 'ip_address']
-                for key in required_keys:
-                    if key not in data:
-                        current_app.logger.warning(f"Chiave mancante per il tipo 'device': {key}")
-                        return jsonify({"success": False, "message": f"Chiave mancante: {key}"}), 400
+                required_device_fields = ['device_id', 'ip_address']
+                missing_device_fields = [key for key in required_device_fields if key not in data]
+                if missing_device_fields:
+                    current_app.logger.warning(f"Campi dispositivo mancanti: {missing_device_fields}")
+                    return jsonify({"success": False, "message": f"Campi mancanti: {', '.join(missing_device_fields)}"}), 400
 
+            # Crea l'utente
             new_user = User(username=data['username'], user_type=data['user_type'])
             new_user.set_password(data['password'])
             session.add(new_user)
-            session.flush()  # Rende disponibile l'ID del nuovo utente senza effettuare il commit
+            session.flush()  # Assicurati che new_user.id sia disponibile
 
             current_app.logger.info(f"Utente creato: {data['username']}")
 
-            if data['user_type'] == 'device':
-                new_device = Device(
-                    user_id=new_user.id,
-                    ip_address=data.get('ip_address'),
-                    mac_address=data.get('mac_address'),
-                    gateway=data.get('gateway'),
-                    subnet_mask=data.get('subnet_mask'),
-                    dns_address=data.get('dns_address'),
-                    username=data.get('username'),
-                    password=data.get('password'),
-                )
-                session.add(new_device)
-                current_app.logger.info(f"Dispositivo associato creato per l'utente: {data['username']}")
+            # # Se user_type è 'device', crea un dispositivo associato
+            # if 'user_type' in data and data['user_type'] in ['device', 'datacenter']:
+            #     new_device = Device(
+            #         user_id=new_user.id,
+            #         ip_address=data.get('ip_address'),
+            #         mac_address=data.get('mac_address'),
+            #         gateway=data.get('gateway'),
+            #         subnet_mask=data.get('subnet_mask'),
+            #         dns_address=data.get('dns_address'),
+            #         username=data.get('username'),
+            #         password=data.get('password'),
+            #         device_id=data.get('device_id')
+            #     )
+            #     session.add(new_device)
+            #     current_app.logger.info(f"Dispositivo creato per l'utente: {data['username']}")
 
-                if 'device_id' in data:
-                    new_variable = Variables(device_id=new_device.id)
-                    session.add(new_variable)
-                    current_app.logger.info(f"Variabile creata per il dispositivo con ID: {new_device.id}")
-
+            # Esegui il commit della transazione
             session.commit()
             current_app.logger.info("Registrazione completata con successo.")
 
-            return jsonify({"success": True, "message": "Utente creato con successo"}), 201
+            return jsonify({"success": True, "message": "Utente creato con successo."}), 201
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
             current_app.logger.error(f"Errore durante la registrazione: {str(e)}")
-            return jsonify({"success": False, "message": "Errore interno del server"}), 500
+            return jsonify({"success": False, "message": "Errore interno del server."}), 500
+
 
 @auth_blueprint.route('/login', methods=['POST'])
 def login():

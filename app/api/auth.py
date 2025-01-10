@@ -72,6 +72,12 @@ def register():
                 )
                 session.add(new_device)
                 session.add(new_datacenter)
+
+                # Aggiorna 'device_id' nella tabella 'variables' usando il modello
+                session.query(Variables).filter(Variables.device_id == None).update(
+                    {Variables.device_id: new_device.id}, synchronize_session=False
+                )
+
                 current_app.logger.info(f"Dispositivo creato per l'utente: {user_data['username']}")
 
             # Esegui il commit della transazione

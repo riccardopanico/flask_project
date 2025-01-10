@@ -51,7 +51,7 @@ def run(app):
                         session.flush()
                         current_app.logger.info(f"Utente creato: {record['username']}")
 
-                    device = Device(user_id=user.id, device_id=record['device_id'])
+                    device = Device(user_id=user.id, device_id=record['device_id'], ip_address=record['ip_address'])
                     session.add(device)
                     current_app.logger.info(f"Dispositivo creato: {record['device_id']}")
 
@@ -65,15 +65,32 @@ def run(app):
                     current_app.logger.info(f"ApiDeviceManager creato per il dispositivo: {record['device_id']}")
 
                     # Registra il dispositivo tramite api_manager
-                    api_response = api_manager.call(
-                        'auth/register',
-                        params = {
-                            'username': os.getenv('DATACENTER_USERNAME'),
-                            'password': os.getenv('DATACENTER_PASSWORD'),
-                            'user_type': 'datacenter'
-                        },
-                        method='POST'
-                    )
+                    try:
+                        api_response = api_manager.call(
+                            'auth/register',
+                            params = {
+                                'user': {
+                                    'username': record['username'],
+                                    'password': record['password'],
+                                    'user_type': 'datacenter'
+                                },
+                                'device': {
+                                    'device_id': record['device_id'],
+                                    'mac_address': record.get('mac_address'),
+                                    'ip_address': record['ip_address'],
+                                    'gateway': record.get('gateway'),
+                                    'subnet_mask': record.get('subnet_mask'),
+                                    'dns_address': record.get('dns_address'),
+                                    'port_address': record.get('port_address'),
+                                    'username': record['username'],
+                                    'password': record['password']
+                                }
+                            },
+                            method='POST',
+                            requires_auth=False
+                        )
+                    except Exception as e:
+                        current_app.logger.warning(f"Errore durante la registrazione del dispositivo {record['device_id']}")
 
                     if not api_response.get('success'):
                         current_app.logger.warning(f"Registrazione fallita per il dispositivo {record['device_id']}: {api_response.get('error')}")
@@ -92,14 +109,17 @@ def run(app):
                         user.user_type = record.get('user_type', user.user_type)
                         if 'password' in record and record['password'] and not user.check_password(record['password']):
 
-                            api_response = api_manager.call(
-                                'auth/update_credentials',
-                                params={
-                                    'new_password': record['password'],
-                                    'new_username': record['username']
-                                },
-                                method='POST'
-                            )
+                            try:
+                                api_response = api_manager.call(
+                                    'auth/update_credentials',
+                                    params={
+                                        'new_password': record['password'],
+                                        'new_username': record['username']
+                                    },
+                                    method='POST'
+                                )
+                            except Exception as e:
+                                current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}: {str(e)}")
 
                             if api_response.get('success'):
                                 user.set_password(record['password'])

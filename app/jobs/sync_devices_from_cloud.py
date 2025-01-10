@@ -28,33 +28,32 @@ def run(app):
             else:
                 raise Exception(f"Errore durante la richiesta: {response.get('error')}")
 
-            # Lista per tracciare gli ID dei dispositivi sincronizzati
             synchronized_device_ids = []
 
             for record in data_records:
-                # Converti tutte le chiavi del record in minuscolo
                 record = {key.lower(): value for key, value in record.items()}
-
-                # Aggiungi il device_id alla lista dei dispositivi sincronizzati
                 synchronized_device_ids.append(record['device_id'])
-
-                # Sincronizza il dispositivo basato sul device_id
                 device = session.query(Device).filter_by(device_id=record['device_id']).first()
 
                 # Ottieni l'API manager associato al dispositivo
                 api_manager = app.api_device_manager.get(record['username'])
-                if api_manager:
-                    api_manager.ip_address = device.ip_address
-                    api_manager.username = device.username
-                    api_manager.password = device.password
-                else:
-                    current_app.logger.info(f"Device manager non trovato per il dispositivo {device.username}. Creazione in corso...")
-                    api_manager = ApiDeviceManager(
-                        ip_address=device.ip_address,
-                        username=device.username,
-                        password=device.password
-                    )
-                    app.api_device_manager[device.username] = api_manager
+                if not api_manager:
+                    current_app.logger.info(f"Device manager non trovato per il dispositivo {record['username']}. Creazione in corso...")
+
+                    # Controlla che i parametri esistano e siano validi
+                    if not all([
+                        'ip_address' in record and record['ip_address'],
+                        'username' in record and record['username'],
+                        'password' in record and record['password']
+                    ]):
+                        current_app.logger.warning(f"Parametri mancanti o non validi per il dispositivo {record['username']}.")
+                    else:
+                        api_manager = ApiDeviceManager(
+                            ip_address=record['ip_address'],
+                            username=record['username'],
+                            password=record['password']
+                        )
+                        app.api_device_manager[record['username']] = api_manager
 
                 if not device:
                     # Crea un nuovo dispositivo e utente associato
@@ -113,6 +112,8 @@ def run(app):
                                     method='POST'
                                 )
                                 if api_response.get('success'):
+                                    api_manager.username = record['username']
+                                    api_manager.password = record['password']
                                     if current_app.debug:
                                         current_app.logger.info(f"Password aggiornata correttamente per dispositivo: {record['device_id']}")
                                 else:
@@ -134,6 +135,9 @@ def run(app):
                 device.username = record.get('username', device.username)
                 device.password = record.get('password', device.password)
 
+                #
+                api_manager.ip_address = record['ip_address']
+
                 current_app.logger.debug(f"Dati dispositivo aggiornati per ID dispositivo: {record['device_id']}")
 
             # Rimuovi i dispositivi e utenti di tipo "device" non sincronizzati
@@ -142,33 +146,24 @@ def run(app):
                 User.user_type == 'device'
             ).all()
             for device in devices_to_remove:
-                if current_app.debug:
-                    current_app.logger.debug(f"Rimozione dispositivo non sincronizzato: {device.device_id}")
-                # Rimuovi il manager API associato, se presente
+                current_app.logger.debug(f"Rimozione dispositivo non sincronizzato: {device.device_id}")
                 if device.username in app.api_device_manager:
                     del app.api_device_manager[device.username]
-                    if current_app.debug:
-                        current_app.logger.debug(f"Rimosso ApiDeviceManager per dispositivo: {device.device_id}")
-                # Rimuovi il dispositivo
+                    current_app.logger.debug(f"Rimosso ApiDeviceManager per dispositivo: {device.device_id}")
                 session.delete(device)
 
-                # Rimuovi l'utente associato, se di tipo "device"
                 user = session.query(User).filter_by(id=device.user_id, user_type='device').first()
                 if user:
                     session.delete(user)
-                    if current_app.debug:
-                        current_app.logger.debug(f"Rimosso utente associato al dispositivo: {device.device_id}")
+                    current_app.logger.debug(f"Rimosso utente associato al dispositivo: {device.device_id}")
 
             session.commit()
-            if current_app.debug:
-                current_app.logger.info("Sincronizzazione dei record completata con successo.")
+            current_app.logger.info("Sincronizzazione dei record completata con successo.")
         except IntegrityError as e:
             session.rollback()
-            if current_app.debug:
-                current_app.logger.error(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}")
+            current_app.logger.error(f"Errore di integrità durante la sincronizzazione dei record: {str(e)}", exc_info=True)
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            if current_app.debug:
-                current_app.logger.error(f"Errore durante la sincronizzazione dei record: {str(e)}")
+            current_app.logger.error(f"Errore durante la sincronizzazione dei record: {str(e)}", exc_info=True)
         finally:
             session.close()

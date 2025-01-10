@@ -15,6 +15,7 @@ class Device(db.Model):
     username = db.Column(db.String(255), nullable=True)
     password = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+    device_type = db.Column(db.String(50), nullable=True)
 
     # Relazione con LogData: ogni dispositivo può avere molti dati di log
     log_data = db.relationship('LogData', backref='device', passive_deletes=True)

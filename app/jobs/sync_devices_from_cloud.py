@@ -67,12 +67,10 @@ def run(app):
                     # Registra il dispositivo tramite api_manager
                     api_response = api_manager.call(
                         'auth/register',
-                        params={
-                            'username': record['username'],
-                            'password': record['password'],
-                            'user_type': record['user_type'],
-                            'device_id': record['device_id'],
-                            'ip_address': record['ip_address']
+                        params = {
+                            'username': os.getenv('DATACENTER_USERNAME'),
+                            'password': os.getenv('DATACENTER_PASSWORD'),
+                            'user_type': 'datacenter'
                         },
                         method='POST'
                     )
@@ -93,21 +91,24 @@ def run(app):
 
                         user.user_type = record.get('user_type', user.user_type)
                         if 'password' in record and record['password'] and not user.check_password(record['password']):
-                            user.set_password(record['password'])
-                            current_app.logger.info(f"Password aggiornata per l'utente: {user.username}")
-                            if not api_manager:
-                                current_app.logger.warning(f"ApiDeviceManager non trovato per {record['device_id']} ({record['username']}). Aggiornamento credenziali non possibile.")
+
+                            api_response = api_manager.call(
+                                'auth/update_credentials',
+                                params={
+                                    'new_password': record['password'],
+                                    'new_username': record['username']
+                                },
+                                method='POST'
+                            )
+
+                            if api_response.get('success'):
+                                user.set_password(record['password'])
+                                user.username = record['username']
+                                api_manager.username = record['username']
+                                api_manager.password = record['password']
+                                current_app.logger.info(f"ApiDeviceManager e utente aggiornati per il dispositivo: {device.device_id}")
                             else:
-                                api_response = api_manager.call(
-                                    'auth/update_credentials',
-                                    params={
-                                        'new_password': record['password'],
-                                        'new_username': record['username']
-                                    },
-                                    method='POST'
-                                )
-                                if not api_response.get('success'):
-                                    current_app.logger.error(f"Errore aggiornamento credenziali per {record['device_id']}: {api_response.get('error')}")
+                                current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}")
 
                         user.name = record.get('name', user.name)
                         user.last_name = record.get('last_name', user.last_name)

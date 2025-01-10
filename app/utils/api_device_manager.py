@@ -3,7 +3,7 @@ import requests
 from requests.exceptions import RequestException
 
 class ApiDeviceManager:
-    def __init__(self, ip_address, username, password):
+    def __init__(self, ip_address, username=None, password=None):
         self.ip_address = ip_address
         self.username = username
         self.password = password
@@ -12,8 +12,11 @@ class ApiDeviceManager:
         self.refresh_token = None
         self.headers = {'Content-Type': 'application/json'}
 
-        if not self.ip_address or not self.username or not self.password:
-            raise ValueError("IP_ADDRESS, USERNAME e PASSWORD devono essere impostati.")
+        if not self.ip_address:
+            raise ValueError("IP_ADDRESS deve essere impostato.")
+
+        if (self.username and not self.password) or (not self.username and self.password):
+            raise ValueError("USERNAME e PASSWORD devono essere impostati entrambi o nessuno.")
 
     def _login(self):
         """Effettua il login e ottiene i token di accesso."""
@@ -51,32 +54,34 @@ class ApiDeviceManager:
         except RequestException as e:
             return self._login()
 
-    def call(self, url, params=None, method='GET'):
+    def call(self, url, params=None, method='GET', requires_auth=True):
         """Esegue una chiamata API verso un endpoint esterno."""
-        if not self.access_token:
-            login_response = self._login()
-            if not login_response['success']:
-                return {'success': False, 'status': 401, 'error': f"Unable to login: {login_response['error']}"}
-
         full_url = f"{self.api_base_url}/{url.lstrip('/')}"
         method = method.upper()
 
+        if requires_auth:
+            if not self.access_token:
+                login_response = self._login()
+                if not login_response['success']:
+                    return {'success': False, 'status': 401, 'error': f"Unable to login: {login_response['error']}"}
+
         try:
+            headers = self.headers if requires_auth else {'Content-Type': 'application/json'}
             if method == 'POST':
-                response = requests.post(full_url, json=params, headers=self.headers)
+                response = requests.post(full_url, json=params, headers=headers)
             elif method == 'PUT':
-                response = requests.put(full_url, json=params, headers=self.headers)
+                response = requests.put(full_url, json=params, headers=headers)
             elif method == 'DELETE':
-                response = requests.delete(full_url, json=params, headers=self.headers)
+                response = requests.delete(full_url, json=params, headers=headers)
             else:  # Default to GET
-                response = requests.get(full_url, params=params, headers=self.headers)
+                response = requests.get(full_url, params=params, headers=headers)
 
             if response.status_code in [200, 201]:
                 return {'success': True, 'data': response.json()}
-            elif response.status_code == 401:
+            elif response.status_code == 401 and requires_auth:
                 refresh_response = self._refresh_token()
                 if refresh_response['success']:
-                    return self.call(url, params, method)
+                    return self.call(url, params, method, requires_auth=True)
                 else:
                     return {'success': False, 'status': 401, 'error': f"Unable to refresh or login: {refresh_response['error']}"}
             else:

@@ -9,7 +9,41 @@ from app.models.user import User
 from app.models.device import Device
 from app.utils.api_device_manager import ApiDeviceManager
 
-JOB_INTERVAL = timedelta(seconds=5)
+JOB_INTERVAL = timedelta(seconds=8)
+
+def initialize_api_manager(app, device, record):
+    with app.app_context():
+        old_username = device.username if device else None
+        api_manager = app.api_device_manager.get(old_username)
+
+        if device is None:
+            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['device_id']}")
+            api_manager = ApiDeviceManager(
+                ip_address=record['ip_address'],
+                username=record['username'],
+                password=record['password']
+            )
+            app.api_device_manager[record['username']] = api_manager
+
+        elif api_manager is not None and api_manager.username == record['username']:
+            current_app.logger.info(f"Utilizzo dell'ApiDeviceManager esistente per il dispositivo: {record['device_id']}")
+
+        elif api_manager is not None and api_manager.username != record['username']:
+            current_app.logger.info(f"ApiDeviceManager con username cambiato: {record['device_id']}")
+            current_app.logger.info(f"Usando vecchie credenziali per aggiornare il dispositivo: {device.device_id}")
+
+        elif api_manager is None:
+            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['device_id']}. Il manager non esisteva.")
+            api_manager = ApiDeviceManager(
+                ip_address=record.get('ip_address', device.ip_address if device else None),
+                username=record.get('username', device.username if device else None),
+                password=record.get('password', device.password if device else None)
+            )
+            app.api_device_manager[record['username']] = api_manager
+        else:
+            current_app.logger.info(f"(Anomalia) Dispositivo con api_manager Non Trovato per il dispositivo: {record['device_id']}")
+
+        return api_manager
 
 def run(app):
     with app.app_context():
@@ -18,6 +52,7 @@ def run(app):
             Session = sessionmaker(bind=db.engine)
             session = Session()
 
+            # Chiamata all'API per ottenere i dispositivi
             response = app.api_oracle_manager.call('device', method='GET')
             if not isinstance(response, dict):
                 raise ValueError(f"Risposta non valida: {response}")
@@ -33,13 +68,15 @@ def run(app):
                 record = {key.lower(): value for key, value in record.items()}
                 synchronized_device_ids.append(record['device_id'])
 
+                # Recupera o inizializza il dispositivo
                 device = session.query(Device).filter_by(device_id=record['device_id']).first()
-
-                # Gestione di api_manager
-                api_manager = app.api_device_manager.get(record['username'])
+                old_username = device.username if device else None  # Memorizza il vecchio username
+                api_manager = initialize_api_manager(app, device, record)
 
                 if not device:
                     current_app.logger.info(f"Dispositivo non trovato: {record['device_id']}. Creazione in corso...")
+
+                    # Creazione di un nuovo utente
                     user = session.query(User).filter_by(username=record['username']).first()
                     if not user:
                         user = User(username=record['username'], user_type=record['user_type'])
@@ -51,24 +88,16 @@ def run(app):
                         session.flush()
                         current_app.logger.info(f"Utente creato: {record['username']}")
 
+                    # Creazione di un nuovo dispositivo
                     device = Device(user_id=user.id, device_id=record['device_id'], ip_address=record['ip_address'])
                     session.add(device)
                     current_app.logger.info(f"Dispositivo creato: {record['device_id']}")
-
-                    # Crea il ApiDeviceManager al momento della creazione
-                    api_manager = ApiDeviceManager(
-                        ip_address=record['ip_address'],
-                        username=record['username'],
-                        password=record['password']
-                    )
-                    app.api_device_manager[record['username']] = api_manager
-                    current_app.logger.info(f"ApiDeviceManager creato per il dispositivo: {record['device_id']}")
 
                     # Registra il dispositivo tramite api_manager
                     try:
                         api_response = api_manager.call(
                             'auth/register',
-                            params = {
+                            params={
                                 'user': {
                                     'username': record['username'],
                                     'password': record['password'],
@@ -90,13 +119,13 @@ def run(app):
                             requires_auth=False
                         )
                     except Exception as e:
-                        current_app.logger.warning(f"Errore durante la registrazione del dispositivo {record['device_id']}")
+                        current_app.logger.warning(f"Errore durante la registrazione del dispositivo {record['device_id']}: {e}")
 
                     if not api_response.get('success'):
                         current_app.logger.warning(f"Registrazione fallita per il dispositivo {record['device_id']}: {api_response.get('error')}")
 
                 else:
-                    # Aggiorna i dati del dispositivo e dell'utente associato
+                    # Aggiorna l'utente associato al dispositivo
                     user = session.query(User).filter_by(id=device.user_id).first()
                     if user:
                         if user.username != record['username']:
@@ -107,8 +136,8 @@ def run(app):
                             user.username = record['username']
 
                         user.user_type = record.get('user_type', user.user_type)
-                        if 'password' in record and record['password'] and not user.check_password(record['password']):
-
+                        if record['password'] and not user.check_password(record['password']) or old_username != record['username']:
+                            current_app.logger.info(f"Aggiornamento delle credenziali per l'utente: {user.username}")
                             try:
                                 api_response = api_manager.call(
                                     'auth/update_credentials',
@@ -119,13 +148,19 @@ def run(app):
                                     method='POST'
                                 )
                             except Exception as e:
-                                current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}: {str(e)}")
+                                current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}: {e}")
 
                             if api_response.get('success'):
                                 user.set_password(record['password'])
                                 user.username = record['username']
+
                                 api_manager.username = record['username']
                                 api_manager.password = record['password']
+
+                                if old_username != record['username'] and old_username in app.api_device_manager:
+                                    del app.api_device_manager[old_username]
+                                    app.api_device_manager[record['username']] = api_manager
+                                    current_app.logger.info(f"Rimosso ApiDeviceManager per il vecchio username: {old_username} e aggiunto per il nuovo username: {record['username']}")
                                 current_app.logger.info(f"ApiDeviceManager e utente aggiornati per il dispositivo: {device.device_id}")
                             else:
                                 current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}")
@@ -167,9 +202,9 @@ def run(app):
             current_app.logger.info("Sincronizzazione completata con successo.")
         except IntegrityError as e:
             session.rollback()
-            current_app.logger.error(f"Errore di integrità durante la sincronizzazione: {str(e)}", exc_info=True)
+            current_app.logger.error(f"Errore di integrità durante la sincronizzazione: {e}", exc_info=True)
         except (SQLAlchemyError, Exception) as e:
             session.rollback()
-            current_app.logger.error(f"Errore durante la sincronizzazione: {str(e)}", exc_info=True)
+            current_app.logger.error(f"Errore durante la sincronizzazione: {e}", exc_info=True)
         finally:
             session.close()

@@ -49,7 +49,7 @@ def register():
                     return jsonify({"success": False, "message": f"Campi dispositivo mancanti: {', '.join(missing_device_fields)}"}), 400
 
                 new_device = Device(
-                    user_id=new_user.id, # PIU AVANTI ASSICURATI CEH USER ID SIA ASSOCATO AL DEVICE GIUSTO, AL MOMENTO QUESTO è DATACENTER
+                    user_id=new_user.id,
                     device_id=device_data['device_id'],
                     ip_address=device_data['ip_address'],
                     mac_address=device_data.get('mac_address'),
@@ -61,7 +61,7 @@ def register():
                     password=device_data.get('password')
                 )
                 session.add(new_device)
-                session.flush()  # Assicura che new_device.id sia disponibile
+                session.flush()
 
                 session.query(Variables).filter(Variables.device_id == None).update(
                     {Variables.device_id: new_device.id}, synchronize_session=False
@@ -69,7 +69,6 @@ def register():
 
                 current_app.logger.info(f"Dispositivo creato per l'utente: {user_data['username']}")
 
-            # Esegui il commit della transazione
             session.commit()
             current_app.logger.info("Registrazione completata con successo.")
 

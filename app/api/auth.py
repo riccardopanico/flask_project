@@ -49,31 +49,20 @@ def register():
                     return jsonify({"success": False, "message": f"Campi dispositivo mancanti: {', '.join(missing_device_fields)}"}), 400
 
                 new_device = Device(
-                    user_id=None,
+                    user_id=new_user.id, # PIU AVANTI ASSICURATI CEH USER ID SIA ASSOCATO AL DEVICE GIUSTO, AL MOMENTO QUESTO è DATACENTER
                     device_id=device_data['device_id'],
                     ip_address=device_data['ip_address'],
                     mac_address=device_data.get('mac_address'),
                     gateway=device_data.get('gateway'),
                     subnet_mask=device_data.get('subnet_mask'),
                     dns_address=device_data.get('dns_address'),
-                    port_address=device_data.get('port_address')
-                )
-                new_datacenter = Device(
-                    user_id=new_user.id,
-                    device_id=None,
-                    ip_address=os.getenv('DATACENTER_IP_ADDRESS'),
-                    mac_address=os.getenv('DATACENTER_MAC_ADDRESS'),
-                    gateway=os.getenv('DATACENTER_GATEWAY'),
-                    subnet_mask=os.getenv('DATACENTER_SUBNET_MASK'),
-                    dns_address=os.getenv('DATACENTER_DNS_ADDRESS'),
-                    port_address=os.getenv('DATACENTER_PORT_ADDRESS'),
+                    port_address=device_data.get('port_address'),
                     username=device_data.get('username'),
                     password=device_data.get('password')
                 )
                 session.add(new_device)
-                session.add(new_datacenter)
+                session.flush()  # Assicura che new_device.id sia disponibile
 
-                # Aggiorna 'device_id' nella tabella 'variables' usando il modello
                 session.query(Variables).filter(Variables.device_id == None).update(
                     {Variables.device_id: new_device.id}, synchronize_session=False
                 )
@@ -146,17 +135,17 @@ def update_credentials():
                 current_app.logger.warning(f"Utente non trovato con ID: {current_user['id']}")
                 return jsonify({"success": False, "message": "Utente non trovato."}), 404
 
-            if new_password:
-                user.set_password(new_password)
-                current_app.logger.info(f"Password aggiornata per l'utente: {user.username}")
-
             if new_username:
-                existing_user = session.query(User).filter_by(username=new_username).first()
+                existing_user = session.query(User).filter(User.username == new_username, User.id != current_user['id']).first()
                 if existing_user:
-                    current_app.logger.warning("Tentativo di aggiornare lo username con un nome già in uso.")
+                    current_app.logger.warning("Tentativo di aggiornare lo username con un nome già in uso da un altro utente.")
                     return jsonify({"success": False, "message": "Il nuovo username è già in uso."}), 400
                 user.username = new_username
                 current_app.logger.info(f"Username aggiornato per l'utente: {new_username}")
+
+            if new_password:
+                user.set_password(new_password)
+                current_app.logger.info(f"Password aggiornata per l'utente: {user.username}")
 
             devices = session.query(Device).filter_by(user_id=user.id).all()
             for device in devices:

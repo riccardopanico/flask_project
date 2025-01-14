@@ -50,6 +50,7 @@ class ApiOracleManager:
             if not token_response['success']:
                 raise Exception(f"Errore nel recupero del token: {token_response['error']}")
         full_url = f"{self.api_base_url}/{url.lstrip('/')}"
+        current_app.logger.debug(f"Chiamata API: {full_url}")
         method = method.upper()
 
         try:

@@ -66,6 +66,7 @@ def run(app):
 
             for record in data_records:
                 record = {key.lower(): value for key, value in record.items()}
+                record['interconnection_id'] = record['device_id']
                 synchronized_interconnection_ids.append(record['interconnection_id'])
 
                 # Recupera o inizializza il dispositivo

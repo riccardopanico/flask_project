@@ -1,6 +1,7 @@
 import os
 import requests
 from requests.exceptions import RequestException
+from flask import current_app
 
 class ApiDeviceManager:
     def __init__(self, ip_address, username=None, password=None):
@@ -57,6 +58,7 @@ class ApiDeviceManager:
     def call(self, url, params=None, method='GET', requires_auth=True):
         """Esegue una chiamata API verso un endpoint esterno."""
         full_url = f"{self.api_base_url}/{url.lstrip('/')}"
+        current_app.logger.debug(f"Chiamata API: {full_url}")
         method = method.upper()
 
         if requires_auth:

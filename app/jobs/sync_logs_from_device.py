@@ -8,7 +8,7 @@ from app.models.user import User
 from app.utils.api_device_manager import ApiDeviceManager
 from datetime import timedelta
 
-JOB_INTERVAL = timedelta(seconds=5)
+JOB_INTERVAL = timedelta(seconds=15)
 
 def run(app):
     """Job per sincronizzare i log da tutti i dispositivi."""
@@ -40,7 +40,7 @@ def run(app):
                         last_log = session.query(LogData).filter_by(device_id=device.id).order_by(LogData.created_at.desc()).first()
                         last_sync_date = last_log.created_at.isoformat() if last_log else None
 
-                        response = api_manager.call('/logs', method='GET', params={'last_sync_date': last_sync_date})
+                        response = api_manager.call(f'/device/{device.interconnection_id}/log_data', method='GET', params={'last_sync_date': last_sync_date})
 
                         if response['success']:
                             for log_dict in response['data']:
@@ -57,12 +57,12 @@ def run(app):
                             session.commit()
                             current_app.logger.info(f"Log per il dispositivo {device.ip_address} sincronizzati con successo.")
                         else:
-                            current_app.logger.error(f"Errore nella sincronizzazione dei log per il dispositivo {device.ip_address}: {response['error']}")
+                            current_app.logger.error(f"Errore nella sincronizzazione dei log per il dispositivo {device.ip_address}: {response['error']}", exc_info=True)
                     except SQLAlchemyError as db_error:
                         session.rollback()
-                        current_app.logger.error(f"Errore del database per il dispositivo {device.ip_address}: {db_error}")
+                        current_app.logger.error(f"Errore del database per il dispositivo {device.ip_address}: {db_error}", exc_info=True)
                     except Exception as sync_error:
                         session.rollback()
-                        current_app.logger.error(f"Errore imprevisto durante la sincronizzazione dei log per il dispositivo {device.ip_address}: {sync_error}")
+                        current_app.logger.error(f"Errore imprevisto durante la sincronizzazione dei log per il dispositivo {device.ip_address}: {sync_error}", exc_info=True)
         except Exception as critical_error:
-            current_app.logger.critical(f"Errore critico nel lavoro di sincronizzazione dei log: {critical_error}")
+            current_app.logger.critical(f"Errore critico nel lavoro di sincronizzazione dei log: {critical_error}", exc_info=True)

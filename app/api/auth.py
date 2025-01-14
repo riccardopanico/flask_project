@@ -67,6 +67,10 @@ def register():
                     {Variables.device_id: new_device.id}, synchronize_session=False
                 )
 
+                session.query(Variables).filter(Variables.variable_code == 'interconnection_id').update(
+                    {Variables.numeric_value: new_device.interconnection_id}, synchronize_session=False
+                )
+
                 current_app.logger.info(f"Dispositivo creato per l'utente: {user_data['username']}")
 
             session.commit()

@@ -5,6 +5,7 @@ from app import db
 from app.models.log_data import LogData
 from app.models.device import Device
 from app.models.user import User
+from app.models.variables import Variables
 from app.utils.api_device_manager import ApiDeviceManager
 from datetime import timedelta
 
@@ -40,14 +41,30 @@ def run(app):
                         last_log = session.query(LogData).filter_by(device_id=device.id).order_by(LogData.created_at.desc()).first()
                         last_sync_date = last_log.created_at.isoformat() if last_log else None
 
-                        response = api_manager.call(f'/device/{device.interconnection_id}/log_data', method='GET', params={'last_sync_date': last_sync_date})
+                        try:
+                            response = api_manager.call(f'/device/{device.interconnection_id}/log_data', method='GET', params={'last_sync_date': last_sync_date})
+                        except Exception as e:
+                            current_app.logger.error(f"Errore durante la richiesta per il dispositivo {device.ip_address}: {str(e)}")
+                            continue
 
                         if response['success']:
                             for log_dict in response['data']:
+                                variable_code = log_dict.get('variable_code')
+                                variable = session.query(Variables).filter_by(device_id=device.id, variable_code=variable_code).first()
+                                if not variable:
+                                    current_app.logger.info(f"Variabile con codice {variable_code} non trovata per il dispositivo {device.id}. Creazione in corso...")
+                                    variable = Variables(
+                                        device_id=device.id,
+                                        variable_code=variable_code,
+                                        variable_name=log_dict.get('variable_name')
+                                    )
+                                    session.add(variable)
+                                    session.flush()
+
                                 log = LogData(
-                                    user_id=log_dict.get('user_id'),
-                                    device_id=device.id,
-                                    variable_id=log_dict.get('variable_id'),
+                                    user_id=device.user_id,  # Può essere null
+                                    device_id=device.id,  # Locale
+                                    variable_id=variable.id,  # Locale
                                     numeric_value=log_dict.get('numeric_value'),
                                     boolean_value=log_dict.get('boolean_value'),
                                     string_value=log_dict.get('string_value'),

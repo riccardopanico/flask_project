@@ -4,7 +4,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.device import Device
-from app.models.user import User
 from app.models.variables import Variables
 from app.models.log_data import LogData
 from datetime import datetime
@@ -33,7 +32,17 @@ def get_device_logs(interconnection_id):
 
             logs = logs_query.order_by(LogData.created_at.asc()).all()
 
-            logs_data = [log.to_dict() for log in logs]
+            logs_data = []
+            for log in logs:
+                if not log.variable or not log.variable.variable_code:
+                    current_app.logger.warning(f"Log con ID {log.id} ignorato: variable_code non valido.")
+                    continue
+
+                logs_data.append({
+                    **log.to_dict(),
+                    "variable_code": log.variable.variable_code,
+                    "variable_name": log.variable.variable_name
+                })
 
             return jsonify({"success": True, "message": "Log recuperati con successo.", "data": logs_data}), 200
 

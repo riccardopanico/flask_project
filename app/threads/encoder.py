@@ -73,15 +73,15 @@ def load_fattore_taratura_from_db():
 # Funzione per salvare i record aggiornando le variabili
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
     try:
-        variables = db.session.query(Variables).filter(Variables.variable_code.in_(['device_id', 'commessa', 'badge'])).all()
+        variables = db.session.query(Variables).filter(Variables.variable_code.in_(['interconnection_id', 'commessa', 'badge'])).all()
         variables_dict = {var.variable_code: var.get_value() for var in variables}
 
-        device_id = variables_dict.get('device_id')
+        interconnection_id = variables_dict.get('interconnection_id')
         commessa = variables_dict.get('commessa')
         badge = variables_dict.get('badge')
 
-        if device_id is None or commessa is None or badge is None:
-            raise ValueError("Errore: variabili 'device_id', 'commessa' o 'badge' non trovate.")
+        if interconnection_id is None or commessa is None or badge is None:
+            raise ValueError("Errore: variabili 'interconnection_id', 'commessa' o 'badge' non trovate.")
 
         # Aggiorna i valori delle variabili
         encoder_consumo = db.session.query(Variables).filter_by(variable_code='encoder_consumo').first()

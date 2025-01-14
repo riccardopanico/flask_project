@@ -6,6 +6,8 @@ from app import db, websocket_queue
 from app.models.variables import Variables
 from app.models.log_data import LogData
 from app.models.campionatura import Campionatura
+from app.models.user import User
+from app.models.device import Device
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 from datetime import datetime
@@ -88,8 +90,11 @@ async def check_queue_messages(app):
                     elif message == "dati_orlatura":
                         print("Ottengo dati orlatura, invio messaggio ai client connessi...")
 
-                        # Recupera device_id da Variables
-                        device_id = int(session.query(Variables).filter_by(variable_code='device_id').first().get_value())
+                        # Recupera interconnection_id da Variables
+                        interconnection_id = int(session.query(Variables).filter_by(variable_code='interconnection_id').first().get_value())
+
+                        # Recupera device_id con interconnection_id da Device
+                        device_id = session.query(Device).filter_by(interconnection_id=interconnection_id).first().id
 
                         # Recupera commessa_id e valore corrente
                         commessa_var = session.query(Variables).filter_by(variable_code='commessa').first()

@@ -42,7 +42,7 @@ def register():
             if 'device' in data:
                 device_data = data['device']
 
-                required_device_fields = ['device_id', 'ip_address']
+                required_device_fields = ['interconnection_id', 'ip_address']
                 missing_device_fields = [key for key in required_device_fields if key not in device_data]
                 if missing_device_fields:
                     current_app.logger.warning(f"Campi dispositivo mancanti: {missing_device_fields}")
@@ -50,7 +50,7 @@ def register():
 
                 new_device = Device(
                     user_id=new_user.id,
-                    device_id=device_data['device_id'],
+                    interconnection_id=device_data['interconnection_id'],
                     ip_address=device_data['ip_address'],
                     mac_address=device_data.get('mac_address'),
                     gateway=device_data.get('gateway'),
@@ -152,7 +152,7 @@ def update_credentials():
                     device.username = new_username
                 if new_password:
                     device.password = new_password
-                current_app.logger.info(f"Credenziali aggiornate per il dispositivo: {device.device_id}")
+                current_app.logger.info(f"Credenziali aggiornate per il dispositivo: {device.interconnection_id}")
 
             session.commit()
             current_app.logger.info("Aggiornamento credenziali completato con successo.")

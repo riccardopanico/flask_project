@@ -37,8 +37,10 @@ class Variables(db.Model):
         return None
 
     def set_value(self, value):
-        if value is None:
-            raise ValueError("Il valore non può essere None.")
+        # if value is None:
+        #     raise ValueError("Il valore non può essere None.")
+
+        from app.models.log_data import LogData
 
         # Resetta tutti i campi prima di impostare un nuovo valore
         self.boolean_value = None

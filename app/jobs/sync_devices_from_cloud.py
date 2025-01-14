@@ -17,7 +17,7 @@ def initialize_api_manager(app, device, record):
         api_manager = app.api_device_manager.get(old_username)
 
         if device is None:
-            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['device_id']}")
+            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}")
             api_manager = ApiDeviceManager(
                 ip_address=record['ip_address'],
                 username=record['username'],
@@ -26,14 +26,14 @@ def initialize_api_manager(app, device, record):
             app.api_device_manager[record['username']] = api_manager
 
         elif api_manager is not None and api_manager.username == record['username']:
-            current_app.logger.info(f"Utilizzo dell'ApiDeviceManager esistente per il dispositivo: {record['device_id']}")
+            current_app.logger.info(f"Utilizzo dell'ApiDeviceManager esistente per il dispositivo: {record['interconnection_id']}")
 
         elif api_manager is not None and api_manager.username != record['username']:
-            current_app.logger.info(f"ApiDeviceManager con username cambiato: {record['device_id']}")
-            current_app.logger.info(f"Usando vecchie credenziali per aggiornare il dispositivo: {device.device_id}")
+            current_app.logger.info(f"ApiDeviceManager con username cambiato: {record['interconnection_id']}")
+            current_app.logger.info(f"Usando vecchie credenziali per aggiornare il dispositivo: {device.interconnection_id}")
 
         elif api_manager is None:
-            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['device_id']}. Il manager non esisteva.")
+            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}. Il manager non esisteva.")
             api_manager = ApiDeviceManager(
                 ip_address=record.get('ip_address', device.ip_address if device else None),
                 username=record.get('username', device.username if device else None),
@@ -41,7 +41,7 @@ def initialize_api_manager(app, device, record):
             )
             app.api_device_manager[record['username']] = api_manager
         else:
-            current_app.logger.info(f"(Anomalia) Dispositivo con api_manager Non Trovato per il dispositivo: {record['device_id']}")
+            current_app.logger.info(f"(Anomalia) Dispositivo con api_manager Non Trovato per il dispositivo: {record['interconnection_id']}")
 
         return api_manager
 
@@ -62,19 +62,19 @@ def run(app):
             else:
                 raise Exception(f"Errore durante la richiesta: {response.get('error')}")
 
-            synchronized_device_ids = []
+            synchronized_interconnection_ids = []
 
             for record in data_records:
                 record = {key.lower(): value for key, value in record.items()}
-                synchronized_device_ids.append(record['device_id'])
+                synchronized_interconnection_ids.append(record['interconnection_id'])
 
                 # Recupera o inizializza il dispositivo
-                device = session.query(Device).filter_by(device_id=record['device_id']).first()
+                device = session.query(Device).filter_by(interconnection_id=record['interconnection_id']).first()
                 old_username = device.username if device else None  # Memorizza il vecchio username
                 api_manager = initialize_api_manager(app, device, record)
 
                 if not device:
-                    current_app.logger.info(f"Dispositivo non trovato: {record['device_id']}. Creazione in corso...")
+                    current_app.logger.info(f"Dispositivo non trovato: {record['interconnection_id']}. Creazione in corso...")
 
                     # Creazione di un nuovo utente
                     user = session.query(User).filter_by(username=record['username']).first()
@@ -89,9 +89,9 @@ def run(app):
                         current_app.logger.info(f"Utente creato: {record['username']}")
 
                     # Creazione di un nuovo dispositivo
-                    device = Device(user_id=user.id, device_id=record['device_id'], ip_address=record['ip_address'])
+                    device = Device(user_id=user.id, interconnection_id=record['interconnection_id'], ip_address=record['ip_address'])
                     session.add(device)
-                    current_app.logger.info(f"Dispositivo creato: {record['device_id']}")
+                    current_app.logger.info(f"Dispositivo creato: {record['interconnection_id']}")
 
                     # Registra il dispositivo tramite api_manager
                     try:
@@ -104,7 +104,7 @@ def run(app):
                                     'user_type': 'datacenter'
                                 },
                                 'device': {
-                                    'device_id': record['device_id'],
+                                    'interconnection_id': record['interconnection_id'],
                                     'mac_address': record.get('mac_address'),
                                     'ip_address': record['ip_address'],
                                     'gateway': record.get('gateway'),
@@ -119,10 +119,10 @@ def run(app):
                             requires_auth=False
                         )
                     except Exception as e:
-                        current_app.logger.warning(f"Errore durante la registrazione del dispositivo {record['device_id']}: {e}")
+                        current_app.logger.warning(f"Errore durante la registrazione del dispositivo {record['interconnection_id']}: {e}")
 
                     if not api_response.get('success'):
-                        current_app.logger.warning(f"Registrazione fallita per il dispositivo {record['device_id']}: {api_response.get('error')}")
+                        current_app.logger.warning(f"Registrazione fallita per il dispositivo {record['interconnection_id']}: {api_response.get('error')}")
 
                 else:
                     # Aggiorna l'utente associato al dispositivo
@@ -161,7 +161,7 @@ def run(app):
                                     del app.api_device_manager[old_username]
                                     app.api_device_manager[record['username']] = api_manager
                                     current_app.logger.info(f"Rimosso ApiDeviceManager per il vecchio username: {old_username} e aggiunto per il nuovo username: {record['username']}")
-                                current_app.logger.info(f"ApiDeviceManager e utente aggiornati per il dispositivo: {device.device_id}")
+                                current_app.logger.info(f"ApiDeviceManager e utente aggiornati per il dispositivo: {device.interconnection_id}")
                             else:
                                 current_app.logger.warning(f"Errore durante l'aggiornamento delle credenziali per l'utente: {user.username}")
 
@@ -179,24 +179,24 @@ def run(app):
                     device.password = record.get('password', device.password)
 
                     api_manager.ip_address = device.ip_address
-                    current_app.logger.info(f"Dispositivo aggiornato: {device.device_id}")
+                    current_app.logger.info(f"Dispositivo aggiornato: {device.interconnection_id}")
 
             # Rimuovi dispositivi non sincronizzati
             devices_to_remove = session.query(Device).join(User).filter(
-                Device.device_id.notin_(synchronized_device_ids),
+                Device.interconnection_id.notin_(synchronized_interconnection_ids),
                 User.user_type == 'device'
             ).all()
             for device in devices_to_remove:
-                current_app.logger.info(f"Rimozione dispositivo non sincronizzato: {device.device_id}")
+                current_app.logger.info(f"Rimozione dispositivo non sincronizzato: {device.interconnection_id}")
                 if device.username in app.api_device_manager:
                     del app.api_device_manager[device.username]
-                    current_app.logger.info(f"ApiDeviceManager rimosso per dispositivo: {device.device_id}")
+                    current_app.logger.info(f"ApiDeviceManager rimosso per dispositivo: {device.interconnection_id}")
                 session.delete(device)
 
                 user = session.query(User).filter_by(id=device.user_id, user_type='device').first()
                 if user:
                     session.delete(user)
-                    current_app.logger.info(f"Utente rimosso per il dispositivo: {device.device_id}")
+                    current_app.logger.info(f"Utente rimosso per il dispositivo: {device.interconnection_id}")
 
             session.commit()
             current_app.logger.info("Sincronizzazione completata con successo.")

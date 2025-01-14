@@ -4,7 +4,7 @@ class Device(db.Model):
     __tablename__ = 'devices'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    device_id = db.Column(db.Integer, unique=True, nullable=True)
+    interconnection_id = db.Column(db.Integer, unique=True, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     mac_address = db.Column(db.String(17), nullable=True)
     ip_address = db.Column(db.String(45), nullable=False)
@@ -32,7 +32,7 @@ class Device(db.Model):
         """Rappresentazione del modello come dizionario."""
         return {
             'id': self.id,
-            'device_id': self.device_id,
+            'interconnection_id': self.interconnection_id,
             'user_id': self.user_id,  # Include l'utente associato (se esiste)
             'mac_address': self.mac_address,
             'ip_address': self.ip_address,

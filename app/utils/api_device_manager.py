@@ -79,7 +79,7 @@ class ApiDeviceManager:
                 response = requests.get(full_url, params=params, headers=headers)
 
             if response.status_code in [200, 201]:
-                return {'success': True, 'data': response.json()}
+                return response.json()
             elif response.status_code == 401 and requires_auth:
                 refresh_response = self._refresh_token()
                 if refresh_response['success']:

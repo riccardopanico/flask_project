@@ -146,8 +146,8 @@ def update_credentials():
                 user.set_password(new_password)
                 current_app.logger.info(f"Password aggiornata per l'utente: {user.username}")
 
-            devices = session.query(Device).filter_by(user_id=user.id).all()
-            for device in devices:
+            device = session.query(Device).filter_by(user_id=user.id).first()
+            if device:
                 if new_username:
                     device.username = new_username
                 if new_password:

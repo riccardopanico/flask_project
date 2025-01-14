@@ -79,7 +79,6 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
         interconnection_id = variables_dict.get('interconnection_id')
         commessa = variables_dict.get('commessa')
         badge = variables_dict.get('badge')
-
         if interconnection_id is None or commessa is None or badge is None:
             raise ValueError("Errore: variabili 'interconnection_id', 'commessa' o 'badge' non trovate.")
 

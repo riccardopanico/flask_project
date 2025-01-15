@@ -62,7 +62,7 @@ def run(app):
                                     session.flush()
 
                                 log = LogData(
-                                    user_id=device.user_id,  # Può essere null
+                                    user_id=device.user_id,  #TODO Da cambiare con l' ID remoto del dispositivo o Locale ma bisogna sincronizzare anche gli utenti
                                     device_id=device.id,  # Locale
                                     variable_id=variable.id,  # Locale
                                     numeric_value=log_dict.get('numeric_value'),

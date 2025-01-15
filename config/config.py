@@ -15,7 +15,7 @@ class Config:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    ENABLED_JOBS = ['sync_devices_from_cloud', 'sync_logs_from_device']
+    ENABLED_JOBS = ['sync_devices_from_cloud', 'sync_logs_from_device', 'sync_logs_to_cloud']
     ENABLED_THREADS = []
     ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
     ENABLED_API = ['auth', 'device']

@@ -76,12 +76,6 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
         variables = db.session.query(Variables).filter(Variables.variable_code.in_(['interconnection_id', 'commessa', 'badge'])).all()
         variables_dict = {var.variable_code: var.get_value() for var in variables}
 
-        interconnection_id = variables_dict.get('interconnection_id')
-        commessa = variables_dict.get('commessa')
-        badge = variables_dict.get('badge')
-        if interconnection_id is None or commessa is None or badge is None:
-            raise ValueError("Errore: variabili 'interconnection_id', 'commessa' o 'badge' non trovate.")
-
         # Aggiorna i valori delle variabili
         encoder_consumo = db.session.query(Variables).filter_by(variable_code='encoder_consumo').first()
         if encoder_consumo:

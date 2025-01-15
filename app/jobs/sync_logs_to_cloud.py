@@ -1,5 +1,5 @@
 from flask import current_app
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, DataError
 from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.log_data import LogData
@@ -28,24 +28,33 @@ def run(app):
 
                 log_payloads = []
                 for log in logs_to_send:
-                    device = session.query(Device).filter(Device.id == log.device_id).first()
-                    variable = session.query(Variables).filter(Variables.id == log.variable_id).first()
+                    try:
+                        device = session.query(Device).filter(Device.id == log.device_id).first()
+                        variable = session.query(Variables).filter(Variables.id == log.variable_id).first()
 
-                    if not device or not variable:
-                        current_app.logger.warning(f"Dispositivo o variabile non trovati per il log {log.id}.")
+                        if not device or not variable:
+                            current_app.logger.warning(f"Dispositivo o variabile non trovati per il log {log.id}.")
+                            continue
+
+                        log_payloads.append({
+                            "user_id": log.user_id,
+                            "device_id": device.interconnection_id,  # Usa il valore di interconnection_id
+                            "variable_code": variable.variable_code,  # Usa il valore di variable_code
+                            "numeric_value": log.numeric_value,
+                            "boolean_value": log.boolean_value,
+                            "string_value": log.string_value,
+                            "created_at": log.created_at.isoformat()
+                        })
+                    except AttributeError as attr_err:
+                        current_app.logger.error(f"Errore di attributo per il log {log.id}: {attr_err}")
                         continue
 
-                    log_payloads.append({
-                        "user_id": log.user_id,
-                        "device_id": device.interconnection_id,  # Usa il valore di interconnection_id
-                        "variable_code": variable.variable_code,  # Usa il valore di variable_code
-                        "numeric_value": log.numeric_value,
-                        "boolean_value": log.boolean_value,
-                        "string_value": log.string_value,
-                        "created_at": log.created_at.isoformat()
-                    })
+                if not log_payloads:
+                    current_app.logger.info("Nessun log valido da inviare.")
+                    return
 
                 try:
+                    current_app.logger.debug(f"Invio dei log: {log_payloads}")
                     response = api_oracle_manager.call(
                         url='/device/data',
                         params={"logs": log_payloads},
@@ -65,6 +74,9 @@ def run(app):
                 except SQLAlchemyError as db_error:
                     session.rollback()
                     current_app.logger.error(f"Errore del database durante l'invio dei log: {db_error}", exc_info=True)
+                except DataError as data_error:
+                    session.rollback()
+                    current_app.logger.error(f"Errore di dati durante l'invio dei log: {data_error}", exc_info=True)
                 except Exception as sync_error:
                     session.rollback()
                     current_app.logger.error(f"Errore imprevisto durante l'invio dei log: {sync_error}", exc_info=True)

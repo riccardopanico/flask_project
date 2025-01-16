@@ -126,6 +126,7 @@ async def check_queue_messages(app):
                             LogData.device_id == device_id,
                             LogData.variable_id == commessa_id
                         ).order_by(LogData.created_at.desc()).first()
+                        current_app.logger.info(f"Ultimo log di commessa trovato: {last_commessa_log}")
 
                         if last_commessa_log:
                             start_commessa = last_commessa_log.created_at
@@ -187,7 +188,7 @@ async def check_queue_messages(app):
                         await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))
                         session.commit()
             except Exception as e:
-                current_app.logger.error(f"Errore durante l'invio dell'alert spola: {e}")
+                current_app.logger.error(f"Errore durante l'invio di {message}: {e}")
 
 # Invia un messaggio a tutti i client connessi
 async def broadcast_message(message):

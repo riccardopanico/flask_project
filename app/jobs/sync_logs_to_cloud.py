@@ -40,6 +40,7 @@ def run(app):
                             "user_id": log.user_id,
                             "device_id": device.interconnection_id,  # Usa il valore di interconnection_id
                             "variable_code": variable.variable_code,  # Usa il valore di variable_code
+                            "variable_name": variable.variable_name,
                             "numeric_value": log.numeric_value,
                             "boolean_value": log.boolean_value,
                             "string_value": log.string_value,

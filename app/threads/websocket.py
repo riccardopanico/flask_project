@@ -121,37 +121,34 @@ async def check_queue_messages(app):
                         ).scalar() or 0
                         current_app.logger.info(f"Consumo totale: {consumo_totale}, Operatività totale: {operativita_totale}")
 
-                        # Trova i range di tempo per la commessa basato su variable_id e valore corrente
-                        commessa_range = session.query(LogData.created_at).filter(
+                        # Calcola dati dalla data dell'ultimo log della commessa
+                        last_commessa_log = session.query(LogData).filter(
                             LogData.device_id == device_id,
-                            LogData.variable_id == commessa_id,
-                            LogData.string_value == commessa_value
-                        ).order_by(LogData.created_at.asc()).first(), session.query(LogData.created_at).filter(
-                            LogData.device_id == device_id,
-                            LogData.variable_id == commessa_id,
-                            LogData.string_value == commessa_value
+                            LogData.variable_id == commessa_id
                         ).order_by(LogData.created_at.desc()).first()
-                        current_app.logger.info(f"Range di tempo per la commessa: {commessa_range}")
 
-                        if commessa_range[0] and commessa_range[1]:
-                            start_commessa, stop_commessa = commessa_range[0][0], commessa_range[1][0]
-                            current_app.logger.info(f"Range di tempo per la commessa: inizio {start_commessa}, fine {stop_commessa}")
+                        if last_commessa_log:
+                            start_commessa = last_commessa_log.created_at
+                            stop_commessa = datetime.now()
+
+                            consumo_commessa = session.query(func.sum(LogData.numeric_value)).filter(
+                                LogData.device_id == device_id,
+                                LogData.variable_id == consumo_var_id,
+                                LogData.created_at.between(start_commessa, stop_commessa)
+                            ).scalar() or 0
+
+                            operativita_commessa = session.query(func.sum(LogData.numeric_value)).filter(
+                                LogData.device_id == device_id,
+                                LogData.variable_id == operativita_var_id,
+                                LogData.created_at.between(start_commessa, stop_commessa)
+                            ).scalar() or 0
+
+                            current_app.logger.info(
+                                f"Consumo commessa corrente: {consumo_commessa}, "
+                                f"Operatività commessa corrente: {operativita_commessa}"
+                            )
                         else:
-                            start_commessa, stop_commessa = None, None
-                            current_app.logger.warning("Nessun range di tempo trovato per la commessa.")
-
-                        # Query per dati commessa usando il range di tempo
-                        consumo_commessa = session.query(func.sum(LogData.numeric_value)).filter(
-                            LogData.device_id == device_id,
-                            LogData.variable_id == consumo_var_id,
-                            LogData.created_at.between(start_commessa, stop_commessa)
-                        ).scalar() or 0
-                        operativita_commessa = session.query(func.sum(LogData.numeric_value)).filter(
-                            LogData.device_id == device_id,
-                            LogData.variable_id == operativita_var_id,
-                            LogData.created_at.between(start_commessa, stop_commessa)
-                        ).scalar() or 0
-                        current_app.logger.info(f"Consumo commessa: {consumo_commessa}, Operatività commessa: {operativita_commessa}")
+                            current_app.logger.warning("Nessun log di commessa trovato. Nessun dato calcolato per la commessa corrente.")
 
                         # Query per dati campionatura
                         last_campionatura = session.query(Campionatura.start, Campionatura.stop).order_by(Campionatura.id.desc()).first()
@@ -189,7 +186,6 @@ async def check_queue_messages(app):
                         # Invio dei dati ai client
                         await broadcast_message(json.dumps({"action": "dati_orlatura", "data": dati_orlatura}))
                         session.commit()
-                        current_app.logger.info("Dati orlatura inviati ai client.")
             except Exception as e:
                 current_app.logger.error(f"Errore durante l'invio dell'alert spola: {e}")
 

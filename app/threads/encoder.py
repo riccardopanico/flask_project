@@ -5,6 +5,7 @@ from app import db, websocket_queue
 from app.models.variables import Variables
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
+from flask import current_app
 
 # Disabilita gli avvisi GPIO
 GPIO.setwarnings(False)
@@ -90,11 +91,11 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
             encoder_impulsi.set_value(impulsi)
 
         websocket_queue.put("dati_orlatura")
-        print(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
+        current_app.logger.info(f"Impulsi: {impulsi}, Lunghezza: {lunghezza:.6f} cm, Tempo Operatività: {tempo_operativita} s")
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Errore durante il salvataggio del record: {e}")
+        current_app.logger.error(f"Errore durante il salvataggio del record: {e}")
 
 # Funzione per monitorare l'encoder e salvare periodicamente i dati
 def run(app):

@@ -5,6 +5,7 @@ from app import db, websocket_queue
 from app.models.variables import Variables
 from app.models.log_data import LogData
 from sqlalchemy.orm import sessionmaker
+from flask import current_app
 
 # Thread per monitorare il consumo di filo e confrontarlo con il parametro spola e l'olio
 def run(app):
@@ -36,10 +37,10 @@ def run(app):
                         ).scalar() or 0.0
 
                         if consumo_totale > parametro_spola:
-                            print(f"Attenzione: il consumo totale di {consumo_totale:.2f} cm ha superato il valore di spola di {parametro_spola:.2f} cm.")
+                            current_app.logger.warning(f"Attenzione: il consumo totale di {consumo_totale:.2f} cm ha superato il valore di spola di {parametro_spola:.2f} cm.")
                             websocket_queue.put("alert_spola")
                         else:
-                            print(f"Consumo totale: {consumo_totale:.2f} cm. Valore spola: {parametro_spola:.2f} cm. Periodo: dal {data_cambio_spola} ad ora ({datetime.now()})")
+                            current_app.logger.info(f"Consumo totale: {consumo_totale:.2f} cm. Valore spola: {parametro_spola:.2f} cm. Periodo: dal {data_cambio_spola} ad ora ({datetime.now()})")
 
                     # Recupera l'ID della variabile operatività
                     operativita_var_id = session.query(Variables).filter_by(variable_code='encoder_operativita').first().id
@@ -58,10 +59,10 @@ def run(app):
                         tempo_operativo_totale = tempo_operativo_totale / 3600  # Converti da secondi a ore
 
                         if tempo_operativo_totale > parametro_olio:
-                            print(f"Attenzione: il tempo operativo di {tempo_operativo_totale:.2f} ore ha superato il limite di {parametro_olio:.2f} ore per l'olio.")
+                            current_app.logger.warning(f"Attenzione: il tempo operativo di {tempo_operativo_totale:.2f} ore ha superato il limite di {parametro_olio:.2f} ore per l'olio.")
                             websocket_queue.put("alert_olio")
                         else:
-                            print(f"Tempo operativo totale: {tempo_operativo_totale:.2f} ore. Valore limite olio: {parametro_olio:.2f} ore. Periodo: dal {data_cambio_olio} ad ora ({datetime.now()})")
+                            current_app.logger.info(f"Tempo operativo totale: {tempo_operativo_totale:.2f} ore. Valore limite olio: {parametro_olio:.2f} ore. Periodo: dal {data_cambio_olio} ad ora ({datetime.now()})")
 
                     # Commit delle modifiche per gli alert
                     session.commit()
@@ -70,5 +71,5 @@ def run(app):
                     time.sleep(SLEEP_TIME)
 
             except Exception as e:
-                print(f"Errore durante il controllo del consumo di filo e dell'olio: {e}")
+                current_app.logger.error(f"Errore durante il controllo del consumo di filo e dell'olio: {e}")
                 time.sleep(SLEEP_TIME)

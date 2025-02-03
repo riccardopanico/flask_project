@@ -18,7 +18,7 @@ class Config:
     ENABLED_JOBS = ['sync_devices_from_cloud', 'sync_logs_from_device', 'sync_logs_to_cloud']
     ENABLED_THREADS = []
     ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
-    ENABLED_API = ['auth', 'device']
+    ENABLED_API = ['auth', 'device', 'recipe']
 
 class ProductionConfig(Config):
     DEBUG = False

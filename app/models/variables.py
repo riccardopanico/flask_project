@@ -9,7 +9,7 @@ class Variables(db.Model):
     variable_name = db.Column(db.String(255), nullable=False)
     variable_code = db.Column(db.String(255), unique=True, nullable=False)
     boolean_value = db.Column(db.Integer)
-    string_value = db.Column(db.String(255))
+    string_value = db.Column(db.String(4000))
     numeric_value = db.Column(db.Float)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 

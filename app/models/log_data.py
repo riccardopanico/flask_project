@@ -9,7 +9,7 @@ class LogData(db.Model):
     variable_id = db.Column(db.Integer, db.ForeignKey('variables.id', ondelete='CASCADE'))  # Relazione con Variables: log relativo a una variabile
     numeric_value = db.Column(db.Float)
     boolean_value = db.Column(db.Integer)
-    string_value = db.Column(db.String(255))
+    string_value = db.Column(db.String(4000))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     sent = db.Column(db.Integer, nullable=True, server_default='0')
 

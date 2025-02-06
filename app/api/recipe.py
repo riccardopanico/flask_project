@@ -204,23 +204,26 @@ def info():
         return jsonify({"success": False, "error": "Valori non validi per codpref o nlotto"}), 400
 
     queryInfo = """
-        SELECT ocr.prefisso, (ocr.codart || '-' || ocr.versione) AS articolo
-        FROM prod_lot_test plt, PROD_LOT_RIG plr, ordcli_prefissi odf,
-             ordcli_righe ocr, articoli a
-        WHERE plt.prefisso = odf.prefisso
-          AND plt.prefisso = plr.prefisso
-          AND plt.nlotto = plr.nlotto
-          AND plr.prefisso = ocr.prefisso
-          AND plr.nordcli = ocr.nordcli
-          AND plr.nrigocl = ocr.nrigocl
-          AND a.codart = ocr.codart
-          AND odf.codpref = :codpref
-          AND plt.nlotto = :nlotto
-    """
+            SELECT
+                ocr.prefisso,
+                :nlotto as NLOTTO,
+                (ocr.codart || '-' || ocr.versione) AS articolo,
+                ocr.note AS note_lavorazione
+            FROM prod_lot_test plt, PROD_LOT_RIG plr, ordcli_prefissi odf, ordcli_righe ocr, articoli a
+                WHERE plt.prefisso = odf.prefisso
+                AND plt.prefisso = plr.prefisso
+                AND plt.nlotto = plr.nlotto
+                AND plr.prefisso = ocr.prefisso
+                AND plr.nordcli = ocr.nordcli
+                AND plr.nrigocl = ocr.nrigocl
+                AND a.codart = ocr.codart
+                AND odf.codpref = :codpref
+                AND plt.nlotto = :nlotto
+        """
     try:
         con = get_connection('ga2')
         cursor = con.cursor()
-        cursor.execute(queryInfo, [codpref, nlotto])
+        cursor.execute(queryInfo, [nlotto, codpref, nlotto])
         result = cursor.fetchone()
         return jsonify({"success": True, "data": result}), 200
     except Exception as e:
@@ -251,6 +254,8 @@ def tecnici():
         cursor = con.cursor()
         cursor.execute(query, params)
         rows = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+        if codice_tecnico:
+            rows = rows[0]
         return jsonify({"success": True, "data": rows}), 200
     except Exception as e:
         current_app.logger.error(f"Errore in tecnici: {str(e)}")

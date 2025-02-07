@@ -7,7 +7,8 @@ class Variables(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'))  # Relazione con Device: variabile associata a un dispositivo
     variable_name = db.Column(db.String(255), nullable=False)
-    variable_code = db.Column(db.String(255), unique=True, nullable=False)
+    variable_code = db.Column(db.String(255), nullable=False)
+    __table_args__ = (db.UniqueConstraint('device_id', 'variable_code', name='uq_device_variable'),)  # Unicità della coppia device_id e variable_code
     boolean_value = db.Column(db.Integer)
     string_value = db.Column(db.String(4000))
     numeric_value = db.Column(db.Float)

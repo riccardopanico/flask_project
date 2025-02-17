@@ -29,6 +29,15 @@ class LogData(db.Model):
             "sent": self.sent,
         }
 
+    def get_value(self):
+        if self.boolean_value is not None:
+            return bool(self.boolean_value)
+        elif self.string_value is not None:
+            return self.string_value
+        elif self.numeric_value is not None:
+            return self.numeric_value
+        return None
+
     @staticmethod
     def get_last_value(variable_id):
         record = LogData.query.filter_by(variable_id=variable_id).order_by(LogData.created_at.desc()).first()

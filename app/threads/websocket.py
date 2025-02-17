@@ -8,12 +8,33 @@ from app.models.log_data import LogData
 from app.models.campionatura import Campionatura
 from app.models.user import User
 from app.models.device import Device
+from app.models.dipendenti import Dipendente
+from app.jobs.sincronizza_dipendenti import run as sincronizzaDipendenti
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 from datetime import datetime
 import signal
 import weakref
+# import gpiod as GPIO
+import os
 from flask import current_app
+import lgpio
+import time
+
+# Apri il GPIO chip
+CHIP_ID = 0  # gpiochip0
+PIN_BUZZER = 26
+# Apri il chip GPIO
+h = lgpio.gpiochip_open(CHIP_ID)
+# Imposta il pin come output
+lgpio.gpio_claim_output(h, PIN_BUZZER)
+
+def bip(n=1):
+    for _ in range(n):
+        lgpio.gpio_write(h, PIN_BUZZER, 1)  # Accendi il buzzer
+        time.sleep(0.1)
+        lgpio.gpio_write(h, PIN_BUZZER, 0)  # Spegni il buzzer
+        time.sleep(0.05)
 
 HOST = '0.0.0.0'
 PORT = 8765
@@ -58,9 +79,32 @@ async def socket_handler(websocket, path):
                         subprocess.run(["sudo", "systemctl", "stop", "flask.service"], shell=False)
                         subprocess.run(["sudo", "systemctl", "stop", "chromium-kiosk.service"], shell=False)
                         subprocess.run(["sudo", "reboot", "--no-wall"], shell=False)
+                    elif action == 'registraBadge':
+                        if "badge" in data and data["badge"]:
+                            success, message = await asyncio.to_thread(registraBadge, data["badge"])
+                            await websocket.send(json.dumps({
+                                "message": message,
+                                "icon": "success" if success else "error",
+                                "autoclose": success,
+                                "timer": 3000
+                            }))
+                    elif action == 'sincronizzaDipendenti':
+                        try:
+                            await asyncio.to_thread(sincronizzaDipendenti, current_app)
+                            message = "Sincronizzazione completata con successo."
+                            success = True
+                        except Exception as e:
+                            message = f"Errore durante la sincronizzazione: {str(e)}"
+                            success = False
+                        await websocket.send(json.dumps({
+                            "message": message,
+                            "icon": "success" if success else "error",
+                            "autoclose": success,
+                            "timer": 3000
+                        }))
                     else:
                         current_app.logger.warning(f"Azione non riconosciuta: {action}")
-                    await websocket.send(json.dumps({"action": "readyForNext"}))
+                    await websocket.send(json.dumps({"status": "readyForNext"}))
                 else:
                     current_app.logger.warning("Messaggio JSON non valido, manca la chiave 'action'.")
             except Exception as e:
@@ -72,6 +116,37 @@ async def socket_handler(websocket, path):
     finally:
         connected_clients.discard(websocket)
         current_app.logger.info(f"Client disconnesso: {websocket.remote_address}")
+
+def registraBadge(badge_value):
+    with current_app.app_context():
+        session = db.session  # Ottiene la sessione attiva
+        try:
+            badge_variable = session.query(Variables).filter_by(variable_code="badge").first()
+
+            if badge_variable:
+                dipendente = session.query(Dipendente).filter_by(badge=badge_value).first()
+                if dipendente:
+                    nome_cognome = f"{dipendente.nome} {dipendente.cognome}"
+                    nome_oscurato = dipendente.nome[0] + "*" * (len(dipendente.nome) - 1)
+                    cognome_oscurato = dipendente.cognome[0] + "*" * (len(dipendente.cognome) - 1)
+                    current_app.logger.info(f"Badge registrato: {badge_value} per {nome_cognome}")
+                    badge_variable.set_value(badge_value)
+                    session.commit()
+                    bip(1)
+                    return True, f"Timbratura alle {datetime.now().strftime('%H:%M')} <br> {nome_oscurato} {cognome_oscurato}"
+                else:
+                    bip(3)
+                    current_app.logger.warning(f"Nessun dipendente trovato con il badge: {badge_value}")
+                    return False, "Errore: Dipendente non trovato"
+            else:
+                current_app.logger.error("Errore: Variabile 'badge' non trovata nel database.")
+                return False, "Errore: Variabile 'badge' non trovata"
+        except Exception as e:
+            session.rollback()  # Rollback in caso di errore
+            current_app.logger.error(f"Errore nel salvataggio del badge: {e}")
+            return False, f"Errore interno: {str(e)}"
+        finally:
+            session.close()  # Chiude la sessione
 
 async def check_queue_messages(app):
     with app.app_context():
@@ -237,6 +312,8 @@ def run(app):
         # Avvia il server WebSocket e il task di controllo alert_spola
         websocket_task = loop.create_task(start_websocket_server())
         queue_task = loop.create_task(check_queue_messages(app))
+
+        bip(2)
 
         try:
             loop.run_forever()

@@ -15,10 +15,24 @@ class Config:
     JWT_BLACKLIST_ENABLED = True
     JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    ENABLED_JOBS = []
-    ENABLED_THREADS = ['encoder', 'monitor_alert', 'websocket']
-    ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
-    ENABLED_API = ['auth', 'device']
+
+    # # MF1
+    # ENABLED_JOBS = []
+    # ENABLED_THREADS = ['encoder', 'monitor_alert', 'websocket']
+    # ENABLED_MODELS = ['campionatura', 'device', 'variables', 'tasks', 'user', 'log_data']
+    # ENABLED_API = ['auth', 'device']
+
+    # # XDC1
+    # ENABLED_JOBS = []
+    # ENABLED_THREADS = []
+    # ENABLED_MODELS = ['device', 'variables', 'tasks', 'user', 'log_data']
+    # ENABLED_API = ['auth', 'device']
+
+    # RP1
+    ENABLED_JOBS = ['sincronizza_presenze', 'sincronizza_dipendenti']
+    ENABLED_THREADS = ['websocket']
+    ENABLED_MODELS = ['device', 'variables', 'user', 'log_data', 'dipendenti']
+    ENABLED_API = []
 
 class ProductionConfig(Config):
     DEBUG = False

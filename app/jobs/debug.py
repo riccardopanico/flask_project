@@ -9,11 +9,4 @@ JOB_INTERVAL = timedelta(seconds=2)
 
 def run(app):
     with app.app_context():
-        current_app.logger.debug(f"Chiavi disponibili in app.api_device_manager: {list(app.api_device_manager.keys())}")
-
-        for username, api_manager in app.api_device_manager.items():
-            current_app.logger.debug(f"Username: {username}")
-            current_app.logger.debug(f"Username: {api_manager.username}")
-            current_app.logger.debug(f"Password: {api_manager.password}")
-            current_app.logger.debug(f"Access Token: {api_manager.access_token}")
-            current_app.logger.debug(f"Refresh Token: {api_manager.refresh_token}")
+        current_app.logger.debug(f"Start job {__name__}...")

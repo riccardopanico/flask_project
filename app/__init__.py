@@ -37,7 +37,8 @@ def create_app():
     app.config.from_object(config_class)
 
     # Configurazione logger personalizzato
-    log_level = logging.DEBUG if app.debug else logging.INFO
+    # log_level = logging.DEBUG if app.debug else logging.INFO
+    log_level = logging.DEBUG if app.debug else logging.WARNING
     log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler = RotatingFileHandler('app.log', maxBytes=10 * 1024 * 1024, backupCount=5)
     file_handler.setLevel(log_level)

@@ -24,8 +24,8 @@ spi.mode = 0b00
 # Comandi LS7366R per gestire l'encoder
 CLEAR_COUNTER = 0x20
 READ_COUNTER = 0x60
-WRITE_MDR0 = 0x88  # Comando per scrivere nel registro MDR0
-WRITE_MDR1 = 0x90  # Comando per scrivere nel registro MDR1
+WRITE_MDR0 = 0x88
+WRITE_MDR1 = 0x90
 
 # Parametri dell'encoder e del rullino
 PUNTI_PER_GIRO = 100
@@ -33,10 +33,7 @@ DIAMETRO_RULLINO = 11.0
 CIRCONFERENZA_RULLINO = 34.55749
 LUNGHEZZA_PER_IMPULSO = CIRCONFERENZA_RULLINO / PUNTI_PER_GIRO / 10
 fattore_taratura = 1.0
-inizio_operativita = None
-encoder_fermo = True
 ultimo_impulso_time = 0.0
-TEMPO_FERMO = 1.0  # Tempo in secondi per considerare l'encoder fermo
 
 # Funzione per scrivere un comando tramite SPI
 def write_byte(command, value=None):
@@ -56,7 +53,7 @@ def reset_registers():
     write_byte(WRITE_MDR1, 0x00)
     write_byte(CLEAR_COUNTER)
 
-# Funzione per leggere il contatore dell'encoder con gestione dell'overflow
+# Funzione per leggere il contatore dell'encoder
 def read_counter():
     result = spi.xfer2([READ_COUNTER, 0x00, 0x00, 0x00, 0x00])
     count = (result[1] << 24) | (result[2] << 16) | (result[3] << 8) | result[4]
@@ -66,18 +63,14 @@ def read_counter():
 
 # Funzione per caricare il fattore di taratura dal database
 def load_fattore_taratura_from_db():
+    global fattore_taratura
     impostazione = Variables.query.filter_by(variable_code='fattore_taratura').first()
     if impostazione:
-        return float(impostazione.get_value()) / 100
-    return None
+        fattore_taratura = float(impostazione.get_value()) / 100
 
-# Funzione per salvare i record aggiornando le variabili
+# Funzione per salvare i record aggiornando le variabili ogni secondo
 def save_record_to_db(impulsi, lunghezza, tempo_operativita):
     try:
-        variables = db.session.query(Variables).filter(Variables.variable_code.in_(['interconnection_id', 'commessa', 'badge'])).all()
-        variables_dict = {var.variable_code: var.get_value() for var in variables}
-
-        # Aggiorna i valori delle variabili
         encoder_consumo = db.session.query(Variables).filter_by(variable_code='encoder_consumo').first()
         if encoder_consumo:
             encoder_consumo.set_value(lunghezza)
@@ -97,43 +90,23 @@ def save_record_to_db(impulsi, lunghezza, tempo_operativita):
         db.session.rollback()
         current_app.logger.error(f"Errore durante il salvataggio del record: {e}")
 
-# Funzione per monitorare l'encoder e salvare periodicamente i dati
+# Funzione per monitorare l'encoder e salvare i dati ogni secondo
 def run(app):
-    global lettura_precedente_encoder, inizio_operativita, encoder_fermo, ultimo_impulso_time
+    global fattore_taratura
     lettura_precedente_encoder = 0
     lunghezza_totale_filo = 0.0
-
-    # Usa il contesto dell'applicazione Flask per gestire correttamente le operazioni sul database
     with app.app_context():
-        # Carica il fattore di taratura e configura l'encoder
-        load_fattore_taratura_from_db()
         reset_registers()
         configure_encoder_x4_mode()
-
         try:
             while True:
                 impulsi_totali = read_counter()
                 differenza_impulsi = impulsi_totali - lettura_precedente_encoder
                 lettura_precedente_encoder = impulsi_totali
-
                 if differenza_impulsi != 0:
-                    # L'encoder è attivo
-                    ultimo_impulso_time = time.time()
-                    if encoder_fermo:
-                        # Se l'encoder era fermo, iniziamo a contare il tempo di operatività
-                        inizio_operativita = time.time()
-                        encoder_fermo = False
-
-                    lunghezza_aggiornata = differenza_impulsi * LUNGHEZZA_PER_IMPULSO * fattore_taratura
-                    lunghezza_totale_filo += lunghezza_aggiornata
-                else:
-                    # Se l'encoder non genera impulsi per più di TEMPO_FERMO secondi, fermiamo il timer e salviamo i dati
-                    if time.time() - ultimo_impulso_time >= TEMPO_FERMO and not encoder_fermo:
-                        encoder_fermo = True
-                        tempo_operativita = int(time.time() - inizio_operativita)
-                        save_record_to_db(impulsi_totali, lunghezza_totale_filo, tempo_operativita)
-                        lunghezza_totale_filo = 0.0  # Reset della lunghezza totale dopo il salvataggio
-
+                    load_fattore_taratura_from_db()
+                    lunghezza_totale_filo = differenza_impulsi * LUNGHEZZA_PER_IMPULSO * fattore_taratura
+                    save_record_to_db(impulsi_totali, lunghezza_totale_filo, 1)
                 time.sleep(1)
         finally:
             cleanup()

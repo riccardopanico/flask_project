@@ -12,7 +12,7 @@ from app.models.dipendenti import Dipendente
 from app.jobs.sincronizza_dipendenti import run as sincronizzaDipendenti
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timedelta
 import signal
 import weakref
 # import gpiod as GPIO
@@ -83,10 +83,36 @@ async def socket_handler(websocket, path):
                         if "badge" in data and data["badge"]:
                             success, message = await asyncio.to_thread(registraBadge, data["badge"])
                             await websocket.send(json.dumps({
+                                "success": success,
                                 "message": message,
                                 "icon": "success" if success else "error",
-                                "autoclose": success,
-                                "timer": 3000
+                                "autoclose": True,
+                                # "autoclose": success,
+                                "timer": 3000 if success else 5000
+                            }))
+                    elif action == 'impostaRete':
+                        if "interfaccia_di_rete" in data and "indirizzo_ip" in data and "subnet_mask" in data and "gateway" in data and "dns" in data:
+                            interfaccia_di_rete = data["interfaccia_di_rete"]
+                            indirizzo_ip = data["indirizzo_ip"]
+                            subnet_mask = data["subnet_mask"]
+                            gateway = data["gateway"]
+                            dns = data["dns"]
+                            success, message = await asyncio.to_thread(impostaRete, interfaccia_di_rete, indirizzo_ip, subnet_mask, gateway, dns)
+                            await websocket.send(json.dumps({
+                                "success": success,
+                                "message": message,
+                                "showConfirmButton": True,
+                                "icon": "success" if success else "error",
+                                # "autoclose": True,
+                                # "timer": 3000 if success else 5000
+                            }))
+                        else:
+                            await websocket.send(json.dumps({
+                                "success": False,
+                                "message": "Parametri mancanti.",
+                                "icon": "error",
+                                # "autoclose": True,
+                                # "timer": 3000
                             }))
                     elif action == 'sincronizzaDipendenti':
                         try:
@@ -117,36 +143,118 @@ async def socket_handler(websocket, path):
         connected_clients.discard(websocket)
         current_app.logger.info(f"Client disconnesso: {websocket.remote_address}")
 
+def impostaRete(interfaccia_di_rete, indirizzo_ip, subnet_mask, gateway, dns, ssid=None):
+    with current_app.app_context():
+        session = db.session
+        try:
+            current_app.logger.info(
+                f"Configurazione rete: {interfaccia_di_rete}, {indirizzo_ip}, {subnet_mask}, {gateway}, {dns}"
+            )
+
+
+            # Costruzione del comando da eseguire
+            command = [
+                "sudo", "bash", "-x", "/var/www/html/raspberryprojects/set_ip.sh",
+                interfaccia_di_rete, indirizzo_ip, subnet_mask, gateway, dns
+            ]
+            if ssid:
+                command.append(ssid)
+
+            current_app.logger.info("Eseguo comando: " + " ".join(command))
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            output = result.stdout.strip()
+            current_app.logger.info("Output script: " + output)
+
+            # Funzione di utilità per aggiornare o creare una variabile nel DB
+            def update_or_create(var_code, value):
+                var = session.query(Variables).filter_by(variable_code=var_code).first()
+                if var:
+                    var.set_value(value)
+                else:
+                    var = Variables(variable_code=var_code, value=value)
+                    session.add(var)
+            update_or_create("interfaccia_di_rete", interfaccia_di_rete)
+            update_or_create("indirizzo_ip", indirizzo_ip)
+            update_or_create("subnet_mask", subnet_mask)
+            update_or_create("gateway", gateway)
+            update_or_create("dns", dns)
+            session.commit()
+
+            return True, f"Configurazione della rete completata."
+
+        except subprocess.CalledProcessError as e:
+            error_message = f"Errore durante la configurazione, verifica i dati di rete"
+            current_app.logger.error(error_message)
+            session.rollback()
+            return False, error_message
+        except Exception as e:
+            session.rollback()
+            current_app.logger.error(f"Errore durante l'impostazione della rete")
+            return False, f"Errore durante l'impostazione della rete"
+
 def registraBadge(badge_value):
     with current_app.app_context():
-        session = db.session  # Ottiene la sessione attiva
+        session = db.session
         try:
             badge_variable = session.query(Variables).filter_by(variable_code="badge").first()
 
-            if badge_variable:
-                dipendente = session.query(Dipendente).filter_by(badge=badge_value).first()
-                if dipendente:
-                    nome_cognome = f"{dipendente.nome} {dipendente.cognome}"
-                    nome_oscurato = dipendente.nome[0] + "*" * (len(dipendente.nome) - 1)
-                    cognome_oscurato = dipendente.cognome[0] + "*" * (len(dipendente.cognome) - 1)
-                    current_app.logger.info(f"Badge registrato: {badge_value} per {nome_cognome}")
-                    badge_variable.set_value(badge_value)
-                    session.commit()
-                    bip(1)
-                    return True, f"Timbratura alle {datetime.now().strftime('%H:%M')} <br> {nome_oscurato} {cognome_oscurato}"
-                else:
-                    bip(3)
-                    current_app.logger.warning(f"Nessun dipendente trovato con il badge: {badge_value}")
-                    return False, "Errore: Dipendente non trovato"
-            else:
-                current_app.logger.error("Errore: Variabile 'badge' non trovata nel database.")
+            if not badge_variable:
+                current_app.logger.error("Variabile 'badge' non trovata nel database.")
                 return False, "Errore: Variabile 'badge' non trovata"
+
+            dipendente = session.query(Dipendente).filter_by(badge=badge_value).first()
+            if not dipendente:
+                current_app.logger.warning(f"Nessun dipendente trovato con il badge: {badge_value}")
+                bip(3)
+                return False, "Errore: Dipendente non trovato"
+
+            # Controlla l'ultima registrazione per questo badge
+            ultima_registrazione = (
+                session.query(LogData)
+                .join(Variables, LogData.variable_id == Variables.id)
+                .filter(Variables.variable_code == "badge")
+                .filter(LogData.string_value == badge_value)
+                .order_by(LogData.created_at.desc())
+                .first()
+            )
+
+            ora_attuale = datetime.now()
+
+            if ultima_registrazione:
+                intervallo = ora_attuale - ultima_registrazione.created_at
+                if intervallo <= timedelta(seconds=60):
+                    ora_precedente = ultima_registrazione.created_at.strftime('%H:%M')
+                    current_app.logger.info(f"Tentativo di registrazione badge troppo ravvicinato per badge: {badge_value}")
+                    current_app.logger.debug(f"Intervallo: {intervallo}, Ora attuale: {ora_attuale}, Ora precedente: {ora_precedente}")
+                    bip(2)
+                    return False, f"Badge già registrato alle {ora_precedente}."
+
+            # Se passa i controlli, procedi con la registrazione
+            nome_oscurato = dipendente.nome[0] + "*" * (len(dipendente.nome) - 1)
+            cognome_oscurato = dipendente.cognome[0] + "*" * (len(dipendente.cognome) - 1)
+
+            # Registra il badge
+            badge_variable.set_value(badge_value)
+
+            current_app.logger.info(f"Badge registrato: {badge_value} per {dipendente.nome} {dipendente.cognome}")
+            session.commit()
+            bip(1)
+
+            return True, f"Timbratura alle {ora_attuale.strftime('%H:%M')} <br> {nome_oscurato} {cognome_oscurato}"
+
         except Exception as e:
-            session.rollback()  # Rollback in caso di errore
+            session.rollback()
             current_app.logger.error(f"Errore nel salvataggio del badge: {e}")
             return False, f"Errore interno: {str(e)}"
+
         finally:
-            session.close()  # Chiude la sessione
+            session.close()
 
 async def check_queue_messages(app):
     with app.app_context():

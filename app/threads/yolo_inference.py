@@ -11,8 +11,10 @@ import io
 from datetime import datetime
 import torch
 import streamlit as st
+import numpy as np
 from ultralytics import YOLO
 from contextlib import redirect_stdout
+from flask import current_app
 from config.config import Config
 
 class YOLOInferenceThread:
@@ -223,6 +225,44 @@ class YOLOInferenceThread:
             time.sleep(0.1)
 
 def run(app):
-    """Entry point for the thread"""
-    yolo_thread = YOLOInferenceThread(app)
-    yolo_thread.run() 
+    """Run the YOLO inference app"""
+    with app.app_context():
+        app.logger.info("Starting YOLO inference app")
+        
+        # Get configuration from app
+        config = app.config['MODULES']['threads']['config']['yolo_inference']
+        
+        # Initialize YOLO model
+        model = YOLO('yolov8n.pt')
+        
+        # Streamlit app
+        st.title("YOLO Object Detection")
+        
+        # Camera selection
+        camera_index = st.selectbox("Select Camera", options=[0, 1, 2])
+        
+        # Start video capture
+        cap = cv2.VideoCapture(camera_index)
+        
+        # Create placeholder for video
+        placeholder = st.empty()
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                st.error("Failed to read from camera")
+                break
+                
+            # Run YOLO inference
+            results = model(frame)
+            
+            # Draw results
+            annotated_frame = results[0].plot()
+            
+            # Display the frame
+            placeholder.image(annotated_frame, channels="BGR")
+            
+            # Add a small delay
+            time.sleep(0.1)
+            
+        cap.release() 

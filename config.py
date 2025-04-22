@@ -36,9 +36,11 @@ class Config:
 
     # Camera configuration
     CAMERA_RTSP_URLS = {
-        'camera1': os.getenv('CAMERA1_RTSP_URL', 'rtsp://admin:password@192.168.1.100:554/stream1'),
-        'camera2': os.getenv('CAMERA2_RTSP_URL', 'rtsp://admin:password@192.168.1.101:554/stream1')
+        'camera1': 'http://192.168.0.92:8080/video',
     }
+    MAX_CAMERAS = 10
+    CAMERA_FRAME_RATE = 30
+    CAMERA_QUEUE_SIZE = 1
     
     # YOLO configuration
     YOLO_MODEL_PATH = os.getenv('YOLO_MODEL_PATH', os.path.join(MODELS_DIR, 'yolov8n.pt'))
@@ -69,21 +71,29 @@ class Config:
         'api': {
             'enabled': True,
             'prefix': '/api',
-            'modules': ['device']
+            'modules': []
         },
         'models': {
             'enabled': True,
-            'modules': ['device', 'impostazioni', 'log_operazioni', 'log_orlatura', 'operatori']
+            'modules': []
         },
         'jobs': {
             'enabled': True,
             'interval': timedelta(minutes=15),
             'max_instances': 10,
-            'modules': ['maintenance']
+            'modules': []
         },
         'threads': {
             'enabled': True,
-            'modules': ['encoder', 'monitor_spola', 'websocket', 'camera_monitor']
+            'modules': ['camera_monitor'],
+            'config': {
+                'camera_monitor': {
+                    'port': 8505,
+                    'headless': True,
+                    'enableCORS': False,
+                    'enableXsrfProtection': False
+                }
+            }
         },
         'utils': {
             'enabled': True,
@@ -93,18 +103,7 @@ class Config:
 
     # Streamlit configuration
     STREAMLIT = {
-        'enabled': True,
-        'apps': {
-            'yolo_inference': {
-                'script_path': 'app/threads/yolo_inference.py',
-                'port': 8501,
-                'config': {
-                    'headless': True,
-                    'enableCORS': False,
-                    'enableXsrfProtection': False
-                }
-            }
-        }
+        'enabled': True
     }
 
 class ProductionConfig(Config):

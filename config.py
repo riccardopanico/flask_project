@@ -20,15 +20,9 @@ class Config:
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, 'data')
-    MODELS_DIR = os.path.join(DATA_DIR, 'models')
-    DATASETS_DIR = os.path.join(DATA_DIR, 'datasets')
-    OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
-    TEMP_DIR = os.path.join(DATA_DIR, 'temp')
-    LOGS_DIR = os.path.join(DATA_DIR, 'logs')
-    CONFIG_DIR = os.path.join(DATA_DIR, 'config')
-
-    for d in [MODELS_DIR, DATASETS_DIR, OUTPUT_DIR, TEMP_DIR, LOGS_DIR, CONFIG_DIR]:
-        os.makedirs(d, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    for sub in ['models', 'datasets', 'output', 'temp', 'logs', 'config']:
+        os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
     CAMERA_RTSP_URLS = {
         'camera1': 'http://192.168.0.92:8080/video',
@@ -36,25 +30,6 @@ class Config:
     MAX_CAMERAS = 10
     CAMERA_FRAME_RATE = 30
     CAMERA_QUEUE_SIZE = 1
-
-    YOLO_MODEL_PATH = os.getenv('YOLO_MODEL_PATH', os.path.join(MODELS_DIR, 'yolov8n.pt'))
-    YOLO_TRAIN_CONFIG = os.getenv('YOLO_TRAIN_CONFIG', os.path.join(CONFIG_DIR, 'yolo_train.yaml'))
-    YOLO_VAL_CONFIG = os.getenv('YOLO_VAL_CONFIG', os.path.join(CONFIG_DIR, 'yolo_val.yaml'))
-
-    TRAIN_BATCH_SIZE = int(os.getenv('TRAIN_BATCH_SIZE', '16'))
-    TRAIN_EPOCHS = int(os.getenv('TRAIN_EPOCHS', '100'))
-    TRAIN_IMG_SIZE = int(os.getenv('TRAIN_IMG_SIZE', '640'))
-    TRAIN_DEVICE = os.getenv('TRAIN_DEVICE', 'cuda')
-
-    INFERENCE_CONFIDENCE = float(os.getenv('INFERENCE_CONFIDENCE', '0.5'))
-    INFERENCE_IOU = float(os.getenv('INFERENCE_IOU', '0.45'))
-    INFERENCE_DEVICE = os.getenv('INFERENCE_DEVICE', 'cuda')
-    INFERENCE_FRAME_SKIP = int(os.getenv('INFERENCE_FRAME_SKIP', '1'))
-
-    THREAD_POOL_SIZE = int(os.getenv('THREAD_POOL_SIZE', '4'))
-
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', os.path.join(LOGS_DIR, 'app.log'))
 
     MODULES = {
         'api': {
@@ -74,27 +49,27 @@ class Config:
         },
         'threads': {
             'enabled': True,
-            'modules': [
-                'camera_monitor',
-                'streamlit_manager'
-            ],
+            'modules': ['inference_monitor'],
             'config': {
-                'camera_monitor': {
+                'inference_monitor': {
+                    'script_path': os.path.join(BASE_DIR, 'app', 'threads', 'inference_monitor.py'),
                     'port': 8505,
                     'headless': True,
                     'enableCORS': False,
                     'enableXsrfProtection': False
-                },
-                'streamlit_manager': {
-                    # no per‐module config needed; manager reads its own THREADS config
                 }
             }
         },
         'utils': {
             'enabled': True,
-            'modules': []
+            'modules': ['streamlit_manager']
         }
     }
+
+    ENABLED_API     = MODULES['api']['modules']
+    ENABLED_MODELS  = MODULES['models']['modules']
+    ENABLED_JOBS    = MODULES['jobs']['modules']
+    ENABLED_THREADS = MODULES['threads']['modules']
 
 class ProductionConfig(Config):
     DEBUG = False

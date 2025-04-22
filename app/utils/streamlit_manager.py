@@ -1,19 +1,16 @@
+# app/utils/streamlit_manager.py
 import os
 import subprocess
-import threading
-import time
 from flask import current_app
 
 class StreamlitManager:
     def __init__(self, app):
         self.app = app
-        self.processes = {}
-        self.threads = {}
-        self.running = False
+        self.procs = {}
 
-    def start_app(self, app_name, cfg):
-        script = cfg.get('script_path')
-        port = cfg.get('port', 8501)
+    def start_app(self, name, cfg):
+        script = cfg['script_path']
+        port   = cfg['port']
         cmd = [
             "streamlit", "run", script,
             "--server.port", str(port),
@@ -22,48 +19,28 @@ class StreamlitManager:
             "--server.enableXsrfProtection", str(cfg.get('enableXsrfProtection', False)).lower()
         ]
         with self.app.app_context():
-            self.app.logger.info(f"Starting Streamlit app {app_name} on port {port}")
-        p = subprocess.Popen(cmd)
-        self.processes[app_name] = p
-
-    def stop_app(self, app_name):
-        if app_name in self.processes:
-            self.processes[app_name].terminate()
-            del self.processes[app_name]
+            current_app.logger.info(f"[STREAMLIT] Starting {name} on port {port}")
+        try:
+            p = subprocess.Popen(cmd)
+            self.procs[name] = p
             with self.app.app_context():
-                self.app.logger.info(f"Stopped {app_name}")
-
-    def monitor_apps(self):
-        while self.running:
+                current_app.logger.info(f"[STREAMLIT] App {name} avviata: http://localhost:{port}")
+        except Exception as e:
             with self.app.app_context():
-                cfg = self.app.config['MODULES']['threads']['config']
-                for name, proc in list(self.processes.items()):
-                    if proc.poll() is not None:
-                        self.app.logger.warning(f"{name} crashed, restarting...")
-                        self.start_app(name, cfg.get(name, {}))
-            time.sleep(1)
+                current_app.logger.error(f"[STREAMLIT] Errore avviando {name}: {e}")
 
     def start(self):
-        with self.app.app_context():
-            self.running = True
-            mon = threading.Thread(target=self.monitor_apps, daemon=True)
-            mon.start()
-            self.threads['monitor'] = mon
-
-            cfg = self.app.config['MODULES']['threads']
-            for name in cfg.get('modules', []):
-                conf = cfg.get('config', {}).get(name, {})
-                if name != 'camera_monitor' and conf.get('script_path') and os.path.exists(conf['script_path']):
-                    self.start_app(name, conf)
+        cfgs = self.app.config['MODULES']['threads']['config']
+        for name, cfg in cfgs.items():
+            if name == 'camera_monitor':
+                continue
+            script = cfg.get('script_path')
+            if script and os.path.exists(script):
+                self.start_app(name, cfg)
+            else:
+                with self.app.app_context():
+                    current_app.logger.error(f"[STREAMLIT] Missing script for {name}")
 
     def stop(self):
-        self.running = False
-        for t in self.threads.values():
-            t.join(timeout=1)
-        for name in list(self.processes):
-            self.stop_app(name)
-
-def run(app):
-    manager = StreamlitManager(app)
-    manager.start()
-    return manager
+        for p in self.procs.values():
+            p.terminate()

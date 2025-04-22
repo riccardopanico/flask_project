@@ -1,37 +1,100 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data directories
+data/
+!data/.gitkeep
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.*
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# YOLO specific
+*.pt
+*.onnx
+*.weights
+*.cfg
+*.names
+
+# Dataset specific
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tiff
+*.webp
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
+# Configurations
+*.yaml
+*.yml
+config/
+
+# Outputs
+output/
+*.csv
+*.json
+*.xml
+*.txt
 
 # Caches and logs
-*.log
 *.pot
 *.pyc
 *.pyo
 *.pyd
-*.sqlite3
-
-# Virtual environment
-venv/
-flask/
-.env
 
 # Distribution / packaging
-.Python
-build/
-dist/
-*.egg-info/
-.eggs/
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
+flask/
 
 # Flask specific
 instance/
-*.env
 *.flaskenv
 
 # Migrations

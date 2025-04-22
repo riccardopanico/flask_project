@@ -10,12 +10,10 @@ from datetime import timedelta
 import atexit
 import logging
 from logging.handlers import RotatingFileHandler
-from config.config import ProductionConfig, DevelopmentConfig
+from config import ProductionConfig, DevelopmentConfig
 import importlib.util
 import glob
 import queue
-from app.utils.api_device_manager import ApiDeviceManager
-from app.utils.api_oracle_manager import ApiOracleManager
 
 # Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
@@ -36,6 +34,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Inizializza MODULES se non è presente
+    if 'MODULES' not in app.config:
+        app.config['MODULES'] = config_class.MODULES
+
     # Configurazione logger personalizzato
     log_level = logging.DEBUG if app.debug else logging.INFO
     log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -50,7 +52,6 @@ def create_app():
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-
     run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
     modules_to_import = {
         'models': os.path.join(os.path.dirname(__file__), 'models', '*.py')
@@ -62,41 +63,14 @@ def create_app():
             'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py')
         })
 
-        # Inizializzazione di ApiDeviceManager e ApiOracleManager
-        with app.app_context():
-            from app.models.device import Device
-            from app.models.user import User
-
-            # Ottieni tutti i dispositivi associati a utenti di tipo 'device'
-            devices = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'device').all()
-            app.api_device_manager = {
-                device.username: ApiDeviceManager(
-                    ip_address=device.ip_address,
-                    username=device.username,
-                    password=device.password
-                ) for device in devices
-            }
-
-            # Ottieni il primo record associato a un utente di tipo 'datacenter'
-            datacenter_device = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'datacenter').first()
-            if datacenter_device:
-                app.api_datacenter_manager = ApiDeviceManager(
-                    ip_address=datacenter_device.ip_address,
-                    username=datacenter_device.username,
-                    password=datacenter_device.password
-                )
-            else:
-                app.api_datacenter_manager = None
-                app.logger.warning("Nessun dispositivo trovato per il tipo 'datacenter'.")
-
-            app.api_oracle_manager = ApiOracleManager()
-
     # Inizializzazione di Scheduler
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
     for key, path in modules_to_import.items():
-        enabled_key = f'ENABLED_{key.upper()}'
-        enabled_modules = app.config.get(enabled_key, [])
+        module_config = app.config['MODULES'].get(key, {})
+        if not module_config.get('enabled', False):
+            continue
 
+        enabled_modules = module_config.get('modules', [])
         for file_path in glob.glob(path):
             module_name = os.path.basename(file_path)[:-3]
             if module_name not in enabled_modules:
@@ -109,7 +83,8 @@ def create_app():
                 blueprint_name = f"{module_name}_blueprint"
                 if hasattr(module, blueprint_name):
                     blueprint = getattr(module, blueprint_name)
-                    app.register_blueprint(blueprint, url_prefix=f'/api/{module_name}')
+                    prefix = module_config.get('prefix', '/api')
+                    app.register_blueprint(blueprint, url_prefix=f'{prefix}/{module_name}')
             elif key == 'models':
                 importlib.import_module(f'app.models.{module_name}')
             elif key == 'jobs':
@@ -117,18 +92,55 @@ def create_app():
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
-                    job_interval = getattr(module, 'JOB_INTERVAL', timedelta(minutes=15))
-                    scheduler.add_job(module.run, 'interval', seconds=job_interval.total_seconds(), id=module_name, max_instances=10, args=(app,))
+                    try:
+                        job_config = app.config['MODULES']['jobs']
+                        interval = job_config.get('interval', timedelta(minutes=15))
+                        max_instances = job_config.get('max_instances', 10)
+                        
+                        scheduler.add_job(
+                            module.run,
+                            'interval',
+                            seconds=interval.total_seconds(),
+                            id=module_name,
+                            max_instances=max_instances,
+                            args=(app,),
+                            name=f"{module_name}_job"
+                        )
+                        app.logger.info(f"Scheduled {module_name} job with interval {interval}")
+                    except Exception as e:
+                        app.logger.error(f"Failed to schedule {module_name} job: {str(e)}")
             elif key == 'threads':
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, 'run'):
-                    thread = threading.Thread(target=module.run, args=(app,))
-                    thread.daemon = True
-                    thread.start()
+                    try:
+                        thread = threading.Thread(
+                            target=module.run,
+                            args=(app,),
+                            daemon=True,
+                            name=f"{module_name}_thread"
+                        )
+                        thread.start()
+                        app.logger.info(f"Started {module_name} thread")
+                    except Exception as e:
+                        app.logger.error(f"Failed to start {module_name} thread: {str(e)}")
+            elif key == 'utils':
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, 'init'):
+                    module.init(app)
+
+    # Initialize Streamlit Manager if enabled
+    if app.config['STREAMLIT'].get('enabled', False):
+        from .utils.streamlit_manager import StreamlitManager
+        app.streamlit_manager = StreamlitManager(app)
+        app.streamlit_manager.start()
 
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
+    if hasattr(app, 'streamlit_manager'):
+        atexit.register(lambda: app.streamlit_manager.stop())
 
     return app

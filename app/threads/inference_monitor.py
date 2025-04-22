@@ -14,8 +14,9 @@ import streamlit as st
 from ultralytics import YOLO
 from contextlib import redirect_stdout
 
+STREAMLIT_APP = True
+
 # ----- DIRECTORY CONFIGURATION -----
-# assumi che la struttura sia: PROJECT_ROOT/app/threads/inference.py
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR      = os.path.join(PROJECT_ROOT, "data")
 MODELS_DIR    = os.path.join(DATA_DIR, "models")

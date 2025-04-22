@@ -1,3 +1,4 @@
+# config.py
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -52,7 +53,6 @@ class Config:
             'modules': ['inference_monitor'],
             'config': {
                 'inference_monitor': {
-                    'script_path': os.path.join(BASE_DIR, 'app', 'threads', 'inference_monitor.py'),
                     'port': 8505,
                     'headless': True,
                     'enableCORS': False,
@@ -65,11 +65,6 @@ class Config:
             'modules': ['streamlit_manager']
         }
     }
-
-    ENABLED_API     = MODULES['api']['modules']
-    ENABLED_MODELS  = MODULES['models']['modules']
-    ENABLED_JOBS    = MODULES['jobs']['modules']
-    ENABLED_THREADS = MODULES['threads']['modules']
 
 class ProductionConfig(Config):
     DEBUG = False

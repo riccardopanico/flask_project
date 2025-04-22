@@ -1,59 +1,57 @@
-# Flask Project
+# Flask Project Framework
 
-Questo è un progetto Flask che fornisce un'applicazione web con alcune funzionalità API e task schedulati. L'applicazione è progettata per essere modulare e facilmente scalabile, con una struttura ben organizzata e utilizzando tecnologie popolari come Flask, SQLAlchemy, Flask-JWT-Extended e APScheduler.
+Un framework Flask modulare e automatizzato per lo sviluppo rapido di applicazioni web con supporto integrato per API, job schedulati e thread. Il progetto è progettato per essere estremamente flessibile e automatizzato, permettendo di aggiungere nuove funzionalità semplicemente creando nuovi moduli nelle directory appropriate.
 
 ## Struttura del Progetto
-
-La struttura del progetto è la seguente:
 
 ```
 flask_project/
 │
 ├── app/
-│   ├── api/
+│   ├── api/              # API endpoints (automaticamente registrati)
 │   │   ├── __init__.py
-│   │   └── device.py
-│   ├── jobs/
-│   │   └── __init__.py
-│   ├── models/
+│   │   └── *.py         # Ogni file diventa un blueprint
+│   │
+│   ├── jobs/            # Job schedulati (automaticamente registrati)
 │   │   ├── __init__.py
-│   │   ├── device.py
-│   │   ├── impostazioni.py
-│   │   ├── log_operazioni.py
-│   │   ├── log_orlatura.py
-│   │   └── operatori.py
-│   └── threads/
-│       ├── __init__.py
-│       ├── encoder.py
-│       ├── monitor_spola.py
-│       └── websocket.py
+│   │   └── *.py         # Ogni file con funzione run() diventa un job
+│   │
+│   ├── models/          # Modelli del database
+│   │   ├── __init__.py
+│   │   └── *.py         # Ogni file diventa un modello
+│   │
+│   ├── threads/         # Thread in background (automaticamente avviati)
+│   │   ├── __init__.py
+│   │   └── *.py         # Ogni file con funzione run() diventa un thread
+│   │
+│   ├── utils/           # Utility e helper functions
+│   │   └── *.py
+│   │
+│   └── __init__.py      # Configurazione principale dell'app
 │
 ├── config/
 │   ├── __init__.py
-│   └── config.py
+│   └── config.py        # Configurazioni dell'applicazione
 │
 ├── .gitignore
-├── manage.py
+├── manage.py            # Punto di ingresso dell'applicazione
 ├── README.md
-└── requirements.txt
-
+└── requirements.txt     # Dipendenze del progetto
 ```
 
-- `app/`: Contiene l'applicazione principale Flask, con moduli per le API, i modelli, i job e i thread.
-  - `api/`: Contiene i blueprint delle API (es. gestione dei dispositivi, operatori, ...) 
-  - `jobs/`: Modulo per definire i job o task schedulati, con l'inizializzazione in `__init__.py`.
-  - `models/`: Contiene i modelli del database, tra cui impostazioni, log operazioni, log orlatura e operatori.
-  - `threads/`: Gestisce i thread dedicati a specifiche operazioni asincrone (es. `encoder.py`, `monitor_spola.py`, `websocket.py`).
-- `config/`: Contiene la configurazione principale dell'applicazione.
-- `.gitignore`: File per escludere dal repository specifici file o cartelle, come configurazioni locali o file generati automaticamente.
-- `manage.py`: Punto di ingresso per gestire il server Flask e altre operazioni di amministrazione.
-- `requirements.txt`: Elenco delle dipendenze del progetto.
+## Caratteristiche Principali
 
+- **Automatizzazione Completa**: Aggiungi nuovi moduli nelle directory appropriate e vengono automaticamente registrati/avviati
+- **API RESTful**: Crea nuovi endpoint semplicemente aggiungendo file nella directory `api/`
+- **Job Schedulati**: Aggiungi nuovi job nella directory `jobs/` con una funzione `run()`
+- **Thread in Background**: Aggiungi nuovi thread nella directory `threads/` con una funzione `run()`
+- **Modelli Database**: Aggiungi nuovi modelli nella directory `models/` per la gestione dei dati
+- **Configurazione Flessibile**: Sistema di configurazione basato su ambiente (development, testing, production)
 
 ## Prerequisiti
 
-- Python 3.x
-- Virtualenv
+- Python 3.8 o superiore
+- pip (gestore pacchetti Python)
 
 ## Installazione
 
@@ -63,20 +61,16 @@ flask_project/
    cd flask_project
    ```
 
-2. **Crea un virtual environment**
+2. **Crea e attiva un ambiente virtuale**
+   ```bash
+   # Linux/MacOS
+   python3 -m venv venv
+   source venv/bin/activate
 
-   - **Su Linux/MacOS:**
-     ```bash
-     python3 -m venv venv
-     source venv/bin/activate
-     ```
-
-   - **Su Windows:**
-     ```bash
-     python -m venv venv
-     .\venv\Scripts\activate
-     ```
-
+   # Windows
+   python -m venv venv
+   .\venv\Scripts\activate
+   ```
 
 3. **Installa le dipendenze**
    ```bash
@@ -84,90 +78,89 @@ flask_project/
    ```
 
 4. **Configura l'ambiente**
-   - Crea un file `.env` nella directory principale e aggiungi le variabili di configurazione necessarie (come `SECRET_KEY`, `DATABASE_URL`, etc).
+   ```bash
+   # Crea il file .env
+   cp .env.example .env
+   # Modifica le variabili nel file .env secondo le tue necessità
+   ```
 
 5. **Inizializza il database**
    ```bash
    flask db init
-   flask db migrate -m "Initial migration."
+   flask db migrate -m "Initial migration"
    flask db upgrade
    ```
 
-## Esecuzione del Server
+## Sviluppo
 
-Per avviare il server Flask, esegui:
+### Aggiungere Nuove API
+1. Crea un nuovo file in `app/api/`
+2. Definisci il tuo blueprint
+3. Il sistema lo registrerà automaticamente
 
+### Aggiungere Nuovi Job
+1. Crea un nuovo file in `app/jobs/`
+2. Implementa una funzione `run()`
+3. Il sistema lo schedulerà automaticamente
+
+### Aggiungere Nuovi Thread
+1. Crea un nuovo file in `app/threads/`
+2. Implementa una funzione `run()`
+3. Il sistema lo avvierà automaticamente
+
+### Aggiungere Nuovi Modelli
+1. Crea un nuovo file in `app/models/`
+2. Definisci il tuo modello SQLAlchemy
+3. Il sistema lo registrerà automaticamente
+
+## Esecuzione
+
+### Ambiente di Sviluppo
 ```bash
 python manage.py runserver
 ```
 
-L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
+### Ambiente di Produzione
+```bash
+gunicorn -w 4 -b 0.0.0.0:5000 manage:app
+```
 
-## Funzionalità Principali
+## Configurazione
 
-- **API RESTful**: Gestisce dispositivi industriali, permette la registrazione, l'autenticazione e la gestione tramite token JWT.
-- **Autenticazione JWT**: Implementata con Flask-JWT-Extended per gestire token di accesso e refresh.
-- **Task Schedulati**: Utilizza APScheduler per eseguire task periodici, come la manutenzione dei dispositivi o altre attività.
+Il progetto utilizza un sistema di configurazione basato su ambiente. Le configurazioni possono essere modificate in:
 
-## Esempi di API
+- `config/config.py`: Configurazioni di base
+- `.env`: Variabili d'ambiente specifiche per l'ambiente
 
-### **Registrazione Dispositivo** :
-  - **Endpoint**: `/api/device/register`
-  - **Metodo**: `POST`
-  - **Dati richiesti**:
-    ```json
-    {
-      "matricola": "12345",
-      "password": "password123",
-      "ip_address": "192.168.1.1",
-      "device_type": "sensor",
-      "status": "active",
-      "firmware_version": "1.0.0"
-    }
-    ```
-  - **Risposta** :
-    - `201 Created`: `{"msg": "Device registered successfully"}`
-    - `400 Bad Request`: `{"msg": "Matricola already exists"}` o `{"msg": "Missing key: [nome_chiave]"}`
+## Struttura dei Moduli
 
-### **Login Dispositivo** :
-  - **Endpoint**: `/api/device/login`
-  - **Metodo**: `POST`
-  - **Dati richiesti**:
-    ```json
-    {
-      "matricola": "12345",
-      "password": "password123"
-    }
-    ```
-  - **Risposta** :
-    - `200 OK`: `{ "access_token": "token_di_accesso", "refresh_token": "token_di_refresh" }`
-    - `401 Unauthorized`: `{"msg": "Bad matricola or password"}`
+### API (`app/api/`)
+- Ogni file Python diventa un blueprint
+- Automaticamente registrato all'avvio
+- Supporto integrato per autenticazione JWT
 
-### **Rinnovo del Token di Accesso** :
-  - **Endpoint**: `/api/device/token/refresh`
-  - **Metodo**: `POST`
-  - **Headers richiesti**: `Authorization: Bearer [refresh_token]`
-  - **Risposta**:
-    - `200 OK`: `{ "access_token": "nuovo_token_di_accesso" }`
+### Job (`app/jobs/`)
+- Ogni file con funzione `run()` diventa un job
+- Automaticamente schedulato all'avvio
+- Supporto per intervalli e trigger personalizzati
 
-### **Profilo del Dispositivo** :
-  - **Endpoint**: `/api/device/profile`
-  - **Metodo**: `GET`
-  - **Headers richiesti**: `Authorization: Bearer [access_token]`
-  - **Risposta**:
-    - `200 OK`: `{"matricola": "12345", "ip_address": "192.168.1.1", "device_type": "sensor", "status": "active", "firmware_version": "1.0.0", ...}`
-    - `404 Not Found`: `{"msg": "Device not found"}`
+### Thread (`app/threads/`)
+- Ogni file con funzione `run()` diventa un thread
+- Automaticamente avviato all'avvio
+- Gestione automatica del ciclo di vita
 
+### Modelli (`app/models/`)
+- Ogni file Python diventa un modello
+- Automaticamente registrato con SQLAlchemy
+- Supporto per relazioni e migrazioni
 
-## Gestione dei Thread
+## Contribuire
 
-I thread sono gestiti all'interno dell'applicazione per eseguire operazioni asincrone in background, separate dai job schedulati. Ogni file Python nella cartella `app/threads/` rappresenta un thread dedicato, avviato automaticamente all'avvio dell'applicazione Flask. 
-
-I thread permettono di gestire operazioni indipendenti che non devono bloccare il normale flusso dell'applicazione, come l'encoder, il monitoraggio di dispositivi o il websocket. 
-
-- **Inizializzazione** : Durante l'avvio dell'app, ogni file nella directory `threads/` viene importato e, se contiene una funzione `run`, viene eseguito come un thread separato. Questo meccanismo garantisce l'avvio automatico di ogni modulo di thread presente.
-- **Esempio** : La funzione `run` presente in ogni modulo di thread esegue operazioni specifiche e riceve l'istanza `app` come argomento, per garantire l'accesso alle configurazioni e alle risorse condivise dell'applicazione.
-
+1. Fork il repository
+2. Crea un branch per la tua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit le tue modifiche (`git commit -m 'Add some AmazingFeature'`)
+4. Push sul branch (`git push origin feature/AmazingFeature`)
+5. Apri una Pull Request
 
 ## Licenza
 

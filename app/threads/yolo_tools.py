@@ -13,8 +13,7 @@ import torch
 import streamlit as st
 from ultralytics import YOLO
 from contextlib import redirect_stdout
-
-STREAMLIT_APP = True
+from flask import current_app
 
 # ----- DIRECTORY CONFIGURATION -----
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -598,6 +597,13 @@ def run_app():
     )
     if st.session_state.get("inf_running"):
         engine.run(num_columns)
+    
+def run(app):
+    with app.app_context():
+        name = os.path.splitext(os.path.basename(__file__))[0]
+        cfg = current_app.config['MODULES']['threads']['config'].get(name, {})
+        cfg["script_path"] = os.path.abspath(__file__)
+        current_app.streamlit_manager.register(name, cfg)
 
 if __name__ == "__main__":
     st.set_page_config(page_title="YOLOv8 Streamlit Inference", layout="wide")

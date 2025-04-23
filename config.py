@@ -50,13 +50,27 @@ class Config:
         },
         'threads': {
             'enabled': True,
-            'modules': ['inference_monitor'],
+            'modules': ['ip_camera', 'yolo_tools'],
             'config': {
-                'inference_monitor': {
+                'yolo_tools': {
                     'port': 8505,
                     'headless': True,
                     'enableCORS': False,
-                    'enableXsrfProtection': False
+                    'enableXsrfProtection': False,
+                    'runOnSave': False,
+                    'browserServerAddress': "",
+                    'browserGatherUsageStats': False,
+                    'logLevel': "info"
+                },
+                'ip_camera': {
+                    'port': 8506,
+                    'headless': True,
+                    'enableCORS': False,
+                    'enableXsrfProtection': False,
+                    'runOnSave': False,
+                    'browserServerAddress': "",
+                    'browserGatherUsageStats': False,
+                    'logLevel': "info"
                 }
             }
         },
@@ -67,7 +81,7 @@ class Config:
     }
 
 class ProductionConfig(Config):
-    DEBUG = False
+    DEBUG = True
 
 class DevelopmentConfig(Config):
     DEBUG = True

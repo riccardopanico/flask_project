@@ -1,4 +1,4 @@
-# config.py
+# config.py (completato per supportare VideoPipeline)
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -25,18 +25,30 @@ class Config:
     for sub in ['models', 'datasets', 'output', 'temp', 'logs', 'config']:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
-    CAMERA_RTSP_URLS = {
-        'camera1': 'http://192.168.0.92:8080/video',
+    PIPELINE_CONFIG = {
+        "source": os.getenv("PIPELINE_SOURCE", "0"),
+        "width": int(os.getenv("PIPELINE_WIDTH", 640)),
+        "height": int(os.getenv("PIPELINE_HEIGHT", 480)),
+        "fps": int(os.getenv("PIPELINE_FPS", 30)),
+        "models": [
+            # scarica/prepara il modello in data/models/yolov8n.pt
+            os.path.join(DATA_DIR, "models", "yolov8n.pt")
+        ],
+        "confidence": float(os.getenv("PIPELINE_CONF", 0.5)),
+        "iou": float(os.getenv("PIPELINE_IOU", 0.45)),
+        "draw_boxes": False,
+        "count_objects": False,
+        "count_line": None,   # e.g. ((320,0),(320,480))
+        "metrics_enabled": True,
+        "classes_filter": None,
+        "prefetch": int(os.getenv("PIPELINE_PREFETCH", 10))
     }
-    MAX_CAMERAS = 10
-    CAMERA_FRAME_RATE = 30
-    CAMERA_QUEUE_SIZE = 1
 
     MODULES = {
         'api': {
             'enabled': True,
             'prefix': '/api',
-            'modules': []
+            'modules': ['ip_camera']
         },
         'models': {
             'enabled': True,

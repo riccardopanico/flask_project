@@ -18,7 +18,7 @@ def run_app():
 
     st.markdown('<div class="title">📡 IP Camera Viewer con YOLO & Counter</div>', unsafe_allow_html=True)
 
-    stream_url = 'http://192.168.0.92:8080/video'
+    stream_url = 'http://0.0.0.0:5000/api/ip_camera/stream'
 
     st.sidebar.header("🔌 Telecamere disponibili")
     st.sidebar.markdown("Seleziona la sorgente video da monitorare.")

@@ -1,5 +1,3 @@
-# app/utils/video_pipeline.py
-
 import cv2
 import time
 import queue
@@ -35,20 +33,24 @@ class PipelineConfig(BaseModel):
 
 class VideoPipeline:
     """
-    Semplice da istanziare via:
-        vp = VideoPipeline(PipelineConfig(...))
+    Semplice da istanziare:
+
+        cfg = PipelineConfig(...)
+        vp = VideoPipeline(cfg, logger=app.logger)
         vp.register_callback("on_count", handler)
         vp.start()
-    E con:
-        resp = vp.stream_response()  # flask.Response MJPEG
+
+    E in Flask:
+
+        app.video_pipeline = vp
+        return app.video_pipeline.stream_response()
     """
-    def __init__(
-        self,
-        config: PipelineConfig,
-        logger: Optional[Any] = None
-    ):
+    def __init__(self, config: PipelineConfig, logger: Optional[Any] = None):
         self.config = config
-        self._log = logger or __import__('logging').getLogger(__name__).info
+        if logger:
+            self._log = lambda msg: logger.info(msg)
+        else:
+            self._log = lambda msg: print(f"[VideoPipeline] {msg}")
         self._setup()
 
     def _setup(self):
@@ -77,9 +79,9 @@ class VideoPipeline:
         for p in self.config.models:
             try:
                 m = YOLO(p); self.models.append(m)
-                self._log(f"[Pipeline] model loaded: {p}")
+                self._log(f"model loaded: {p}")
             except Exception as e:
-                self._log(f"[Pipeline] error loading {p}: {e}")
+                self._log(f"error loading {p}: {e}")
         self._models_loaded = True
 
     def register_callback(self, event: str, fn: Callable):
@@ -90,13 +92,13 @@ class VideoPipeline:
     def emit(self, event: str, *args):
         for cb in self._callbacks.get(event, []):
             try: cb(*args)
-            except Exception as e: self._log(f"[Pipeline] callback error: {e}")
+            except Exception as e: self._log(f"callback error: {e}")
 
     def update_config(self, **kwargs):
         self.config = self.config.copy(update=kwargs)
         if {"models","draw_boxes","count_objects"} & set(kwargs):
             self._load_models()
-        self._log(f"[Pipeline] config updated: {kwargs}")
+        self._log(f"config updated: {kwargs}")
 
     def start(self):
         self._stop.clear()
@@ -104,12 +106,12 @@ class VideoPipeline:
         t2 = threading.Thread(target=self._process, daemon=True, name="Pipeline-Proc")
         self._workers = [t1, t2]
         for t in self._workers: t.start()
-        self._log("[Pipeline] started")
+        self._log("started")
 
     def stop(self):
         self._stop.set()
         for t in self._workers: t.join(timeout=1)
-        self._log("[Pipeline] stopped")
+        self._log("stopped")
 
     def _read(self):
         cap = cv2.VideoCapture(
@@ -122,7 +124,7 @@ class VideoPipeline:
         w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         f = cap.get(cv2.CAP_PROP_FPS)
-        self._log(f"[Pipeline] opened {w:.0f}×{h:.0f}@{f:.1f}FPS")
+        self._log(f"opened {w:.0f}×{h:.0f}@{f:.1f}FPS")
 
         while not self._stop.is_set():
             ok, frame = cap.read()
@@ -152,7 +154,8 @@ class VideoPipeline:
                 else:
                     img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
                     start = time.time()
-                    res = [m(img, conf=self.config.confidence, iou=self.config.iou)[0] for m in self.models]
+                    res = [m(img, conf=self.config.confidence, iou=self.config.iou)[0]
+                           for m in self.models]
                     dt = (time.time()-start)*1000
                     self._metrics["inference_times"].append(dt)
                     self.emit("on_inference", fr, res)
@@ -166,12 +169,12 @@ class VideoPipeline:
                         cnts: Dict[str,int] = {}
                         for r in res:
                             for b in r.boxes:
-                                c = int(b.cls)
-                                if self.config.classes_filter and c not in self.config.classes_filter:
+                                cls = int(b.cls)
+                                if self.config.classes_filter and cls not in self.config.classes_filter:
                                     continue
-                                nm = r.names[c]
+                                nm = r.names[cls]
                                 cnts[nm] = cnts.get(nm,0)+1
-                        for nm, c in cnts.items():
+                        for nm,c in cnts.items():
                             self._counters[nm] = self._counters.get(nm,0)+c
                         self.emit("on_count", cnts)
 
@@ -182,7 +185,7 @@ class VideoPipeline:
                 self._processed_q.put(fr)
                 self._metrics["frames_processed"] += 1
 
-            except Exception as e:
+            except Exception:
                 err = traceback.format_exc()
                 self._metrics["last_error"] = err
                 self.emit("on_error", err)
@@ -197,7 +200,6 @@ class VideoPipeline:
             yield (b + b'\r\nContent-Type: image/jpeg\r\n\r\n' + fr.data + b'\r\n')
 
     def stream_response(self):
-        """Flask-ready MJPEG response."""
         from flask import Response, stream_with_context
         return Response(
             stream_with_context(self.output_generator()),
@@ -213,7 +215,8 @@ class VideoPipeline:
         }
 
     def metrics(self):
-        avg = (np.mean(self._metrics["inference_times"]) 
+        import numpy as _np
+        avg = (_np.mean(self._metrics["inference_times"])
                if self._metrics["inference_times"] else 0)
         return {
             "avg_inference_ms": avg,

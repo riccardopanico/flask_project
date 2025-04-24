@@ -1,8 +1,6 @@
+from flask import Blueprint, current_app, jsonify, request
 
-# app/api/ip_camera.py
-from flask import Blueprint, current_app, jsonify, request, stream_with_context
-
-ip_camera_blueprint = Blueprint('ip_camera', __name__)
+ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
 
 @ip_camera_blueprint.route('/stream', methods=['GET'])
 def stream():

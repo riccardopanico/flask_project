@@ -34,19 +34,18 @@ class Config:
         # qui definisci per ogni modello il proprio sotto-config:
         # key = percorso completo su disco, valore = dict di parametri
         "model_behaviors": {
-            # Esempio:
-            # os.path.join(DATA_DIR,"models","yolov8n.pt"): {
-            #     "draw":  True,
-            #     "count": False,
-            #     "confidence": 0.25,
-            #     "iou": 0.45
-            # },
-            # os.path.join(DATA_DIR,"models","yolov8s.pt"): {
-            #     "draw":  False,
-            #     "count": True,
-            #     "confidence": 0.5,
-            #     "iou": 0.5
-            # },
+            os.path.join(DATA_DIR,"models","scarpe_25k_305ep.pt"): {
+                "draw":  True,
+                "count": False,
+                "confidence": 0.5,
+                "iou": 0.5
+            },
+            os.path.join(DATA_DIR,"models","yolo11n.pt"): {
+                "draw":  True,
+                "count": False,
+                "confidence": 0.5,
+                "iou": 0.5
+            },
         },
         "count_line":  None,    # es. ((320,0),(320,480))
         "metrics_enabled": True,

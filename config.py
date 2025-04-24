@@ -5,6 +5,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def list_yolo_models(model_dir):
+    return [
+        os.path.join(model_dir, f)
+        for f in os.listdir(model_dir)
+        if f.endswith('.pt') and os.path.isfile(os.path.join(model_dir, f))
+    ]
+
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
@@ -27,18 +34,15 @@ class Config:
 
     PIPELINE_CONFIG = {
         "source": os.getenv("PIPELINE_SOURCE", "0"),
-        "width": int(os.getenv("PIPELINE_WIDTH", 640)),
-        "height": int(os.getenv("PIPELINE_HEIGHT", 480)),
-        "fps": int(os.getenv("PIPELINE_FPS", 30)),
-        "models": [
-            # scarica/prepara il modello in data/models/yolov8n.pt
-            os.path.join(DATA_DIR, "models", "yolov8n.pt")
-        ],
+        "width": int(os.getenv("PIPELINE_WIDTH")) if os.getenv("PIPELINE_WIDTH") else None,
+        "height": int(os.getenv("PIPELINE_HEIGHT")) if os.getenv("PIPELINE_HEIGHT") else None,
+        "fps": int(os.getenv("PIPELINE_FPS")) if os.getenv("PIPELINE_FPS") else None,
+        "models": list_yolo_models(os.path.join(DATA_DIR, "models")),
         "confidence": float(os.getenv("PIPELINE_CONF", 0.5)),
         "iou": float(os.getenv("PIPELINE_IOU", 0.45)),
-        "draw_boxes": False,
-        "count_objects": False,
-        "count_line": None,   # e.g. ((320,0),(320,480))
+        "draw_boxes": os.getenv("PIPELINE_DRAW", "false").lower() == "true",
+        "count_objects": os.getenv("PIPELINE_COUNT", "false").lower() == "true",
+        "count_line": None,
         "metrics_enabled": True,
         "classes_filter": None,
         "prefetch": int(os.getenv("PIPELINE_PREFETCH", 10))

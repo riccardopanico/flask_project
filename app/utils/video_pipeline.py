@@ -1,58 +1,129 @@
-# app/utils/video_pipeline.py
-
-import cv2, time, queue, threading, traceback, os
-from typing import Callable, Dict, Any, Optional, Tuple, List
+import cv2
+import time
+import queue
+import threading
+import traceback
+import os
+import requests
 import numpy as np
+from typing import Callable, Dict, Any, Optional, Tuple, List
 from pydantic import BaseModel, Field
+
 
 class Frame(BaseModel):
     data: bytes
     timestamp: float
     seq: int
-    meta: Optional[Dict[str,Any]] = None
+    meta: Optional[Dict[str, Any]] = None
+
 
 class ModelBehavior(BaseModel):
-    draw:       bool    = False
-    count:      bool    = False
-    confidence: float   = 0.5
-    iou:        float   = 0.45
+    draw: bool = False
+    count: bool = False
+    confidence: float = 0.5
+    iou: float = 0.45
+
 
 class PipelineConfig(BaseModel):
-    source:   str
-    width:    Optional[int] = None
-    height:   Optional[int] = None
-    fps:      Optional[int] = None
-    prefetch: int           = 10
+    source: str
+    width: Optional[int] = None
+    height: Optional[int] = None
+    fps: Optional[int] = None
+    prefetch: int = 10
     model_behaviors: Dict[str, ModelBehavior] = Field(default_factory=dict)
-    count_line: Optional[Tuple[Tuple[int,int],Tuple[int,int]]] = None
+    count_line: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
 
+
+class SourceHandler:
+    """
+    Astratta lettura da webcam o stream HTTP MJPEG.
+    """
+    def __init__(self, source: str, width: Optional[int] = None,
+                 height: Optional[int] = None, fps: Optional[int] = None):
+        self.source = source
+        self.cap = None
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.is_http = source.startswith(('http://', 'https://'))
+        if self.is_http:
+            self.session = requests.Session()
+            self.stream_req = self.session.get(source, stream=True)
+            self.bytes_buffer = b''
+        else:
+            idx = int(source) if source.isdigit() else source
+            self.cap = cv2.VideoCapture(idx)
+            if width:
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            if height:
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if fps:
+                self.cap.set(cv2.CAP_PROP_FPS, fps)
+
+    def read(self) -> Optional[np.ndarray]:
+        if self.is_http:
+            for chunk in self.stream_req.iter_content(chunk_size=1024):
+                self.bytes_buffer += chunk
+                a = self.bytes_buffer.find(b'\xff\xd8')
+                b = self.bytes_buffer.find(b'\xff\xd9')
+                if a != -1 and b != -1:
+                    jpg = self.bytes_buffer[a:b+2]
+                    self.bytes_buffer = self.bytes_buffer[b+2:]
+                    img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+                    return img
+            return None
+        else:
+            ok, frame = self.cap.read()
+            return frame if ok else None
+
+    def release(self):
+        if self.cap:
+            self.cap.release()
+        if self.is_http:
+            self.stream_req.close()
+            self.session.close()
+
+
+class Tracker:
+    """
+    Semplice aggregatore di rilevazioni: unisce conteggi per classe tra modelli.
+    Per tracciamento avanzato, integra SORT/DeepSORT.
+    """
+    def __init__(self):
+        self.history: Dict[str, int] = {}
+
+    def update(self, detections: Dict[str, int]) -> Dict[str, int]:
+        # Aggiorna conteggi cumulativi per classe
+        for cls, count in detections.items():
+            self.history[cls] = self.history.get(cls, 0) + count
+        return dict(self.history)
+
+
 class VideoPipeline:
-    def __init__(self, config: PipelineConfig, logger: Optional[Any]=None):
+    def __init__(self, config: PipelineConfig, logger: Optional[Any] = None):
         self.config = config
         self._log = logger.info if logger else lambda m: print(f"[VP] {m}")
         self._setup()
 
     def _setup(self):
-        self._frame_q     = queue.Queue(maxsize=self.config.prefetch)
+        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
         self._processed_q = queue.Queue(maxsize=self.config.prefetch)
-        self._stop        = threading.Event()
-        self._seq         = 0
-        self._counters    = {}
-        self._metrics     = {
-            "frames_received":0,
-            "frames_processed":0,
-            "inference_times":[],
-            "last_error":None
-        }
-        self._callbacks   = {"on_frame":[], "on_inference":[], "on_count":[], "on_error":[]}
+        self._stop = threading.Event()
+        self._seq = 0
+        self._counters: Dict[str, int] = {}
+        self._metrics = {"frames_received": 0, "frames_processed": 0,
+                         "inference_times": [], "last_error": None}
+        self._callbacks = {"on_frame": [], "on_inference": [],
+                           "on_count": [], "on_error": []}
+        self.tracker = Tracker()
         self._load_models()
-        self._cap = None   # verrà inizializzato in start()
+        self.source_handler = None
 
     def _load_models(self):
         from ultralytics import YOLO
-        self.models = {}
+        self.models: Dict[str, Dict[str, Any]] = {}
         for path, beh in self.config.model_behaviors.items():
             if not os.path.isfile(path):
                 self._log(f"Modello NON trovato: {path}")
@@ -73,65 +144,54 @@ class VideoPipeline:
 
     def _emit(self, event: str, *args):
         for cb in self._callbacks[event]:
-            try: cb(*args)
-            except Exception as e: self._log(f"Callback error[{event}]: {e}")
+            try:
+                cb(*args)
+            except Exception as e:
+                self._log(f"Callback error[{event}]: {e}")
 
     def update_config(self, **kwargs):
+        # Permette di aggiornare source e modelli dinamicamente
+        old_source = self.config.source
         self.config = self.config.copy(update=kwargs)
         if "model_behaviors" in kwargs:
             self._load_models()
+        if "source" in kwargs and kwargs["source"] != old_source:
+            # riavvia source handler
+            if self.source_handler:
+                self.source_handler.release()
+            self.source_handler = None
         self._log(f"Config aggiornata: {kwargs}")
 
     def start(self):
-        """Apre la camera e avvia i thread."""
-        # 1) apri una sola volta la camera
-        self._cap = cv2.VideoCapture(
-            int(self.config.source) if self.config.source.isdigit()
-            else self.config.source
-        )
-        # imposta solo se specificato
-        if self.config.width:  self._cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.config.width)
-        if self.config.height: self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
-        if self.config.fps:    self._cap.set(cv2.CAP_PROP_FPS,          self.config.fps)
+        # Inizializza source handler se necessario
+        if not self.source_handler:
+            cfg = self.config
+            self.source_handler = SourceHandler(
+                cfg.source, cfg.width, cfg.height, cfg.fps
+            )
 
         self._stop.clear()
-        threading.Thread(target=self._read,    daemon=True, name="VP-Read").start()
+        # Thread di lettura e di processo
+        threading.Thread(target=self._read, daemon=True, name="VP-Read").start()
         threading.Thread(target=self._process, daemon=True, name="VP-Proc").start()
+        # Thread per drenare output e mantenere vivo il processo
+        threading.Thread(target=self._drain_output_queue, daemon=True, name="VP-Drain").start()
         self._log("Pipeline avviata")
 
     def stop(self):
         self._stop.set()
-        if self._cap and self._cap.isOpened():
-            self._cap.release()
+        if self.source_handler:
+            self.source_handler.release()
         self._log("Pipeline arrestata")
 
-    def camera_info(self) -> Dict[str,Any]:
-        """Legge le info dalla camera già aperta."""
-        if not self._cap or not self._cap.isOpened():
-            return {"error": "camera non disponibile"}
-        # width=3, height=4, fps=5, fourcc=6     (cv2.CAP_PROP_*)
-        w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        f = float(self._cap.get(cv2.CAP_PROP_FPS))
-        fourcc_int = int(self._cap.get(cv2.CAP_PROP_FOURCC))
-        fourcc = "".join(chr((fourcc_int >> 8*i) & 0xFF) for i in range(4))
-        return {"width": w, "height": h, "fps": f, "fourcc": fourcc}
-
     def _read(self):
-        """Legge frame da self._cap."""
-        cap = self._cap
-        if not cap or not cap.isOpened():
-            self._log("Errore apertura camera in _read()")
-            return
-        w,h,f = cap.get(3), cap.get(4), cap.get(5)
-        self._log(f"Camera aperta: {w:.0f}×{h:.0f}@{f:.1f}FPS")
-
+        # Legge frame dalla sorgente
         while not self._stop.is_set():
-            ok, frame = cap.read()
-            if not ok:
+            img = self.source_handler.read()
+            if img is None:
                 time.sleep(0.05)
                 continue
-            _, buf = cv2.imencode('.jpg', frame)
+            _, buf = cv2.imencode('.jpg', img)
             fr = Frame(data=buf.tobytes(), timestamp=time.time(), seq=self._seq)
             self._seq += 1
             try:
@@ -142,47 +202,51 @@ class VideoPipeline:
                 continue
 
     def _process(self):
-        import numpy as _np
         while not self._stop.is_set():
             try:
                 fr = self._frame_q.get(timeout=0.1)
             except queue.Empty:
                 continue
             try:
-                if not self.models:
-                    out = fr.data
-                else:
-                    img = cv2.imdecode(_np.frombuffer(fr.data, _np.uint8), cv2.IMREAD_COLOR)
-                    start = time.time()
-                    for path, mi in self.models.items():
-                        beh = mi["beh"]
-                        res = mi["model"](img, conf=beh.confidence, iou=beh.iou)[0]
-                        self._emit("on_inference", fr, path, res)
-                        if beh.draw:
-                            img = res.plot()
-                        if beh.count and hasattr(res, "boxes"):
-                            cnts: Dict[str,int] = {}
-                            for b in res.boxes:
-                                cls = int(b.cls)
-                                if self.config.classes_filter and cls not in self.config.classes_filter:
-                                    continue
-                                nm = res.names[cls]
-                                cnts[nm] = cnts.get(nm,0) + 1
-                            self._counters.update(cnts)
-                            self._emit("on_count", fr, path, cnts)
-                    dt = (time.time()-start)*1000
-                    self._metrics["inference_times"].append(dt)
-                    _, buf2 = cv2.imencode('.jpg', img)
-                    out = buf2.tobytes()
-
-                fr.data = out
+                img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
+                start = time.time()
+                total_counts: Dict[str, int] = {}
+                for path, mi in self.models.items():
+                    beh = mi["beh"]
+                    res = mi["model"](img, conf=beh.confidence, iou=beh.iou)[0]
+                    self._emit("on_inference", fr, path, res)
+                    if beh.draw:
+                        img = res.plot()
+                    if beh.count and hasattr(res, "boxes"):
+                        cnts: Dict[str, int] = {}
+                        for b in res.boxes:
+                            cls_id = int(b.cls)
+                            if self.config.classes_filter and cls_id not in self.config.classes_filter:
+                                continue
+                            cls_name = res.names[cls_id]
+                            cnts[cls_name] = cnts.get(cls_name, 0) + 1
+                        total_counts.update(cnts)
+                # tracking aggregato tra modelli
+                tracked = self.tracker.update(total_counts)
+                self._emit("on_count", fr, tracked)
+                dt = (time.time() - start) * 1000
+                self._metrics["inference_times"].append(dt)
+                _, buf2 = cv2.imencode('.jpg', img)
+                fr.data = buf2.tobytes()
                 self._processed_q.put(fr)
                 self._metrics["frames_processed"] += 1
-
             except Exception:
                 err = traceback.format_exc()
                 self._metrics["last_error"] = err
                 self._emit("on_error", err)
+
+    def _drain_output_queue(self):
+        # Mantiene fluida l'elaborazione drenando la coda
+        while not self._stop.is_set():
+            try:
+                self._processed_q.get(timeout=0.1)
+            except queue.Empty:
+                continue
 
     def output_generator(self):
         b = b'--frame'
@@ -200,23 +264,17 @@ class VideoPipeline:
             mimetype='multipart/x-mixed-replace; boundary=frame'
         )
 
-    def health(self) -> Dict[str,Any]:
-        return {
-            "running":    not self._stop.is_set(),
-            "received":   self._metrics["frames_received"],
-            "processed":  self._metrics["frames_processed"],
-            "queue_depth":self._frame_q.qsize(),
-        }
+    def health(self) -> Dict[str, Any]:
+        return {"running": not self._stop.is_set(),
+                "received": self._metrics["frames_received"],
+                "processed": self._metrics["frames_processed"],
+                "queue_depth": self._frame_q.qsize()}
 
-    def metrics(self) -> Dict[str,Any]:
-        import numpy as _np
-        avg = (_np.mean(self._metrics["inference_times"]) 
-               if self._metrics["inference_times"] else 0)
-        return {
-            "avg_inf_ms": avg,
-            "counters":   self._counters,
-            "last_error": self._metrics["last_error"]
-        }
+    def metrics(self) -> Dict[str, Any]:
+        avg = (np.mean(self._metrics["inference_times"]) if self._metrics["inference_times"] else 0)
+        return {"avg_inf_ms": avg,
+                "counters": self.tracker.history,
+                "last_error": self._metrics["last_error"]}
 
-    def export_config(self) -> Dict[str,Any]:
+    def export_config(self) -> Dict[str, Any]:
         return self.config.dict()

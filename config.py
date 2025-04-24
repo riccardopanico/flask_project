@@ -5,13 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def list_yolo_models(model_dir):
-    return [
-        os.path.join(model_dir, f)
-        for f in os.listdir(model_dir)
-        if f.endswith('.pt') and os.path.isfile(os.path.join(model_dir, f))
-    ]
-
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
@@ -33,19 +26,31 @@ class Config:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
     PIPELINE_CONFIG = {
-        "source": os.getenv("PIPELINE_SOURCE", "0"),
-        "width": int(os.getenv("PIPELINE_WIDTH")) if os.getenv("PIPELINE_WIDTH") else None,
-        "height": int(os.getenv("PIPELINE_HEIGHT")) if os.getenv("PIPELINE_HEIGHT") else None,
-        "fps": int(os.getenv("PIPELINE_FPS")) if os.getenv("PIPELINE_FPS") else None,
-        "models": list_yolo_models(os.path.join(DATA_DIR, "models")),
-        "confidence": float(os.getenv("PIPELINE_CONF", 0.5)),
-        "iou": float(os.getenv("PIPELINE_IOU", 0.45)),
-        "draw_boxes": os.getenv("PIPELINE_DRAW", "false").lower() == "true",
-        "count_objects": os.getenv("PIPELINE_COUNT", "false").lower() == "true",
-        "count_line": None,
+        "source":      os.getenv("PIPELINE_SOURCE", "0"),
+        "width":       int(os.getenv("PIPELINE_WIDTH")) if os.getenv("PIPELINE_WIDTH") else None,
+        "height":      int(os.getenv("PIPELINE_HEIGHT")) if os.getenv("PIPELINE_HEIGHT") else None,
+        "fps":         int(os.getenv("PIPELINE_FPS"))    if os.getenv("PIPELINE_FPS")    else None,
+        "prefetch":    int(os.getenv("PIPELINE_PREFETCH", 10)),
+        # qui definisci per ogni modello il proprio sotto-config:
+        # key = percorso completo su disco, valore = dict di parametri
+        "model_behaviors": {
+            # Esempio:
+            # os.path.join(DATA_DIR,"models","yolov8n.pt"): {
+            #     "draw":  True,
+            #     "count": False,
+            #     "confidence": 0.25,
+            #     "iou": 0.45
+            # },
+            # os.path.join(DATA_DIR,"models","yolov8s.pt"): {
+            #     "draw":  False,
+            #     "count": True,
+            #     "confidence": 0.5,
+            #     "iou": 0.5
+            # },
+        },
+        "count_line":  None,    # es. ((320,0),(320,480))
         "metrics_enabled": True,
-        "classes_filter": None,
-        "prefetch": int(os.getenv("PIPELINE_PREFETCH", 10))
+        "classes_filter":   None,
     }
 
     MODULES = {

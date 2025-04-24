@@ -34,3 +34,13 @@ def healthz():
 def metrics():
     vp = current_app.video_pipeline
     return jsonify(success=True, **vp.metrics()), 200
+
+@ip_camera_blueprint.route('/info', methods=['GET'])
+def info():
+    """
+    Restituisce i metadati della camera aperta:
+    width, height, fps, fourcc.
+    """
+    vp = current_app.video_pipeline
+    info = vp.camera_info()
+    return jsonify(success=True, camera=info), 200

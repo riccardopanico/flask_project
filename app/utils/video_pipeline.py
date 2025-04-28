@@ -33,325 +33,296 @@ class PipelineConfig(BaseModel):
     fps: Optional[int] = None
     prefetch: int = 10
     skip_on_full_queue: bool = True
-    quality: int = 70  # Qualità JPEG (0-100)
+    quality: int = 70        # JPEG quality 0–100
     use_cuda: bool = True
     max_workers: int = 8
     model_behaviors: Dict[str, ModelBehavior] = Field(default_factory=dict)
     count_line: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
+
     model_config = {'arbitrary_types_allowed': True}
 
 
 class SourceHandler:
     """
-    Gestisce input da webcam o da stream HTTP MJPEG.
+    Lettura da webcam (VideoCapture) o da HTTP MJPEG.
     """
-    def __init__(self,
-                 source: str,
-                 width: Optional[int] = None,
-                 height: Optional[int] = None,
-                 fps: Optional[int] = None):
+    def __init__(self, source: str, width=None, height=None, fps=None):
         self.source = source
-        self.cap = None
-        self.width = width
-        self.height = height
-        self.fps = fps
         self.is_http = source.startswith(('http://', 'https://'))
         if self.is_http:
             self.session = requests.Session()
-            self.stream_req = self.session.get(source, stream=True)
+            self.req = self.session.get(source, stream=True)
             self.buffer = b''
         else:
             idx = int(source) if source.isdigit() else source
             self.cap = cv2.VideoCapture(idx)
-            if width:
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            if height:
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            if fps:
-                self.cap.set(cv2.CAP_PROP_FPS, fps)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Bassa latenza per webcam
+            if width:  self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+            if height: self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if fps:    self.cap.set(cv2.CAP_PROP_FPS,          fps)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-    def read(self) -> Optional[np.ndarray]:
+    def read(self) -> Optional[bytes]:
         if self.is_http:
-            for chunk in self.stream_req.iter_content(chunk_size=1024):
+            # restituisce direttamente JPEG bytes
+            for chunk in self.req.iter_content(1024):
                 self.buffer += chunk
                 a = self.buffer.find(b'\xff\xd8')
                 b = self.buffer.find(b'\xff\xd9')
                 if a != -1 and b != -1:
                     jpg = self.buffer[a:b+2]
                     self.buffer = self.buffer[b+2:]
-                    return cv2.imdecode(np.frombuffer(jpg, np.uint8),
-                                         cv2.IMREAD_COLOR)
+                    return jpg
             return None
         else:
             ok, frame = self.cap.read()
-            return frame if ok else None
+            if not ok:
+                return None
+            # encode JPEG con qualità base (100)
+            _, buf = cv2.imencode('.jpg', frame)
+            return buf.tobytes()
 
     def release(self):
-        if self.cap:
+        if not self.is_http and hasattr(self, 'cap'):
             self.cap.release()
-        if self.is_http:
-            self.stream_req.close()
+        elif self.is_http:
+            self.req.close()
             self.session.close()
 
 
 class Tracker:
-    """
-    Aggrega conteggi tra più modelli per ogni classe.
-    """
+    """Aggrega conteggi cumulativi per classe."""
     def __init__(self):
-        self.history: Dict[str, int] = {}
+        self.history: Dict[str,int] = {}
 
-    def update(self, detections: Dict[str, int]) -> Dict[str, int]:
+    def update(self, detections: Dict[str,int]) -> Dict[str,int]:
         for cls, cnt in detections.items():
-            self.history[cls] = self.history.get(cls, 0) + cnt
+            self.history[cls] = self.history.get(cls,0) + cnt
         return dict(self.history)
 
 
 class VideoPipeline:
-    def __init__(self, config: PipelineConfig, logger: Optional[Any] = None):
+    def __init__(self, config: PipelineConfig, logger: Optional[Any]=None):
         self.config = config
         self._log = logger.info if logger else print
         self._setup()
 
     def _setup(self):
-        # coda tra lettura e inferenza
-        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
-        self._stop = threading.Event()
-        self._seq = 0
-        self._metrics = {
-            "frames_received": 0,
-            "frames_processed": 0,
-            "inference_times": [],
-            "last_error": None
-        }
-        # callback
-        self._callbacks = {
-            "on_frame": [], "on_inference": [],
-            "on_count": [], "on_error": []
-        }
-        self.tracker = Tracker()
-        self._load_models()
-        # supporto flessibile sorgente
-        self.pipeline_source: Optional[VideoPipeline] = (
-            self.config.source
-            if isinstance(self.config.source, VideoPipeline)
-            else None
-        )
-        self.source_handler: Optional[SourceHandler] = None
-        # streaming buffer & stats
-        self._last_frame: Optional[bytes] = None
+        # coda tra read e process
+        self._frame_q     = queue.Queue(maxsize=self.config.prefetch)
+        self._stop        = threading.Event()
+        self._seq         = 0
+        self._last_frame  = None
+        self._metrics     = {"frames_received":0,
+                             "frames_processed":0,
+                             "inference_times":[],
+                             "last_error":None}
         self.clients_active = 0
         self.frames_served  = 0
         self.bytes_served   = 0
 
+        self.tracker = Tracker()
+        self._load_models()
+
+        # se source è un'altra pipeline, usalo come sorgente
+        self.pipeline_source = (
+            self.config.source
+            if isinstance(self.config.source, VideoPipeline)
+            else None
+        )
+        self.source_handler = None
+
+        # decide se attivare la fase di process
+        self._processing_enabled = bool(self.config.model_behaviors) or bool(self.config.count_line)
+
     def _load_models(self):
         from ultralytics import YOLO
-        self.models: Dict[str, Dict[str, Any]] = {}
+        self.models: Dict[str,Dict[str,Any]] = {}
         for path, beh in self.config.model_behaviors.items():
             if not os.path.isfile(path):
-                self._log(f"Modello NON trovato: {path}")
+                self._log(f"Model not found: {path}")
                 continue
-            if not (beh.draw or beh.count):
+            if not(beh.draw or beh.count):
                 continue
             try:
-                m = YOLO(path)
-                self.models[path] = {"model": m, "beh": beh}
-                self._log(f"Caricato {path} (draw={beh.draw}, count={beh.count})")
+                m = YOLO(path, verbose=False)
+                self.models[path] = {"model":m, "beh":beh}
+                self._log(f"Loaded {os.path.basename(path)}")
             except Exception as e:
-                self._log(f"Errore caricamento {path}: {e}")
+                self._log(f"Error loading {path}: {e}")
 
     def register_callback(self, event: str, fn: Callable):
-        if event not in self._callbacks:
-            raise KeyError(f"Evento sconosciuto: {event}")
-        self._callbacks[event].append(fn)
+        # eventi: on_frame, on_inference, on_count, on_error
+        if event not in ['on_frame','on_inference','on_count','on_error']:
+            raise KeyError(f"Unknown event {event}")
+        getattr(self, '_'+event+'_cb', []).append(fn)
 
-    def _emit(self, event: str, *args):
-        for cb in self._callbacks[event]:
-            try:
-                cb(*args)
-            except Exception as e:
-                self._log(f"Callback error[{event}]: {e}")
+    def _emit(self, event:str, *args):
+        for cb in getattr(self, '_'+event+'_cb', []):
+            try: cb(*args)
+            except: self._log(f"Callback {event} error")
 
     def update_config(self, **kwargs):
-        old = self.config
+        # aggiorna runtime config e ricarica modelli se serve
         self.config = self.config.copy(update=kwargs)
-        if "model_behaviors" in kwargs:
+        if 'model_behaviors' in kwargs:
             self._load_models()
-        if "source" in kwargs and kwargs["source"] != old.source:
-            if self.source_handler:
-                self.source_handler.release()
-            self.pipeline_source = (
-                kwargs["source"]
-                if isinstance(kwargs["source"], VideoPipeline)
-                else None
-            )
-            self.source_handler = None
-        self._log(f"Config aggiornata: {kwargs}")
-
-    def update_runtime_config(self, **kwargs):
-        """
-        Aggiorna dinamicamente i parametri della pipeline durante l'esecuzione.
-        """
-        self.config = self.config.copy(update=kwargs)
-        if "model_behaviors" in kwargs:
-            self._load_models()
-        self._log(f"Runtime config aggiornata: {kwargs}")
+            self._processing_enabled = bool(self.config.model_behaviors) or bool(self.config.count_line)
+        self._log(f"Config updated: {kwargs}")
 
     def start(self):
-        # init handler se serve
+        # init source handler
         if not self.pipeline_source and not self.source_handler:
-            cfg = self.config
-            self.source_handler = SourceHandler(
-                cfg.source, cfg.width, cfg.height, cfg.fps
-            )
+            c = self.config
+            self.source_handler = SourceHandler(c.source, c.width, c.height, c.fps)
+
         self._stop.clear()
-        threading.Thread(target=self._read,    daemon=True, name="VP-Read").start()
-        threading.Thread(target=self._process, daemon=True, name="VP-Proc").start()
-        self._log("Pipeline avviata")
+        # thread di lettura SEMPRE
+        threading.Thread(target=self._read_loop, daemon=True, name="VP-Read").start()
+
+        if self._processing_enabled:
+            # thread process parallelo
+            threading.Thread(target=self._process_loop, daemon=True, name="VP-Proc").start()
+        else:
+            # passthrough: trasferisci direttamente a last_frame
+            threading.Thread(target=self._passthrough_loop, daemon=True, name="VP-Pass").start()
+
+        self._log("Pipeline started")
 
     def stop(self):
         self._stop.set()
         if self.source_handler:
             self.source_handler.release()
-        self._log("Pipeline arrestata")
+        self._log("Pipeline stopped")
 
-    def _read(self):
+    def _read_loop(self):
         while not self._stop.is_set():
             # sorgente flessibile
             if self.pipeline_source:
-                fb = self.pipeline_source._last_frame
-                if not fb:
-                    time.sleep(0.05)
-                    continue
-                img = cv2.imdecode(np.frombuffer(fb, np.uint8), cv2.IMREAD_COLOR)
+                data = self.pipeline_source._last_frame
             else:
-                img = self.source_handler.read()
-                if img is None:
-                    time.sleep(0.05)
-                    continue
+                data = self.source_handler.read()
 
+            if data is None:
+                time.sleep(0.005)
+                continue
+
+            self._metrics["frames_received"] += 1
+            f = Frame(data=data, timestamp=time.time(), seq=self._seq); self._seq+=1
+            self._emit('on_frame', f)
+
+            # push in coda
             try:
-                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
-                fr = Frame(data=buf.tobytes(), timestamp=time.time(), seq=self._seq)
-                self._seq += 1
-                self._frame_q.put(fr, timeout=0.1)
-                self._metrics["frames_received"] += 1
-                self._emit("on_frame", fr)
+                self._frame_q.put(f, block=not self.config.skip_on_full_queue, timeout=0.01)
             except queue.Full:
-                if self.config.skip_on_full_queue:
-                    continue  # Salta frame se la coda è piena
-                else:
-                    time.sleep(0.05)
+                if not self.config.skip_on_full_queue:
+                    time.sleep(0.005)
 
-    def _process(self):
-        from concurrent.futures import ThreadPoolExecutor
-        executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
-
-        def process_frame(fr):
+    def _passthrough_loop(self):
+        """Modalità senza processing: aggiorna last_frame appena arriva."""
+        while not self._stop.is_set():
             try:
-                img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
-                start = time.time()
-                total_counts: Dict[str, int] = {}
+                f = self._frame_q.get(timeout=0.01)
+            except queue.Empty:
+                continue
+            # senza alcuna elaborazione, mantieni JPEG bytes 
+            self._last_frame = f.data
+            self._metrics["frames_processed"] += 1
 
-                for path, mi in self.models.items():
-                    beh = mi["beh"]
-                    device = 'cuda' if self.config.use_cuda else 'cpu'
-                    res = mi["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device=device)[0]
-                    self._emit("on_inference", fr, path, res)
+    def _process_loop(self):
+        """Modalità elaborazione: inferenza parallela e postprocess."""
+        from concurrent.futures import ThreadPoolExecutor
+        exec = ThreadPoolExecutor(max_workers=self.config.max_workers)
+
+        def worker(f:Frame):
+            try:
+                img = cv2.imdecode(np.frombuffer(f.data, np.uint8), cv2.IMREAD_COLOR)
+                start = time.time()
+                counts:Dict[str,int] = {}
+                # inferenze
+                for path,info in self.models.items():
+                    beh = info["beh"]
+                    dev = 'cuda' if self.config.use_cuda else 'cpu'
+                    res = info["model"](img, conf=beh.confidence, iou=beh.iou,
+                                        verbose=False, device=dev)[0]
+                    self._emit('on_inference', f, path, res)
                     if beh.draw:
                         img = res.plot()
-                    if beh.count and hasattr(res, "boxes"):
-                        cnts: Dict[str, int] = {}
-                        for b in res.boxes:
-                            cid = int(b.cls)
-                            if (self.config.classes_filter and cid not in self.config.classes_filter):
+                    if beh.count:
+                        for box in res.boxes:
+                            cid = int(box.cls)
+                            if self.config.classes_filter and cid not in self.config.classes_filter:
                                 continue
-                            name = res.names[cid]
-                            cnts[name] = cnts.get(name, 0) + 1
-                        total_counts.update(cnts)
+                            name = res.names[cid]; counts[name]=counts.get(name,0)+1
+                # linea + tracking
+                if self.config.count_line:
+                    self.tracker.update(dict())  # (potresti aggiungere logica)
+                tracked = self.tracker.update(counts)
+                self._emit('on_count', f, tracked)
 
-                tracked = self.tracker.update(total_counts)
-                self._emit("on_count", fr, tracked)
-
-                dt = (time.time() - start) * 1000
+                dt = (time.time()-start)*1000
                 self._metrics["inference_times"].append(dt)
 
-                _, buf2 = cv2.imencode('.jpg', img)
-                self._last_frame = buf2.tobytes()
+                # ricodifica JPEG finale
+                _, buf = cv2.imencode('.jpg', img,
+                                      [int(cv2.IMWRITE_JPEG_QUALITY),
+                                       self.config.quality])
+                self._last_frame = buf.tobytes()
                 self._metrics["frames_processed"] += 1
 
-            except Exception:
-                err = traceback.format_exc()
-                self._metrics["last_error"] = err
-                self._emit("on_error", err)
+            except Exception as e:
+                self._metrics["last_error"] = traceback.format_exc()
+                self._emit('on_error', e)
 
         while not self._stop.is_set():
             try:
-                fr = self._frame_q.get(timeout=0.1)
-                executor.submit(process_frame, fr)  # Esegui inferenza in parallelo
+                fr = self._frame_q.get(timeout=0.01)
             except queue.Empty:
                 continue
+            exec.submit(worker, fr)
 
     def stream_response(self):
-        """
-        MJPEG stream con rate-limit, timeout inattività,
-        e monitoraggio risorse per client.
-        """
         from flask import Response, stream_with_context, request
-
-        client_fps = float(request.args.get('fps',
-                              self.config.fps or 10))
-        inactivity = float(request.args.get('timeout', 10))
-
+        fps = float(request.args.get('fps', self.config.fps or 30))
+        timeout = float(request.args.get('timeout', 10))
         self.clients_active += 1
-        last_access = [time.time()]
+        last_time = time.time()
         boundary = b'--frame'
 
         def gen():
             try:
                 while not self._stop.is_set():
-                    frame = self._last_frame
-                    if frame:
-                        yield (boundary +
-                               b'\r\nContent-Type: image/jpeg\r\n\r\n' +
-                               frame + b'\r\n')
+                    if self._last_frame:
+                        yield boundary + b'\r\nContent-Type: image/jpeg\r\n\r\n' + self._last_frame + b'\r\n'
                         self.frames_served += 1
-                        self.bytes_served += len(frame)
-                        last_access[0] = time.time()
-
-                    if time.time() - last_access[0] > inactivity:
+                        self.bytes_served += len(self._last_frame)
+                        last_time = time.time()
+                    if time.time()-last_time > timeout:
                         break
-
-                    time.sleep(1.0 / client_fps)
+                    time.sleep(1.0/fps)
             finally:
                 self.clients_active -= 1
 
-        return Response(
-            stream_with_context(gen()),
-            mimetype='multipart/x-mixed-replace; boundary=frame'
-        )
+        return Response(stream_with_context(gen()),
+                        mimetype='multipart/x-mixed-replace; boundary=frame')
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> Dict[str,Any]:
         return {
-            "running":        not self._stop.is_set(),
-            "frames_received": self._metrics["frames_received"],
-            "frames_processed": self._metrics["frames_processed"],
+            "running": not self._stop.is_set(),
+            **self._metrics,
             "clients_active": self.clients_active
         }
 
-    def metrics(self) -> Dict[str, Any]:
-        avg = (np.mean(self._metrics["inference_times"])
-               if self._metrics["inference_times"] else 0)
+    def metrics(self) -> Dict[str,Any]:
+        avg = np.mean(self._metrics["inference_times"]) if self._metrics["inference_times"] else 0
         return {
-            "avg_inf_ms":    avg,
-            "counters":      self.tracker.history,
+            "avg_inf_ms": avg,
+            "counters": self.tracker.history,
             "frames_served": self.frames_served,
-            "bytes_served":  self.bytes_served,
-            "last_error":    self._metrics["last_error"]
+            "bytes_served": self.bytes_served,
+            "last_error": self._metrics["last_error"]
         }
 
-    def export_config(self) -> Dict[str, Any]:
+    def export_config(self) -> Dict[str,Any]:
         return self.config.dict()

@@ -1,3 +1,5 @@
+# config.py
+
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -24,28 +26,37 @@ class Config:
     for sub in ['models', 'datasets', 'output', 'temp', 'logs', 'config']:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
-    # Config pipeline singola (usata se non si sfrutta multi)
+    # Config pipeline singola
     PIPELINE_CONFIG = {
-        "source":      os.getenv("PIPELINE_SOURCE", "0"),
-        "width":       int(os.getenv("PIPELINE_WIDTH"))  if os.getenv("PIPELINE_WIDTH")  else None,
-        "height":      int(os.getenv("PIPELINE_HEIGHT")) if os.getenv("PIPELINE_HEIGHT") else None,
-        "fps":         int(os.getenv("PIPELINE_FPS"))    if os.getenv("PIPELINE_FPS")    else None,
-        "prefetch":    int(os.getenv("PIPELINE_PREFETCH", 10)),
+        "source": "0",          # Indice webcam o url
+        "width": None,          # Larghezza frame (opzionale)
+        "height": None,         # Altezza frame (opzionale)
+        "fps": None,            # FPS desiderati (opzionale)
+        "prefetch": 10,         # Frame buffer tra read e process
+        "skip_on_full_queue": True,  # Se la coda è piena, salta frame
+        "quality": 70,          # Compressione JPEG (%)
+        "use_cuda": True,       # Usa la GPU per l'inferenza
+        "max_workers": 8,       # Numero thread per inferenza parallela
         "model_behaviors": {
             os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
-                "draw":  True, "count": False, "confidence": 0.5, "iou": 0.5
+                "draw": True,
+                "count": False,
+                "confidence": 0.5,
+                "iou": 0.5
             },
             os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
-                "draw":  True, "count": False, "confidence": 0.5, "iou": 0.5
+                "draw": True,
+                "count": False,
+                "confidence": 0.5,
+                "iou": 0.5
             },
         },
-        "count_line":     None,
-        "metrics_enabled": True,
-        "classes_filter":  None,
+        "count_line": None,         # Linea per conteggio attraversamenti
+        "metrics_enabled": True,    # Abilita metriche
+        "classes_filter": None      # Filtra solo alcune classi se serve
     }
 
-    # Configurazioni per più pipeline
-    # 'default' usa PIPELINE_CONFIG, puoi aggiungere altri source_id con dict analoghi
+    # Configurazione multi-pipeline
     PIPELINE_CONFIGS = {
         "default": PIPELINE_CONFIG,
         "external_rtsp": {
@@ -100,7 +111,6 @@ class Config:
             'modules': ['streamlit_manager']
         }
     }
-
 
 class ProductionConfig(Config):
     DEBUG = False

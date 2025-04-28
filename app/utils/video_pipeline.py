@@ -32,11 +32,16 @@ class PipelineConfig(BaseModel):
     height: Optional[int] = None
     fps: Optional[int] = None
     prefetch: int = 10
+    skip_on_full_queue: bool = True
+    quality: int = 70  # Qualità JPEG (0-100)
+    use_cuda: bool = True
+    max_workers: int = 8
     model_behaviors: Dict[str, ModelBehavior] = Field(default_factory=dict)
     count_line: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
-    model_config = { 'arbitrary_types_allowed': True }
+    model_config = {'arbitrary_types_allowed': True}
+
 
 class SourceHandler:
     """
@@ -186,6 +191,15 @@ class VideoPipeline:
             self.source_handler = None
         self._log(f"Config aggiornata: {kwargs}")
 
+    def update_runtime_config(self, **kwargs):
+        """
+        Aggiorna dinamicamente i parametri della pipeline durante l'esecuzione.
+        """
+        self.config = self.config.copy(update=kwargs)
+        if "model_behaviors" in kwargs:
+            self._load_models()
+        self._log(f"Runtime config aggiornata: {kwargs}")
+
     def start(self):
         # init handler se serve
         if not self.pipeline_source and not self.source_handler:
@@ -220,18 +234,21 @@ class VideoPipeline:
                     continue
 
             try:
-                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 70])  # Riduci qualità JPEG
+                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
                 fr = Frame(data=buf.tobytes(), timestamp=time.time(), seq=self._seq)
                 self._seq += 1
                 self._frame_q.put(fr, timeout=0.1)
                 self._metrics["frames_received"] += 1
                 self._emit("on_frame", fr)
             except queue.Full:
-                continue  # Salta frame se la coda è piena
+                if self.config.skip_on_full_queue:
+                    continue  # Salta frame se la coda è piena
+                else:
+                    time.sleep(0.05)
 
     def _process(self):
         from concurrent.futures import ThreadPoolExecutor
-        executor = ThreadPoolExecutor(max_workers=8)  # Processing parallelo
+        executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
 
         def process_frame(fr):
             try:
@@ -241,7 +258,8 @@ class VideoPipeline:
 
                 for path, mi in self.models.items():
                     beh = mi["beh"]
-                    res = mi["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device='cuda')[0]  # Passa a GPU
+                    device = 'cuda' if self.config.use_cuda else 'cpu'
+                    res = mi["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device=device)[0]
                     self._emit("on_inference", fr, path, res)
                     if beh.draw:
                         img = res.plot()

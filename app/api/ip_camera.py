@@ -1,46 +1,62 @@
 from flask import Blueprint, current_app, jsonify, request
+from app.utils.video_pipeline import VideoPipeline, PipelineConfig
 
 ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
 
-@ip_camera_blueprint.route('/stream', methods=['GET'])
-def stream():
-    """MJPEG stream del flusso elaborato."""
-    vp = current_app.video_pipeline
+# Avvia (o riavvia) la pipeline per <source_id>
+@ip_camera_blueprint.route('/start/<source_id>', methods=['POST'])
+def start(source_id):
+    cfgs = current_app.config.get('PIPELINE_CONFIGS', {})
+    if source_id not in cfgs:
+        return jsonify(success=False, error="Config non trovata"), 404
+
+    # Istanzia se necessario
+    if source_id not in current_app.video_pipelines:
+        cfg = PipelineConfig(**cfgs[source_id])
+        vp = VideoPipeline(cfg, logger=current_app.logger)
+        # ES. registra callback custom:
+        # vp.register_callback('on_count', lambda fr, counts: current_app.logger.info(f"{source_id}: {counts}"))
+        current_app.video_pipelines[source_id] = vp
+
+    vp = current_app.video_pipelines[source_id]
+    vp.start()
+    return jsonify(success=True), 200
+
+# Ferma e rimuove la pipeline per <source_id>
+@ip_camera_blueprint.route('/stop/<source_id>', methods=['POST'])
+def stop(source_id):
+    vp = current_app.video_pipelines.get(source_id)
+    if not vp:
+        return jsonify(success=False, error="Pipeline non esistente"), 404
+
+    vp.stop()
+    # opzionale: rimuovi dal registry
+    current_app.video_pipelines.pop(source_id, None)
+    return jsonify(success=True), 200
+
+# Stream MJPEG parametrizzato
+@ip_camera_blueprint.route('/stream/<source_id>')
+def stream(source_id):
+    vp = current_app.video_pipelines.get(source_id)
+    if not vp:
+        return jsonify(success=False, error="Pipeline non inizializzata"), 404
+
     return vp.stream_response()
 
-@ip_camera_blueprint.route('/config', methods=['GET', 'POST'])
-def config():
-    """GET=leggi config, POST=override dinamico."""
-    vp = current_app.video_pipeline
-    if request.method == 'GET':
-        return jsonify(success=True, config=vp.export_config()), 200
+# Health check per pipeline specifica
+@ip_camera_blueprint.route('/healthz/<source_id>')
+def healthz(source_id):
+    vp = current_app.video_pipelines.get(source_id)
+    if not vp:
+        return jsonify(success=False, error="Pipeline non trovata"), 404
 
-    data = request.get_json(force=True)
-    if not isinstance(data, dict):
-        return jsonify(success=False, error="JSON invalido"), 400
-    try:
-        vp.update_config(**data)
-        return jsonify(success=True, config=vp.export_config()), 200
-    except Exception as e:
-        current_app.logger.error(f"Config update error: {e}", exc_info=True)
-        return jsonify(success=False, error="Errore interno"), 500
-
-@ip_camera_blueprint.route('/healthz', methods=['GET'])
-def healthz():
-    vp = current_app.video_pipeline
     return jsonify(success=True, **vp.health()), 200
 
-@ip_camera_blueprint.route('/metrics', methods=['GET'])
-def metrics():
-    vp = current_app.video_pipeline
-    return jsonify(success=True, **vp.metrics()), 200
+# Metriche per pipeline specifica
+@ip_camera_blueprint.route('/metrics/<source_id>')
+def metrics(source_id):
+    vp = current_app.video_pipelines.get(source_id)
+    if not vp:
+        return jsonify(success=False, error="Pipeline non trovata"), 404
 
-@ip_camera_blueprint.route('/info', methods=['GET'])
-def info():
-    """
-    Restituisce i metadati della camera aperta:
-    width, height, fps, fourcc.
-    """
-    vp = current_app.video_pipeline
-    info = vp.camera_info()
-    return jsonify(success=True, camera=info), 200
+    return jsonify(success=True, **vp.metrics()), 200

@@ -1,4 +1,3 @@
-# config.py (completato per supportare VideoPipeline)
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -25,31 +24,33 @@ class Config:
     for sub in ['models', 'datasets', 'output', 'temp', 'logs', 'config']:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
+    # Config pipeline singola (usata se non si sfrutta multi)
     PIPELINE_CONFIG = {
         "source":      os.getenv("PIPELINE_SOURCE", "0"),
-        "width":       int(os.getenv("PIPELINE_WIDTH")) if os.getenv("PIPELINE_WIDTH") else None,
+        "width":       int(os.getenv("PIPELINE_WIDTH"))  if os.getenv("PIPELINE_WIDTH")  else None,
         "height":      int(os.getenv("PIPELINE_HEIGHT")) if os.getenv("PIPELINE_HEIGHT") else None,
         "fps":         int(os.getenv("PIPELINE_FPS"))    if os.getenv("PIPELINE_FPS")    else None,
         "prefetch":    int(os.getenv("PIPELINE_PREFETCH", 10)),
-        # qui definisci per ogni modello il proprio sotto-config:
-        # key = percorso completo su disco, valore = dict di parametri
         "model_behaviors": {
-            os.path.join(DATA_DIR,"models","scarpe_25k_305ep.pt"): {
-                "draw":  True,
-                "count": False,
-                "confidence": 0.5,
-                "iou": 0.5
+            os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
+                "draw":  True, "count": False, "confidence": 0.5, "iou": 0.5
             },
-            os.path.join(DATA_DIR,"models","yolo11n.pt"): {
-                "draw":  True,
-                "count": False,
-                "confidence": 0.5,
-                "iou": 0.5
+            os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
+                "draw":  True, "count": False, "confidence": 0.5, "iou": 0.5
             },
         },
-        "count_line":  None,    # es. ((320,0),(320,480))
+        "count_line":     None,
         "metrics_enabled": True,
-        "classes_filter":   None,
+        "classes_filter":  None,
+    }
+
+    # Configurazioni per più pipeline
+    # 'default' usa PIPELINE_CONFIG, puoi aggiungere altri source_id con dict analoghi
+    PIPELINE_CONFIGS = {
+        "default": PIPELINE_CONFIG,
+        "external_rtsp": {
+            "source": "http://0.0.0.0:5000/api/ip_camera/stream/default"
+        }
     }
 
     MODULES = {
@@ -100,10 +101,11 @@ class Config:
         }
     }
 
+
 class ProductionConfig(Config):
-    DEBUG = True
+    DEBUG = False
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=15)
+    JWT_ACCESS_TOKEN_EXPIRES  = timedelta(seconds=15)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=30)

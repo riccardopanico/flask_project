@@ -18,7 +18,6 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 
 from config import ProductionConfig, DevelopmentConfig
 from app.utils.streamlit_manager import StreamlitManager
-from app.utils.video_pipeline import VideoPipeline, PipelineConfig
 
 db = SQLAlchemy()
 jwt = JWTManager()
@@ -43,34 +42,34 @@ def configure_logging(app):
     app.logger.propagate = False
 
 def create_app():
+    # 1. Configurazione ambiente
     env = os.getenv("FLASK_ENV", "development").lower()
-    print(f"L'ambiente di esecuzione corrente è: {env}")
     cfg_cls = ProductionConfig if env=="production" else DevelopmentConfig
 
     app = Flask(__name__)
     app.config.from_object(cfg_cls)
     configure_logging(app)
 
+    # 2. Inizializza estensioni
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # inizializza subito la pipeline
-    cfg = PipelineConfig(**app.config['PIPELINE_CONFIG'])
-    app.video_pipeline = VideoPipeline(cfg, logger=app.logger)
-    app.video_pipeline.start()
+    # 3. Registry delle pipeline: nessuna partenza automatica
+    app.video_pipelines: Dict[str, Any] = {}
 
-    # Streamlit
+    # 4. Streamlit e scheduler (resta invariato)
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
     app.streamlit_manager = StreamlitManager(logger=app.logger)
 
-    # caricamento dinamico di api/models/jobs/threads
+    # 5. Caricamento dinamico di api/models/jobs/threads
     run_cli = os.getenv("FLASK_RUN_FROM_CLI")=="true"
+    base = os.path.dirname(__file__)
     patterns = {
-        'api':     os.path.join(os.path.dirname(__file__), 'api',    '*.py'),
-        'models':  os.path.join(os.path.dirname(__file__), 'models',  '*.py'),
-        'jobs':    os.path.join(os.path.dirname(__file__), 'jobs',    '*.py'),
-        'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py'),
+        'api':     os.path.join(base, 'api',    '*.py'),
+        'models':  os.path.join(base, 'models',  '*.py'),
+        'jobs':    os.path.join(base, 'jobs',    '*.py'),
+        'threads': os.path.join(base, 'threads', '*.py'),
     }
     if run_cli:
         patterns={'models':patterns['models']}
@@ -109,10 +108,9 @@ def create_app():
                 t = threading.Thread(target=module.run, args=(app,), daemon=True, name=name)
                 t.start()
 
+    # 6. Avvia scheduler e Streamlit Manager
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-
-    # e Streamlit
     app.streamlit_manager.start()
     atexit.register(lambda: app.streamlit_manager.stop())
 

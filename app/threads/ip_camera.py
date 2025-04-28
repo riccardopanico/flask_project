@@ -1,168 +1,180 @@
 import os
-import streamlit as st
 import requests
 
-# -----------------------------
 # 📡 IP Camera Viewer Frontend
-# -----------------------------
 PAGE_TITLE = "📡 IP Camera Viewer"
-API_PREFIX = "/api/ip_camera"
+
+# Prima scelta: variabile di ambiente o default
+API_BASE = os.getenv("API_BASE", "http://localhost:5000")
+
 
 def run_app():
+    # Import Streamlit solo dentro run_app
+    import streamlit as st
     from streamlit_autorefresh import st_autorefresh
     from streamlit_drawable_canvas import st_canvas
 
-    # --- Init ---
-    st.set_page_config(
-        page_title=PAGE_TITLE,
-        page_icon="📷",
-        layout="wide",
-    )
+    # Se possibile, sovrascrivi API_BASE da secrets
+    global API_BASE
+    try:
+        API_BASE = st.secrets.get("API_BASE", API_BASE)
+    except Exception:
+        pass
 
-    st.markdown(
-        """
-        <style>
-            .title { font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
-            .subtitle { font-size: 1.25rem; font-weight: 600; margin-top: 1rem; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(f"<div class='title'>{PAGE_TITLE} con Pipeline</div>", unsafe_allow_html=True)
-
-    # --- Camera URLs gestione ---
-    if 'camera_urls' not in st.session_state:
-        st.session_state['camera_urls'] = {
-            "Camera Locale": "http://localhost:5000/api/ip_camera/stream"
-        }
-
-    # --- Sidebar ---
-    st.sidebar.header("🔌 Telecamere Disponibili")
-    camera_selezionata = st.sidebar.selectbox(
-        "Seleziona Telecamera",
-        list(st.session_state['camera_urls'].keys())
-    )
-
-    stream_url = st.session_state['camera_urls'][camera_selezionata]
-    st.session_state['selected_camera'] = camera_selezionata
-
-    # --- Info Camera ---
-    @st.cache_data(ttl=60)
-    def fetch_camera_info(url):
-        try:
-            r = requests.get(f"{url.replace('/stream','/info')}", timeout=2)
-            return r.json().get('camera', {})
-        except:
-            return {}
-
-    camera_info = fetch_camera_info(stream_url)
-    if camera_info:
-        st.sidebar.subheader("ℹ️ Info Camera")
-        st.sidebar.write(f"**Risoluzione:** {camera_info.get('width')}x{camera_info.get('height')}")
-        st.sidebar.write(f"**FPS:** {camera_info.get('fps')}")
-        st.sidebar.write(f"**Codec:** {camera_info.get('fourcc')}")
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("⚙️ Configurazione Pipeline")
-    refresh_rate = st.sidebar.number_input("Refresh Live Ogni (sec)", 1, 30, 5)
-
-    # --- Config attuale ---
-    @st.cache_data(ttl=30)
-    def fetch_config():
-        try:
-            r = requests.get(f"{stream_url.replace('/stream','/config')}", timeout=2)
-            return r.json().get('config', {})
-        except:
-            return {}
-
-    config = fetch_config()
-
-    # --- Impostazioni principali ---
-    draw = st.sidebar.checkbox("🎨 Disegna Bounding Boxes", value=config.get('draw_boxes', False))
-    count = st.sidebar.checkbox("🔢 Conta Oggetti", value=config.get('count_objects', False))
-
-    # --- Linea di conteggio ---
-    st.sidebar.subheader("🖐️ Linea di Conteggio")
-    use_line = st.sidebar.checkbox("Abilita Linea", value=bool(config.get('count_line')))
-    line_coords = config.get('count_line') or [[50, 50], [200, 50]]
-    coords = None
-
-    if use_line:
-        canvas_result = st_canvas(
-            fill_color="",
-            stroke_width=2,
-            stroke_color="green",
-            background_color="#f0f0f0",
-            height=300,
-            width=300,
-            drawing_mode="line",
-            initial_drawing=[{"type": "line", "points": line_coords}],
-            key="canvas_countline"
-        )
-        if canvas_result.json_data and canvas_result.json_data["objects"]:
-            last_line = canvas_result.json_data["objects"][-1]
-            coords = [tuple(map(int, p)) for p in last_line["points"]]
-
-    # --- Modelli e Parametri Specifici ---
-    st.sidebar.subheader("🧠 Modelli & Parametri")
-    model_behaviors = config.get("model_behaviors", {})
-    updated_behaviors = {}
-
-    for model_path, settings in model_behaviors.items():
-        with st.sidebar.expander(f"📁 {os.path.basename(model_path)}"):
-            conf = st.slider(f"🎯 Confidence - {os.path.basename(model_path)}", 0.0, 1.0, float(settings.get("confidence", 0.5)), 0.01)
-            iou  = st.slider(f"📏 IoU - {os.path.basename(model_path)}", 0.0, 1.0, float(settings.get("iou", 0.45)), 0.01)
-            draw_m = st.checkbox(f"🎨 Disegna", value=settings.get("draw", False), key=f"draw_{model_path}")
-            count_m = st.checkbox(f"🔢 Conta", value=settings.get("count", False), key=f"count_{model_path}")
-            updated_behaviors[model_path] = {
-                "confidence": conf,
-                "iou": iou,
-                "draw": draw_m,
-                "count": count_m
+    # --- Funzioni interne ---
+    def init_session():
+        if 'camera_urls' not in st.session_state:
+            st.session_state['camera_urls'] = {
+                "Locale": {
+                    "stream_url": f"{API_BASE}/api/ip_camera/stream/default",
+                    "source_id": "default"
+                }
             }
+        if 'selected_camera' not in st.session_state:
+            st.session_state['selected_camera'] = list(st.session_state['camera_urls'])[0]
 
-    # --- Applica Config ---
-    if st.sidebar.button("✅ Applica Configurazione"):
-        payload = {
-            "draw_boxes": draw,
-            "count_objects": count,
-            "count_line": coords,
-            "model_behaviors": updated_behaviors
-        }
+    @st.cache_data(ttl=30)
+    def fetch_json(url):
         try:
-            r = requests.post(f"{stream_url.replace('/stream','/config')}", json=payload, timeout=3)
+            r = requests.get(url, timeout=2)
             if r.ok:
-                st.sidebar.success("✔️ Configurazione applicata")
+                return r.json()
+        except:
+            pass
+        return None
+
+    def sidebar_add_camera():
+        st.sidebar.subheader("➕ Aggiungi Camera")
+        with st.sidebar.form("add_cam_form", clear_on_submit=True):
+            name = st.text_input("Nome telecamera", "")
+            url = st.text_input("URL MJPEG", "")
+            sid = st.text_input("Source ID", "")
+            submitted = st.form_submit_button("Aggiungi")
+            if submitted:
+                if name and url and sid:
+                    st.session_state['camera_urls'][name] = {
+                        "stream_url": url,
+                        "source_id": sid
+                    }
+                    st.success(f"Camera '{name}' aggiunta!")
+                else:
+                    st.error("Compila tutti i campi!")
+
+    def sidebar_camera_selector():
+        st.sidebar.header("🔌 Telecamere")
+        names = list(st.session_state['camera_urls'].keys())
+        sel = st.sidebar.selectbox("Scegli camera", names, index=names.index(st.session_state['selected_camera']))
+        st.session_state['selected_camera'] = sel
+        return st.session_state['camera_urls'][sel]
+
+    def sidebar_pipeline_control(source_id):
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🚦 Pipeline")
+        col1, col2 = st.sidebar.columns(2)
+
+        health = fetch_json(f"{API_BASE}/api/ip_camera/healthz/{source_id}")
+        running = health and health.get("running", False)
+        status = "🟢 Running" if running else "🔴 Stopped"
+        st.sidebar.markdown(f"**Stato:** {status}")
+
+        with col1:
+            if st.button("▶️ Avvia"):
+                r = requests.post(f"{API_BASE}/api/ip_camera/start/{source_id}")
+                if r.ok:
+                    st.experimental_rerun()
+                else:
+                    st.error(r.text)
+        with col2:
+            if st.button("⏹️ Ferma"):
+                r = requests.post(f"{API_BASE}/api/ip_camera/stop/{source_id}")
+                if r.ok:
+                    st.experimental_rerun()
+                else:
+                    st.error(r.text)
+
+    def sidebar_configuration(stream_url):
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("⚙️ Configurazione")
+        refresh_rate = st.sidebar.slider("Refresh (sec)", 1, 30, 5)
+
+        config = fetch_json(stream_url.replace('/stream', '/config')) or {}
+
+        with st.sidebar.expander("Opzioni generali"):
+            draw = st.checkbox("🎨 Disegna box", value=config.get("draw_boxes", False))
+            cnt = st.checkbox("🔢 Conta oggetti", value=config.get("count_objects", False))
+
+        with st.sidebar.expander("Linea di conteggio"):
+            use_line = st.checkbox("Abilita linea", value=bool(config.get("count_line")))
+            coords = config.get("count_line") or [[50, 50], [200, 50]]
+            if use_line:
+                canvas = st_canvas(
+                    fill_color="",
+                    stroke_width=2,
+                    stroke_color="green",
+                    background_color="#f0f0f0",
+                    height=200,
+                    width=200,
+                    drawing_mode="line",
+                    initial_drawing=[{"type": "line", "points": coords}],
+                    key="countline_canvas"
+                )
+                if canvas.json_data and canvas.json_data["objects"]:
+                    last = canvas.json_data["objects"][-1]
+                    coords = [tuple(map(int, p)) for p in last["points"]]
             else:
-                st.sidebar.error("Errore applicazione config")
-        except Exception as e:
-            st.sidebar.error(f"Errore: {e}")
+                coords = None
 
-    # --- UI Principale ---
-    st_autorefresh(interval=refresh_rate * 1000, limit=None, key="refresh")
-    tabs = st.tabs(["📺 Live", "📊 Metriche"])
+        updated_behaviors = {}
+        st.sidebar.markdown("**Modelli:**")
+        for model_path, beh in (config.get("model_behaviors") or {}).items():
+            with st.sidebar.expander(os.path.basename(model_path)):
+                c = st.slider("Conf.", 0.0, 1.0, float(beh.get("confidence", 0.5)), 0.01, key=f"c_{model_path}")
+                i = st.slider("IoU", 0.0, 1.0, float(beh.get("iou", 0.45)), 0.01, key=f"i_{model_path}")
+                d = st.checkbox("Draw", value=beh.get("draw", False), key=f"d_{model_path}")
+                co = st.checkbox("Count", value=beh.get("count", False), key=f"co_{model_path}")
+                updated_behaviors[model_path] = {"confidence": c, "iou": i, "draw": d, "count": co}
 
-    with tabs[0]:
-        st.markdown("<div class='subtitle'>Live Stream</div>", unsafe_allow_html=True)
-        if camera_info:
+        if st.sidebar.button("✅ Applica Configurazione"):
+            payload = {
+                "draw_boxes": draw,
+                "count_objects": cnt,
+                "count_line": coords,
+                "model_behaviors": updated_behaviors
+            }
+            r = requests.post(stream_url.replace('/stream', '/config'), json=payload, timeout=3)
+            if r.ok:
+                st.sidebar.success("Configurazione aggiornata")
+            else:
+                st.sidebar.error("Errore aggiornamento")
+
+        return refresh_rate
+
+    def main_area(stream_url, refresh_rate):
+        st.markdown("## 📺 Live Stream")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st_autorefresh(interval=refresh_rate * 1000, limit=None, key="refresh")
             st.image(stream_url, use_column_width=True)
-        else:
-            st.warning("⚠️ Stream non disponibile")
+        with col2:
+            st.markdown("## 📊 Metriche")
+            metrics = fetch_json(stream_url.replace('/stream', '/metrics')) or {}
+            counters = metrics.get("counters", {})
+            if counters:
+                for cls, val in counters.items():
+                    st.metric(label=cls, value=val)
+            else:
+                st.write("Nessuna metrica disponibile")
 
-    with tabs[1]:
-        st.markdown("<div class='subtitle'>📈 Conteggi & Statistiche</div>", unsafe_allow_html=True)
-        try:
-            metrics = requests.get(f"{stream_url.replace('/stream','/metrics')}", timeout=2).json()
-            counters = metrics.get('counters', {})
-            cols = st.columns(len(counters) or 1)
-            for idx, (cls, val) in enumerate(counters.items()):
-                cols[idx % len(cols)].metric(label=cls, value=val)
-        except Exception as e:
-            st.warning(f"Errore caricamento metriche: {e}")
+    # --- Avvio Streamlit ---
+    init_session()
+    st.set_page_config(page_title=PAGE_TITLE, page_icon="📷", layout="wide")
+    st.title(PAGE_TITLE)
 
-    st.markdown("---")
-    st.caption("🚀 Interfaccia Streamlit con supporto YOLOv8 e conteggio oggetti")
+    sidebar_add_camera()
+    cam = sidebar_camera_selector()
+    sidebar_pipeline_control(cam["source_id"])
+    refresh_rate = sidebar_configuration(cam["stream_url"])
+    main_area(cam["stream_url"], refresh_rate)
 
 
 def run(app):
@@ -172,6 +184,7 @@ def run(app):
         cfg = current_app.config['MODULES']['threads']['config'].get(name, {})
         cfg["script_path"] = os.path.abspath(__file__)
         current_app.streamlit_manager.register(name, cfg)
+
 
 if __name__ == "__main__":
     run_app()

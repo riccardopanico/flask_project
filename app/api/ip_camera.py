@@ -55,7 +55,6 @@ def metrics(source_id):
 
     return jsonify(success=True, **vp.metrics()), 200
 
-# Aggiorna configurazione runtime
 @ip_camera_blueprint.route('/config/<source_id>', methods=['PATCH'])
 def update_config(source_id):
     vp = current_app.video_pipelines.get(source_id)

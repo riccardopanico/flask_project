@@ -34,9 +34,9 @@ class Config:
         "fps": None,            # FPS desiderati (opzionale)
         "prefetch": 10,         # Frame buffer tra read e process
         "skip_on_full_queue": True,  # Se la coda è piena, salta frame
-        "quality": 70,          # Compressione JPEG (%)
+        "quality": 100,          # Compressione JPEG (%)
         "use_cuda": True,       # Usa la GPU per l'inferenza
-        "max_workers": 8,       # Numero thread per inferenza parallela
+        "max_workers": 1,       # Numero thread per inferenza parallela
         "model_behaviors": {},
         "count_line": None,         # Linea per conteggio attraversamenti
         "metrics_enabled": True,    # Abilita metriche
@@ -48,9 +48,8 @@ class Config:
         "default": PIPELINE_CONFIG,
         "external_rtsp": {
             "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
-            "max_workers": 1,
             "model_behaviors": {
-            os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
+                os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
                     "draw": True,
                     "count": False,
                     "confidence": 0.5,

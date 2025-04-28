@@ -32,9 +32,9 @@ class PipelineConfig(BaseModel):
     fps: Optional[int] = None
     prefetch: int = 10
     skip_on_full_queue: bool = True
-    quality: int = 70        # JPEG quality 0–100
+    quality: int = 100        # JPEG quality 0–100
     use_cuda: bool = True
-    max_workers: int = 8
+    max_workers: int = 1
     model_behaviors: Dict[str, ModelBehavior] = Field(default_factory=dict)
     count_line: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
     metrics_enabled: bool = True
@@ -374,3 +374,37 @@ class VideoPipeline:
 
     def export_config(self) -> Dict[str, Any]:
         return self.config.dict()
+
+    def update_config(self, **kwargs):
+        """
+        Aggiorna dinamicamente la configurazione della pipeline.
+
+        Puoi aggiornare: width, height, fps, prefetch, skip_on_full_queue, quality,
+        use_cuda, max_workers, model_behaviors, count_line, metrics_enabled, classes_filter.
+        """
+        reload_models = False
+
+        # source non aggiornabile
+        if 'source' in kwargs:
+            kwargs.pop('source')
+
+        if 'model_behaviors' in kwargs:
+            # Conversione da dict a ModelBehavior
+            new_behaviors = {}
+            for path, beh in kwargs['model_behaviors'].items():
+                if isinstance(beh, dict):
+                    new_behaviors[path] = ModelBehavior(**beh)
+                elif isinstance(beh, ModelBehavior):
+                    new_behaviors[path] = beh
+                else:
+                    raise ValueError(f"model_behaviors invalid for {path}")
+            kwargs['model_behaviors'] = new_behaviors
+            reload_models = True
+
+        self.config = self.config.copy(update=kwargs)
+
+        if reload_models:
+            self._load_models()
+            self._processing_enabled = bool(self.config.model_behaviors) or bool(self.config.count_line)
+
+        self._log(f"Config updated: {kwargs}")

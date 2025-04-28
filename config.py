@@ -37,20 +37,7 @@ class Config:
         "quality": 70,          # Compressione JPEG (%)
         "use_cuda": True,       # Usa la GPU per l'inferenza
         "max_workers": 8,       # Numero thread per inferenza parallela
-        "model_behaviors": {
-            os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
-                "draw": True,
-                "count": False,
-                "confidence": 0.5,
-                "iou": 0.5
-            },
-            os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
-                "draw": True,
-                "count": False,
-                "confidence": 0.5,
-                "iou": 0.5
-            },
-        },
+        "model_behaviors": {},
         "count_line": None,         # Linea per conteggio attraversamenti
         "metrics_enabled": True,    # Abilita metriche
         "classes_filter": None      # Filtra solo alcune classi se serve
@@ -60,7 +47,21 @@ class Config:
     PIPELINE_CONFIGS = {
         "default": PIPELINE_CONFIG,
         "external_rtsp": {
-            "source": "http://0.0.0.0:5000/api/ip_camera/stream/default"
+            "source": "http://0.0.0.0:5000/api/ip_camera/stream/default",
+            "model_behaviors": {
+            os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
+                    "draw": True,
+                    "count": False,
+                    "confidence": 0.5,
+                    "iou": 0.5
+                },
+                os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
+                    "draw": True,
+                    "count": False,
+                    "confidence": 0.5,
+                    "iou": 0.5
+                },
+            }
         }
     }
 

@@ -66,6 +66,7 @@ class SourceHandler:
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             if fps:
                 self.cap.set(cv2.CAP_PROP_FPS, fps)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Bassa latenza per webcam
 
     def read(self) -> Optional[np.ndarray]:
         if self.is_http:
@@ -218,35 +219,29 @@ class VideoPipeline:
                     time.sleep(0.05)
                     continue
 
-            _, buf = cv2.imencode('.jpg', img)
-            fr = Frame(data=buf.tobytes(), timestamp=time.time(), seq=self._seq)
-            self._seq += 1
             try:
+                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 70])  # Riduci qualità JPEG
+                fr = Frame(data=buf.tobytes(), timestamp=time.time(), seq=self._seq)
+                self._seq += 1
                 self._frame_q.put(fr, timeout=0.1)
                 self._metrics["frames_received"] += 1
                 self._emit("on_frame", fr)
             except queue.Full:
-                continue
+                continue  # Salta frame se la coda è piena
 
     def _process(self):
-        while not self._stop.is_set():
-            try:
-                fr = self._frame_q.get(timeout=0.1)
-            except queue.Empty:
-                continue
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=8)  # Processing parallelo
 
+        def process_frame(fr):
             try:
-                img = cv2.imdecode(np.frombuffer(fr.data, np.uint8),
-                                   cv2.IMREAD_COLOR)
+                img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
                 start = time.time()
                 total_counts: Dict[str, int] = {}
 
                 for path, mi in self.models.items():
                     beh = mi["beh"]
-                    res = mi["model"](img,
-                                      conf=beh.confidence,
-                                      iou=beh.iou,
-                                      verbose=False)[0]
+                    res = mi["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device='cuda')[0]  # Passa a GPU
                     self._emit("on_inference", fr, path, res)
                     if beh.draw:
                         img = res.plot()
@@ -254,8 +249,7 @@ class VideoPipeline:
                         cnts: Dict[str, int] = {}
                         for b in res.boxes:
                             cid = int(b.cls)
-                            if (self.config.classes_filter
-                                    and cid not in self.config.classes_filter):
+                            if (self.config.classes_filter and cid not in self.config.classes_filter):
                                 continue
                             name = res.names[cid]
                             cnts[name] = cnts.get(name, 0) + 1
@@ -275,6 +269,13 @@ class VideoPipeline:
                 err = traceback.format_exc()
                 self._metrics["last_error"] = err
                 self._emit("on_error", err)
+
+        while not self._stop.is_set():
+            try:
+                fr = self._frame_q.get(timeout=0.1)
+                executor.submit(process_frame, fr)  # Esegui inferenza in parallelo
+            except queue.Empty:
+                continue
 
     def stream_response(self):
         """

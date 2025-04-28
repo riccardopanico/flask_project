@@ -10,27 +10,11 @@ def start(source_id):
         return jsonify(success=False, error="Config non trovata"), 404
 
     if source_id not in current_app.video_pipelines:
-        cfg_raw = cfgs[source_id]
-
-        # Controllo: se vogliamo leggere da un'altra pipeline già esistente
-        if isinstance(cfg_raw.get('source'), str) and cfg_raw['source'].startswith('http'):
-            # Estrai quale altra pipeline vogliamo usare come sorgente
-            parts = cfg_raw['source'].split('/')
-            if len(parts) >= 5 and parts[-2] == 'stream':
-                source_pipeline_id = parts[-1]  # es: 'default'
-
-                if source_pipeline_id in current_app.video_pipelines:
-                    # IMPORTANTISSIMO: imposta direttamente la VideoPipeline come sorgente!
-                    cfg_raw['source'] = current_app.video_pipelines[source_pipeline_id]
-                else:
-                    return jsonify(success=False, error=f"Pipeline sorgente {source_pipeline_id} non avviata"), 400
-
-        cfg = PipelineConfig(**cfg_raw)
+        cfg = PipelineConfig(**cfgs[source_id])
         vp = VideoPipeline(cfg, logger=current_app.logger)
         current_app.video_pipelines[source_id] = vp
 
-    vp = current_app.video_pipelines[source_id]
-    vp.start()
+    current_app.video_pipelines[source_id].start()
     return jsonify(success=True), 200
 
 # Ferma e rimuove la pipeline per <source_id>

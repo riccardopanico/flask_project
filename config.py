@@ -47,7 +47,8 @@ class Config:
     PIPELINE_CONFIGS = {
         "default": PIPELINE_CONFIG,
         "external_rtsp": {
-            "source": "http://0.0.0.0:5000/api/ip_camera/stream/default",
+            "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
+            "max_workers": 1,
             "model_behaviors": {
             os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
                     "draw": True,

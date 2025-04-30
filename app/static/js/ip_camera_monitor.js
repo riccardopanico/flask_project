@@ -23,60 +23,73 @@ $(function() {
         waiting = true;
       }
     }
+  
     function onMessage(raw) {
-        waiting = false;
-        const m = JSON.parse(raw);
-        const sid = m.source_id;
-      
-        // Ignora risposte fuori sync
-        if (sid && sid !== selectedSource) {
-          return flushQueue(); // Skip se non è la camera attiva
-        }
-      
-        if (!m.success) {
-          console.warn(`[WS] error on ${m.action}: ${m.error}`);
-          return flushQueue();
-        }
-      
-        switch (m.action) {
-          case 'list_cameras':
-            renderCameraList(m.data);
-            break;
-          case 'start':
-            loadStream(selectedSource);
-            send({action: 'get_config',  source_id: selectedSource});
-            send({action: 'get_health',  source_id: selectedSource});
-            send({action: 'get_metrics', source_id: selectedSource});
-            send({action: 'list_cameras'});
-            break;
-          case 'stop':
-            clearStream();
-            clearPanels();
-            send({action: 'list_cameras'});
-            break;
-          case 'get_config':
-            renderConfig(sid, m.data);
-            break;
-          case 'get_health':
-            renderHealth(sid, m.data);
-            break;
-          case 'get_metrics':
-            renderMetrics(sid, m.data);
-            break;
-          case 'update_config':
-            showConfigResult(m);
-            break;
-          default:
-            console.warn('[WS] unhandled:', m);
-        }
-      
-        flushQueue();
+      waiting = false;
+      const m = JSON.parse(raw);
+      const sid = m.source_id;
+  
+      // Always update camera list on list_cameras
+      if (m.action === 'list_cameras') {
+        renderCameraList(m.data);
+        return flushQueue();
       }
+  
+      if (sid && sid !== selectedSource) {
+        // Permetti comunque updateCameraUI per 'start' e 'stop'
+        if (m.action === 'start' || m.action === 'stop') {
+          updateCameraUI(m.source_id, m.action === 'start' ? 'running' : 'stopped');
+        }
+        return flushQueue();
+      }      
+  
+      if (!m.success) {
+        console.warn(`[WS] error on ${m.action}: ${m.error}`);
+        if (m.action === 'stop') clearPanels();
+        return flushQueue();
+      }
+  
+      switch (m.action) {
+        case 'start':
+            updateCameraUI(m.source_id, 'running');
+            if (m.source_id === selectedSource) {
+              send({action: 'get_config',  source_id: selectedSource});
+              send({action: 'get_health',  source_id: selectedSource});
+              send({action: 'get_metrics', source_id: selectedSource});
+            }
+            break;
+          
+          case 'stop':
+            updateCameraUI(m.source_id, 'stopped');
+            break;          
+  
+        case 'get_config':
+          renderConfig(sid, m.data);
+          break;
+  
+        case 'get_health':
+          renderHealth(sid, m.data);
+          break;
+  
+        case 'get_metrics':
+          renderMetrics(sid, m.data);
+          break;
+  
+        case 'update_config':
+          showConfigResult(m);
+          break;
+  
+        default:
+          console.warn('[WS] unhandled:', m);
+      }
+  
+      flushQueue();
+    }
   
     // -------- WS LIFECYCLE --------
     function connect() {
       socket = new WebSocket(WS_URL);
-      socket.onopen    = () => { retryInterval = RETRY_INIT; send({action:'list_cameras'}); };
+      socket.onopen    = () => { retryInterval = RETRY_INIT; send({ action:'list_cameras' }); };
       socket.onmessage = e => onMessage(e.data);
       socket.onclose   = () => {
         setTimeout(connect, retryInterval);
@@ -103,10 +116,10 @@ $(function() {
           <article class="border ${border} ${selCls} rounded-md bg-white p-4 space-y-2">
             <div class="flex justify-between items-center">
               <span class="font-semibold text-sm">${cam.name}</span>
-              <span class="${run?'bg-blue-500':'bg-red-500'} text-white text-[10px] font-semibold rounded-full px-2 py-[2px] flex items-center space-x-1">
-                ${run?'<span class="w-2 h-2 rounded-full bg-green-400 block"></span>':''}
+                <span class="${run ? 'bg-blue-500' : 'bg-red-500'} text-white text-[10px] font-semibold rounded-full px-2 py-[2px] flex items-center space-x-1">
+                ${run && isSel ? '<span class="w-2 h-2 rounded-full bg-green-400 block"></span>' : ''}
                 <span>${cam.status}</span>
-              </span>
+                </span>
             </div>
             <p class="text-xs text-gray-400">${cam.clients} active client${cam.clients!==1?'s':''}</p>
             <div class="flex space-x-2 text-xs font-semibold">
@@ -128,8 +141,9 @@ $(function() {
     // -------- STREAM + PANELS --------
     function loadStream(sid) {
       $('#camera-stream .flex-grow').html(
-        `<img class="w-full h-full object-contain" src="/api/ip_camera/stream/${sid}">`
+        `<img class="w-full h-full object-contain" src="/api/ip_camera/stream/${sid}?_t=${Date.now()}">`
       );
+      showConfig();
     }
     function clearStream() {
       $('#camera-stream .flex-grow').html('Nessuna camera selezionata');
@@ -142,10 +156,17 @@ $(function() {
   
     // -------- RENDER HEALTH & METRICS --------
     function renderHealth(src, data) {
-      let html = `<h4 class="font-semibold mb-2">Health (${src})</h4>`
-               + Object.entries(data).map(([k,v])=>`<div><strong>${k}:</strong> ${v}</div>`).join('');
+      let html = `<h4 class="font-semibold mb-2">Health (${src})</h4><ul class="text-sm space-y-1">`;
+      html += `<li>• Running: ${data.running ? '✅' : '❌'}</li>`;
+      html += `<li>• Received: ${data.frames_received} frames</li>`;
+      html += `<li>• Processed: ${data.frames_processed} frames</li>`;
+      html += `<li>• Avg Inference: ${data.avg_inf_ms.toFixed(2)} ms</li>`;
+      html += `<li>• Clients: ${data.clients_active}</li>`;
+      if (data.last_error) html += `<li class="text-red-500">• Last error: ${data.last_error}</li>`;
+      html += `</ul>`;
       $('#health-panel').html(html);
     }
+  
     function renderMetrics(src, data) {
       const fps = data.frames_received
         ? (data.frames_processed/data.frames_received*(data.avg_inf_ms?1000/data.avg_inf_ms:0)).toFixed(1)
@@ -158,20 +179,19 @@ $(function() {
           <div><p class="text-xs">Avg Inference</p><p class="font-semibold text-lg">${data.avg_inf_ms.toFixed(2)} ms</p></div>
         </div>
         <p class="text-xs mt-2">Total Objects</p>
-        <div class="border border-gray-300 rounded-md p-3 text-xs flex flex-wrap gap-2">`
-        + Object.entries(data.counters||{}).map(([cls,c])=>
-          `<span class="bg-gray-100 rounded px-2 py-[2px] flex items-center space-x-1">
-             <span>${cls}</span><span class="bg-gray-300 text-gray-700 rounded-full px-2 py-[1px] font-semibold">${c}</span>
-           </span>`
-        ).join('')
-        + `</div>`;
+        <div class="border border-gray-300 rounded-md p-3 text-xs flex flex-wrap gap-2">` +
+          Object.entries(data.counters||{}).map(([cls,c]) =>
+            `<span class="bg-gray-100 rounded px-2 py-[2px] flex items-center space-x-1">
+               <span>${cls}</span><span class="bg-gray-300 text-gray-700 rounded-full px-2 py-[1px] font-semibold">${c}</span>
+             </span>`
+          ).join('') +
+        `</div>`;
       $('#metrics-panel article').html(html);
     }
   
     // -------- CONFIG FORM & JSON --------
     function renderConfig(src, cfg) {
       if (src !== selectedSource) return;
-      // popola il form
       $('#stream-url').val(cfg.source);
       $('#width').val(cfg.width||'');
       $('#height').val(cfg.height||'');
@@ -188,15 +208,15 @@ $(function() {
       $('#iou').val(mb?.iou||0).trigger('change');
       $('#count-line').val(cfg.count_line||'');
   
-      // classi
       const cls = cfg.classes_filter||[];
-      $('#classes-filter-container input').each((i,e)=> {
+      $('#classes-filter-container input').each((i,e) => {
         $(e).prop('checked', cls.includes(e.value));
       });
   
       updateJson();
       showConfig();
     }
+  
     function buildConfig() {
       const pi=v=>{let n=parseInt(v,10);return isNaN(n)?null:n},
             pf=v=>{let f=parseFloat(v);return isNaN(f)?null:f};
@@ -224,16 +244,15 @@ $(function() {
         classes_filter: cls.length?cls:null
       };
     }
+  
     function updateJson() {
-      $('#advanced-json-textarea').val(JSON.stringify(buildConfig(),null,2));
+      $('#advanced-json-textarea').val(JSON.stringify(buildConfig(), null, 2));
     }
   
     // -------- CONFIG UI SHOW/HIDE --------
     function showConfig() {
-      $('#tab-stream, #tab-models, #tab-advanced-json').hide();
-      $('#tab-stream').show();
-      switchTab('stream');
       $('.form-section').show();
+      switchTab('stream');
     }
     function hideConfig() {
       $('.form-section').hide();
@@ -241,23 +260,64 @@ $(function() {
   
     // -------- UI EVENTS --------
     // tabs
-    $('#tab-stream-btn,#tab-models-btn,#tab-advanced-json-btn').on('click', e=>{
+    $('#tab-stream-btn,#tab-models-btn,#tab-advanced-json-btn').on('click', e => {
       e.preventDefault();
       switchTab(e.target.id.replace('-btn',''));
     });
     function switchTab(name) {
       $('#tab-stream,#tab-models,#tab-advanced-json').hide();
       $(`#tab-${name}`).show();
-      ['stream','models','advanced-json'].forEach(n=>{
+      ['stream','models','advanced-json'].forEach(n => {
         $(`#tab-${n}-btn`)
           .toggleClass('bg-white', n===name)
           .toggleClass('bg-gray-100', n!==name)
           .attr('aria-selected', n===name);
       });
     }
-  
+    function updateCameraUI(sourceId, status) {
+        const $article = $(`#camera-list [data-src="${sourceId}"]`).closest('article');
+        const isRunning = status === 'running';
+      
+        // Badge: rigenera completamente con pallino se in running
+        const $badgeWrapper = $article.find('.flex.justify-between > span').last();
+        $badgeWrapper
+          .removeClass('bg-blue-500 bg-red-500')
+          .addClass(isRunning ? 'bg-blue-500' : 'bg-red-500')
+          .html(`
+            ${isRunning ? '<span class="w-2 h-2 rounded-full bg-green-400 block"></span>' : ''}
+            <span>${status}</span>
+          `);
+      
+        // Bottoni
+        $article.find('.btn-start')
+          .prop('disabled', isRunning)
+          .toggleClass('cursor-not-allowed text-gray-400', isRunning)
+          .toggleClass('border-gray-200', isRunning)
+          .toggleClass('border-gray-300', !isRunning);
+      
+        $article.find('.btn-stop')
+          .prop('disabled', !isRunning)
+          .toggleClass('cursor-not-allowed text-gray-400', !isRunning)
+          .toggleClass('border-gray-300', isRunning)
+          .toggleClass('border-gray-200', !isRunning);
+      
+        // Se selezionata, aggiorna contenuti
+        if (sourceId === selectedSource) {
+          if (isRunning) {
+            clearStream();
+            setTimeout(() => loadStream(sourceId), 100);
+            send({ action: 'get_config',  source_id: selectedSource });
+            send({ action: 'get_health',  source_id: selectedSource });
+            send({ action: 'get_metrics', source_id: selectedSource });
+          } else {
+            clearStream();
+            clearPanels();
+          }
+        }
+      }        
+      
     // inputs → update JSON
-    $('#quality,#fps').on('input',function(){
+    $('#quality,#fps').on('input', function(){
       $(`#${this.id}-val`).text(this.value);
       updateJson();
     });
@@ -266,25 +326,42 @@ $(function() {
   
     // camera list buttons
     $('#camera-list')
-      .on('click','.btn-start',  function(){ send({action:'start', source_id:$(this).data('src')}); })
-      .on('click','.btn-stop',   function(){ send({action:'stop',  source_id:$(this).data('src')}); })
-      .on('click','.btn-select', function(){
+      .on('click','.btn-start',  function(){
+        send({ action:'start', source_id: $(this).data('src') });
+      })
+      .on('click','.btn-stop',   function(){
+        send({ action:'stop',  source_id: $(this).data('src') });
+      })
+      .on('click', '.btn-select', function() {
         selectedSource = $(this).data('src');
-        send({action:'get_config',  source_id: selectedSource});
-        send({action:'get_health',  source_id: selectedSource});
-        send({action:'get_metrics', source_id: selectedSource});
-      });
+        send({ action: 'list_cameras' }); // per aggiornare selezione e stato
+        
+        // Se la camera è già in esecuzione, carica il video e i dati
+        const $btn = $(this);
+        const $article = $btn.closest('article');
+        const isRunning = $article.find('span').text().includes('running');
+      
+        if (isRunning) {
+          loadStream(selectedSource);
+          send({ action: 'get_config',  source_id: selectedSource });
+          send({ action: 'get_health',  source_id: selectedSource });
+          send({ action: 'get_metrics', source_id: selectedSource });
+        } else {
+          clearStream();
+          clearPanels();
+        }
+      });      
   
     // Apply config
     $('#apply-btn').click(()=>{
       if (!selectedSource) return;
-      send({action:'update_config', source_id: selectedSource, config: buildConfig()});
+      send({ action:'update_config', source_id: selectedSource, config: buildConfig() });
     });
   
     // header buttons
-    $('button:contains("Refresh")').click(()=> send({action:'list_cameras'}));
-    $('button:contains("Start All")').click(()=> $('.btn-start:enabled').click());
-    $('button:contains("Stop All")').click(()=> $('.btn-stop:enabled').click());
+    $('button:contains("Refresh")').click(() => send({ action:'list_cameras' }));
+    $('button:contains("Start All")').click(() => $('.btn-start:enabled').click());
+    $('button:contains("Stop All")').click(() => $('.btn-stop:enabled').click());
   
     // -------- START --------
     connect();

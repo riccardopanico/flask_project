@@ -29,8 +29,8 @@ class Config:
     # Configurazione pipeline singola di default
     PIPELINE_CONFIG = {
         "source": "0",
-        "width": 1280,
-        "height": 720,
+        "width": 320,
+        "height": 240,
         "fps": 60,
         "prefetch": 10,
         "skip_on_full_queue": True,

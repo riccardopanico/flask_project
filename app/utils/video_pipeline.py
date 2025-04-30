@@ -9,6 +9,7 @@ import uuid
 import numpy as np
 from typing import Callable, Dict, Any, Optional, Tuple, List, Union
 from pydantic import BaseModel, Field
+from concurrent.futures import ThreadPoolExecutor
 
 
 class Frame(BaseModel):
@@ -181,22 +182,70 @@ class VideoPipeline:
             except Exception as e: self._log(f"Callback {event} error: {e}")
 
     def start(self):
-        if not self.pipeline_source and not self.source_handler:
+        if self._stop.is_set():
+            self._stop.clear()
+
+        # Reset coda, frame e metriche
+        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
+        self._last_frame = None
+        self._metrics["inference_times"].clear()
+        self._metrics["frames_received"] = 0
+        self._metrics["frames_processed"] = 0
+        self.frames_served = 0
+        self.bytes_served = 0
+
+        # Ricrea l'executor
+        self._executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
+
+        # Reinstanzia sorgente se non è pipeline condivisa
+        if not self.pipeline_source:
             src = str(self.config.source)
             self.source_handler = SourceHandler(src,
                                                 self.config.width,
                                                 self.config.height,
                                                 self.config.fps)
 
-        self._stop.clear()
-        threading.Thread(target=self._ingest_loop, daemon=True, name="VP-Ingest").start()
-        threading.Thread(target=self._process_loop,daemon=True, name="VP-Proc").start()
+        # Avvia i thread
+        self._ingest_thread = threading.Thread(target=self._ingest_loop, daemon=True, name="VP-Ingest")
+        self._process_thread = threading.Thread(target=self._process_loop, daemon=True, name="VP-Proc")
+        self._ingest_thread.start()
+        self._process_thread.start()
+
+        # Pulisce le code client
+        for q in self._clients.values():
+            with q.mutex:
+                q.queue.clear()
+
         self._log("Pipeline started")
 
     def stop(self):
         self._stop.set()
+        time.sleep(0.05)
+
         if self.source_handler:
             self.source_handler.release()
+            self.source_handler = None
+
+        # Stop e join thread
+        if hasattr(self, '_ingest_thread'):
+            self._ingest_thread.join(timeout=0.5)
+            del self._ingest_thread
+        if hasattr(self, '_process_thread'):
+            self._process_thread.join(timeout=0.5)
+            del self._process_thread
+
+        # Shutdown executor
+        if hasattr(self, '_executor'):
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            del self._executor
+
+        # Reset frame e code client
+        self._last_frame = None
+        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
+        for q in self._clients.values():
+            with q.mutex:
+                q.queue.clear()
+
         self._log("Pipeline stopped")
 
     def _ingest_loop(self):
@@ -219,9 +268,6 @@ class VideoPipeline:
                     time.sleep(0.005)
 
     def _process_loop(self):
-        from concurrent.futures import ThreadPoolExecutor
-        exec = ThreadPoolExecutor(max_workers=self.config.max_workers)
-
         def worker(fr: Frame):
             try:
                 img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
@@ -235,14 +281,12 @@ class VideoPipeline:
                     if beh.draw:
                         img = res.plot()
                     if beh.count:
-                        # Gestione filtro classi: accetta sia ID numerici che nomi stringa
                         filter_set = set(self.config.classes_filter or [])
                         for b in res.boxes:
                             cid = int(b.cls)
                             cls_name = res.names.get(cid, None)
-                            if filter_set:
-                                if cid not in filter_set and cls_name not in filter_set:
-                                    continue
+                            if filter_set and cid not in filter_set and cls_name not in filter_set:
+                                continue
                             name = cls_name or str(cid)
                             counts[name] = counts.get(name, 0) + 1
 
@@ -260,7 +304,10 @@ class VideoPipeline:
                     try:
                         q.put_nowait(self._last_frame)
                     except queue.Full:
-                        q.get_nowait()
+                        try:
+                            q.get_nowait()
+                        except queue.Empty:
+                            pass
                         q.put_nowait(self._last_frame)
 
             except Exception as e:
@@ -271,9 +318,9 @@ class VideoPipeline:
         while not self._stop.is_set():
             try:
                 fr = self._frame_q.get(timeout=0.01)
+                self._executor.submit(worker, fr)
             except queue.Empty:
                 continue
-            exec.submit(worker, fr)
 
     def stream_response(self):
         from flask import Response, stream_with_context, request
@@ -338,10 +385,16 @@ class VideoPipeline:
         self._log(f"Config updated: {kwargs}")
 
     def health(self) -> Dict[str, Any]:
+        times = self._metrics["inference_times"]
         return {
             "running":        not self._stop.is_set(),
-            **self._metrics,
-            "clients_active": self.clients_active
+            "frames_received": self._metrics["frames_received"],
+            "frames_processed": self._metrics["frames_processed"],
+            "clients_active": self.clients_active,
+            "last_error": self._metrics["last_error"],
+            "avg_inf_ms": round(np.mean(times), 2) if times else 0,
+            "min_inf_ms": round(np.min(times), 2) if times else 0,
+            "max_inf_ms": round(np.max(times), 2) if times else 0
         }
 
     def metrics(self) -> Dict[str, Any]:

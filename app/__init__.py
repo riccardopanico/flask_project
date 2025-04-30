@@ -46,7 +46,8 @@ def create_app():
     env = os.getenv("FLASK_ENV", "development").lower()
     cfg_cls = ProductionConfig if env=="production" else DevelopmentConfig
 
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder='templates')
+    
     app.config.from_object(cfg_cls)
     configure_logging(app)
 

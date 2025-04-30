@@ -230,32 +230,39 @@ class VideoPipeline:
                 for path, info in self.models.items():
                     beh = info["beh"]
                     dev = 'cuda' if self.config.use_cuda else 'cpu'
-                    res = info["model"](img, conf=beh.confidence, iou=beh.iou,
-                                        verbose=False, device=dev)[0]
+                    res = info["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device=dev)[0]
                     self._emit('on_inference', fr, path, res)
                     if beh.draw:
                         img = res.plot()
                     if beh.count:
+                        # Gestione filtro classi: accetta sia ID numerici che nomi stringa
+                        filter_set = set(self.config.classes_filter or [])
                         for b in res.boxes:
                             cid = int(b.cls)
-                            if self.config.classes_filter and cid not in self.config.classes_filter:
-                                continue
-                            name = res.names[cid]
+                            cls_name = res.names.get(cid, None)
+                            if filter_set:
+                                if cid not in filter_set and cls_name not in filter_set:
+                                    continue
+                            name = cls_name or str(cid)
                             counts[name] = counts.get(name, 0) + 1
 
                 tracked = self.tracker.update(counts)
                 self._emit('on_count', fr, tracked)
-                dt = (time.time() - start)*1000
+
+                dt = (time.time() - start) * 1000
                 self._metrics["inference_times"].append(dt)
 
-                _, buf = cv2.imencode('.jpg', img,
-                    [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
+                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
                 self._last_frame = buf.tobytes()
                 self._metrics["frames_processed"] += 1
+
                 for q in list(self._clients.values()):
-                    try: q.put_nowait(self._last_frame)
+                    try:
+                        q.put_nowait(self._last_frame)
                     except queue.Full:
-                        q.get_nowait(); q.put_nowait(self._last_frame)
+                        q.get_nowait()
+                        q.put_nowait(self._last_frame)
+
             except Exception as e:
                 err = traceback.format_exc()
                 self._metrics["last_error"] = err

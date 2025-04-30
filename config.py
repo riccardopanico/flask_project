@@ -29,19 +29,20 @@ class Config:
     # Configurazione pipeline singola di default
     PIPELINE_CONFIG = {
         "source": "0",
-        "width": 320,
-        "height": 240,
+        "width": 640,
+        "height": 480,
         "fps": 60,
         "prefetch": 10,
         "skip_on_full_queue": True,
-        "quality": 85,
+        "quality": 100,
         "use_cuda": True,
         "max_workers": 1,
         "model_behaviors": {
-            os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
+            os.path.join(DATA_DIR, "models", "shoes_25k_best_hyp.pt"): {
+            # os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
                 "draw": True,
                 "count": False,
-                "confidence": 0.5,
+                "confidence": 0.25,
                 "iou": 0.5
             }
         },

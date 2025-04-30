@@ -24,45 +24,54 @@ $(function() {
       }
     }
     function onMessage(raw) {
-      waiting = false;
-      const m = JSON.parse(raw);
-      switch (m.action) {
-        case 'list_cameras':
-          renderCameraList(m.data);
-          break;
-        case 'start':
-          if (m.success && m.source_id === selectedSource) {
+        waiting = false;
+        const m = JSON.parse(raw);
+        const sid = m.source_id;
+      
+        // Ignora risposte fuori sync
+        if (sid && sid !== selectedSource) {
+          return flushQueue(); // Skip se non è la camera attiva
+        }
+      
+        if (!m.success) {
+          console.warn(`[WS] error on ${m.action}: ${m.error}`);
+          return flushQueue();
+        }
+      
+        switch (m.action) {
+          case 'list_cameras':
+            renderCameraList(m.data);
+            break;
+          case 'start':
             loadStream(selectedSource);
-            send({action:'get_config',    source_id: selectedSource});
-            send({action:'get_health',    source_id: selectedSource});
-            send({action:'get_metrics',   source_id: selectedSource});
-          }
-          send({action:'list_cameras'});
-          break;
-        case 'stop':
-          if (m.success && m.source_id === selectedSource) {
+            send({action: 'get_config',  source_id: selectedSource});
+            send({action: 'get_health',  source_id: selectedSource});
+            send({action: 'get_metrics', source_id: selectedSource});
+            send({action: 'list_cameras'});
+            break;
+          case 'stop':
             clearStream();
             clearPanels();
-          }
-          send({action:'list_cameras'});
-          break;
-        case 'health':
-          renderHealth(m.source_id, m.data);
-          break;
-        case 'metrics':
-          renderMetrics(m.source_id, m.data);
-          break;
-        case 'config':
-          renderConfig(m.source_id, m.data);
-          break;
-        case 'update_config':
-          showConfigResult(m);
-          break;
-        default:
-          console.warn('[WS] unhandled:', m);
+            send({action: 'list_cameras'});
+            break;
+          case 'get_config':
+            renderConfig(sid, m.data);
+            break;
+          case 'get_health':
+            renderHealth(sid, m.data);
+            break;
+          case 'get_metrics':
+            renderMetrics(sid, m.data);
+            break;
+          case 'update_config':
+            showConfigResult(m);
+            break;
+          default:
+            console.warn('[WS] unhandled:', m);
+        }
+      
+        flushQueue();
       }
-      flushQueue();
-    }
   
     // -------- WS LIFECYCLE --------
     function connect() {
@@ -121,7 +130,6 @@ $(function() {
       $('#camera-stream .flex-grow').html(
         `<img class="w-full h-full object-contain" src="/api/ip_camera/stream/${sid}">`
       );
-      $('#camera-stream').find('.border-blue-500, .border-gray-300').removeClass('border-gray-300').addClass('border-blue-500');
     }
     function clearStream() {
       $('#camera-stream .flex-grow').html('Nessuna camera selezionata');
@@ -134,64 +142,64 @@ $(function() {
   
     // -------- RENDER HEALTH & METRICS --------
     function renderHealth(src, data) {
-      let html = `<h4 class="font-semibold mb-2">Health (${src})</h4>`;
-      html += Object.entries(data).map(([k,v])=>`<div><strong>${k}:</strong> ${v}</div>`).join('');
+      let html = `<h4 class="font-semibold mb-2">Health (${src})</h4>`
+               + Object.entries(data).map(([k,v])=>`<div><strong>${k}:</strong> ${v}</div>`).join('');
       $('#health-panel').html(html);
     }
     function renderMetrics(src, data) {
-      let html = `<h4 class="font-semibold mb-2">Metrics (${src})</h4>`;
-      html += `<div class="grid grid-cols-2 gap-2">
-        <div><p class="text-xs">FPS</p><p class="font-semibold text-lg">${ data.frames_received? (data.frames_processed/data.frames_received*(data.avg_inf_ms?1000/data.avg_inf_ms:0)).toFixed(1) : '–' }</p></div>
-        <div><p class="text-xs">Frames Served</p><p class="font-semibold text-lg">${data.frames_served}</p></div>
-        <div><p class="text-xs">Data Transferred</p><p class="font-semibold text-lg">${(data.bytes_served/1024/1024).toFixed(2)} MB</p></div>
-        <div><p class="text-xs">Avg Inference</p><p class="font-semibold text-lg">${data.avg_inf_ms.toFixed(2)} ms</p></div>
-      </div>
-      <p class="text-xs mt-2">Total Objects</p>
-      <div class="border border-gray-300 rounded-md p-3 text-xs flex flex-wrap gap-2">`+
-        Object.entries(data.counters||{}).map(([cls,c])=>
+      const fps = data.frames_received
+        ? (data.frames_processed/data.frames_received*(data.avg_inf_ms?1000/data.avg_inf_ms:0)).toFixed(1)
+        : '–';
+      let html = `<h4 class="font-semibold mb-2">Metrics (${src})</h4>
+        <div class="grid grid-cols-2 gap-2">
+          <div><p class="text-xs">FPS</p><p class="font-semibold text-lg">${fps}</p></div>
+          <div><p class="text-xs">Frames Served</p><p class="font-semibold text-lg">${data.frames_served}</p></div>
+          <div><p class="text-xs">Data Transferred</p><p class="font-semibold text-lg">${(data.bytes_served/1024/1024).toFixed(2)} MB</p></div>
+          <div><p class="text-xs">Avg Inference</p><p class="font-semibold text-lg">${data.avg_inf_ms.toFixed(2)} ms</p></div>
+        </div>
+        <p class="text-xs mt-2">Total Objects</p>
+        <div class="border border-gray-300 rounded-md p-3 text-xs flex flex-wrap gap-2">`
+        + Object.entries(data.counters||{}).map(([cls,c])=>
           `<span class="bg-gray-100 rounded px-2 py-[2px] flex items-center space-x-1">
              <span>${cls}</span><span class="bg-gray-300 text-gray-700 rounded-full px-2 py-[1px] font-semibold">${c}</span>
            </span>`
-        ).join('')+
-      `</div>`;
+        ).join('')
+        + `</div>`;
       $('#metrics-panel article').html(html);
     }
   
     // -------- CONFIG FORM & JSON --------
     function renderConfig(src, cfg) {
       if (src !== selectedSource) return;
-      // Stream URL
+      // popola il form
       $('#stream-url').val(cfg.source);
-      $('#width').val(cfg.width || '');
-      $('#height').val(cfg.height || '');
-      $('#fps').val(cfg.fps || 30);   $('#fps-val').text(cfg.fps||30);
-      $('#quality').val(cfg.quality); $('#quality-val').text(cfg.quality);
-  
+      $('#width').val(cfg.width||'');
+      $('#height').val(cfg.height||'');
+      $('#fps').val(cfg.fps||30).trigger('input');
+      $('#quality').val(cfg.quality).trigger('input');
       $('#use-cuda').prop('checked', cfg.use_cuda);
       $('#metrics-enabled').prop('checked', cfg.metrics_enabled);
   
-      // model_behaviors: prendo primo key
-      const [mname, mb] = Object.entries(cfg.model_behaviors)[0] || [];
+      const [mname, mb] = Object.entries(cfg.model_behaviors)[0]||[];
       $('#model-name').val(mname||'');
       $('#draw-boxes').prop('checked', mb?.draw||false);
       $('#count-objects').prop('checked', mb?.count||false);
       $('#confidence').val(mb?.confidence||0).trigger('change');
       $('#iou').val(mb?.iou||0).trigger('change');
-  
       $('#count-line').val(cfg.count_line||'');
   
-      // classes_filter
+      // classi
       const cls = cfg.classes_filter||[];
-      $('#classes-filter-container input').each((i,el)=>{
-        $(el).prop('checked', cls.includes(el.value));
+      $('#classes-filter-container input').each((i,e)=> {
+        $(e).prop('checked', cls.includes(e.value));
       });
   
       updateJson();
       showConfig();
     }
     function buildConfig() {
-      const pi = v=>{ let n=parseInt(v,10); return isNaN(n)?null:n; };
-      const pf = v=>{ let f=parseFloat(v); return isNaN(f)?null:f; };
+      const pi=v=>{let n=parseInt(v,10);return isNaN(n)?null:n},
+            pf=v=>{let f=parseFloat(v);return isNaN(f)?null:f};
       const cls = $('#classes-filter-container input:checked').map((i,e)=>e.value).get();
       return {
         source: $('#stream-url').val(),
@@ -213,7 +221,7 @@ $(function() {
         },
         count_line: $('#count-line').val()||null,
         metrics_enabled: $('#metrics-enabled').prop('checked'),
-        classes_filter: cls.length ? cls : null
+        classes_filter: cls.length?cls:null
       };
     }
     function updateJson() {
@@ -222,12 +230,13 @@ $(function() {
   
     // -------- CONFIG UI SHOW/HIDE --------
     function showConfig() {
-      $('form[id^="tab-"]').show();
-      $('#tab-stream').show(); switchTab('stream');
+      $('#tab-stream, #tab-models, #tab-advanced-json').hide();
+      $('#tab-stream').show();
+      switchTab('stream');
+      $('.form-section').show();
     }
     function hideConfig() {
-      $('form[id^="tab-"]').hide();
-      $('#tab-stream, #tab-models, #tab-advanced-json').hide();
+      $('.form-section').hide();
     }
   
     // -------- UI EVENTS --------
@@ -257,17 +266,18 @@ $(function() {
   
     // camera list buttons
     $('#camera-list')
-      .on('click','.btn-start', function(){ send({action:'start', source_id:$(this).data('src')}); })
-      .on('click','.btn-stop',  function(){ send({action:'stop',  source_id:$(this).data('src')}); })
-      .on('click','.btn-select',function(){
+      .on('click','.btn-start',  function(){ send({action:'start', source_id:$(this).data('src')}); })
+      .on('click','.btn-stop',   function(){ send({action:'stop',  source_id:$(this).data('src')}); })
+      .on('click','.btn-select', function(){
         selectedSource = $(this).data('src');
-        renderCameraList( $('.btn-select').map((i,btn)=>({name:$(btn).data('src'),status:null,clients:0})).get() );
-        // avvia o mostra stream
-        send({action:'start', source_id: selectedSource});
+        send({action:'get_config',  source_id: selectedSource});
+        send({action:'get_health',  source_id: selectedSource});
+        send({action:'get_metrics', source_id: selectedSource});
       });
   
     // Apply config
     $('#apply-btn').click(()=>{
+      if (!selectedSource) return;
       send({action:'update_config', source_id: selectedSource, config: buildConfig()});
     });
   

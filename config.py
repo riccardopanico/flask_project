@@ -31,7 +31,7 @@ class Config:
         "source": "0",
         "width": 1280,
         "height": 720,
-        "fps": 25,
+        "fps": 60,
         "prefetch": 10,
         "skip_on_full_queue": True,
         "quality": 85,
@@ -49,21 +49,11 @@ class Config:
         "metrics_enabled": True,
         "classes_filter": None
     }
-
-    # Configurazione multipla (multi-camera)
+    
     PIPELINE_CONFIGS = {
         "default": PIPELINE_CONFIG,
-
         "cam_front_door": {
             "source": "http://0.0.0.0:5000/api/ip_camera/stream/cam_front_door",
-            "width": 1280,
-            "height": 720,
-            "fps": 30,
-            "prefetch": 10,
-            "skip_on_full_queue": True,
-            "quality": 90,
-            "use_cuda": True,
-            "max_workers": 1,
             "model_behaviors": {
                 os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
                     "draw": True,
@@ -71,68 +61,27 @@ class Config:
                     "confidence": 0.4,
                     "iou": 0.45
                 }
-            },
-            "count_line": "100,200,400,200",
-            "metrics_enabled": True,
-            "classes_filter": ["person", "car"]
+            }
         },
-
         "cam_backyard": {
             "source": "http://0.0.0.0:5000/api/ip_camera/stream/cam_backyard",
-            "width": 960,
-            "height": 540,
-            "fps": 20,
-            "prefetch": 10,
-            "skip_on_full_queue": True,
-            "quality": 80,
-            "use_cuda": False,
-            "max_workers": 1,
             "model_behaviors": {
                 os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
                     "draw": True,
-                    "count": False,
-                    "confidence": 0.6,
-                    "iou": 0.5
+                    "confidence": 0.6
                 }
-            },
-            "count_line": None,
-            "metrics_enabled": True,
-            "classes_filter": ["cat", "dog", "bird"]
+            }
         },
-
         "cam_garage": {
-            "source": "0",  # USB camera
-            "width": 640,
-            "height": 480,
-            "fps": 15,
-            "prefetch": 5,
-            "skip_on_full_queue": True,
-            "quality": 70,
-            "use_cuda": True,
-            "max_workers": 1,
+            "source": "0",
             "model_behaviors": {
                 os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
-                    "draw": True,
-                    "count": False,
-                    "confidence": 0.5,
-                    "iou": 0.5
+                    "draw": True
                 }
-            },
-            "count_line": None,
-            "metrics_enabled": True,
-            "classes_filter": None
+            }
         },
-
         "external_rtsp": {
             "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
-            "width": 800,
-            "height": 600,
-            "fps": 10,
-            "prefetch": 10,
-            "skip_on_full_queue": True,
-            "quality": 65,
-            "use_cuda": False,
-            "max_workers": 1,
             "model_behaviors": {
                 os.path.join(DATA_DIR, "models", "scarpe_25k_305ep.pt"): {
                     "draw": True,
@@ -141,15 +90,9 @@ class Config:
                     "iou": 0.4
                 },
                 os.path.join(DATA_DIR, "models", "yolo11n.pt"): {
-                    "draw": True,
-                    "count": False,
-                    "confidence": 0.5,
-                    "iou": 0.5
-                },
-            },
-            "count_line": None,
-            "metrics_enabled": False,
-            "classes_filter": ["person", "car", "truck"]
+                    "draw": True
+                }
+            }
         }
     }
 

@@ -1,5 +1,3 @@
-# app/threads/websocket.py
-
 import asyncio
 import websockets
 import json
@@ -16,99 +14,111 @@ _loop: asyncio.AbstractEventLoop = None
 _server = None
 
 
+def error_response(action: str, error: str, success=False):
+    return json.dumps({"action": action, "success": success, "error": error})
+
+
+def success_response(action: str, source_id: str, extra: dict = None):
+    base = {"action": action, "success": True, "source_id": source_id}
+    if extra:
+        base.update(extra)
+    return json.dumps(base)
+
+
 async def socket_handler(ws, path):
-    """Accoglie comandi dal front-end e risponde."""
     _connected.add(ws)
     try:
         async for msg in ws:
             try:
                 data = json.loads(msg)
             except json.JSONDecodeError:
-                await ws.send(json.dumps({"error": "invalid JSON"}))
+                await ws.send(error_response("invalid", "invalid JSON"))
                 continue
 
             action = data.get("action")
-            # 1) lista camere disponibili
-            if action == "list_cameras":
-                cams = []
-                with _app.app_context():
-                    cfgs = _app.config.get("PIPELINE_CONFIGS", {})
+            sid = data.get("source_id")
+            cfg = data.get("config")
+
+            with _app.app_context():
+                cfgs = _app.config.get("PIPELINE_CONFIGS", {})
+
+                if action == "list_cameras":
+                    cams = []
                     for src in cfgs:
                         vp = _app.video_pipelines.get(src)
                         status = "running" if vp and not vp._stop.is_set() else "stopped"
                         clients = vp.clients_active if vp else 0
                         cams.append({"name": src, "status": status, "clients": clients})
-                await ws.send(json.dumps({"action": "list_cameras", "data": cams}))
+                    await ws.send(json.dumps({"action": "list_cameras", "data": cams}))
 
-            # 2) avvia pipeline
-            elif action == "start":
-                sid = data.get("source_id")
-                with _app.app_context():
-                    cfgs = _app.config.get("PIPELINE_CONFIGS", {})
+                elif action == "start":
+                    if not sid:
+                        await ws.send(error_response(action, "missing source_id")); continue
                     if sid in cfgs:
                         if sid not in _app.video_pipelines:
-                            cfg = PipelineConfig(**cfgs[sid])
-                            vp = VideoPipeline(cfg, logger=_app.logger)
+                            pipeline_cfg = PipelineConfig(**cfgs[sid])
+                            vp = VideoPipeline(pipeline_cfg, logger=_app.logger)
                             _app.video_pipelines[sid] = vp
                         _app.video_pipelines[sid].start()
-                        await ws.send(json.dumps({"action": "start", "success": True, "source_id": sid}))
+                        await ws.send(success_response("start", sid))
                     else:
-                        await ws.send(json.dumps({"action": "start", "success": False, "error": "unknown source_id"}))
+                        await ws.send(error_response(action, "unknown source_id"))
 
-            # 3) ferma pipeline
-            elif action == "stop":
-                sid = data.get("source_id")
-                with _app.app_context():
+                elif action == "stop":
+                    if not sid:
+                        await ws.send(error_response(action, "missing source_id")); continue
                     vp = _app.video_pipelines.get(sid)
                     if vp:
                         vp.stop()
                         _app.video_pipelines.pop(sid, None)
-                        await ws.send(json.dumps({"action": "stop", "success": True, "source_id": sid}))
+                        await ws.send(success_response("stop", sid))
                     else:
-                        await ws.send(json.dumps({"action": "stop", "success": False, "error": "not running"}))
+                        await ws.send(error_response(action, "not running"))
 
-            # 4) aggiorna config live
-            elif action == "update_config":
-                sid = data.get("source_id")
-                cfg = data.get("config")
-                if not sid or not cfg:
-                    await ws.send(json.dumps({"action": "update_config", "success": False, "error": "missing parameters"}))
-                    continue
-                with _app.app_context():
+                elif action == "update_config":
+                    if not sid or not cfg:
+                        await ws.send(error_response(action, "missing parameters")); continue
                     vp = _app.video_pipelines.get(sid)
                     if not vp:
-                        await ws.send(json.dumps({"action": "update_config", "success": False, "error": "not running"}))
-                        continue
+                        await ws.send(error_response(action, "not running")); continue
                     try:
                         vp.update_config(**cfg)
-                        await ws.send(json.dumps({"action": "update_config", "success": True, "source_id": sid}))
+                        await ws.send(success_response("update_config", sid))
                     except Exception as e:
-                        await ws.send(json.dumps({"action": "update_config", "success": False, "error": str(e)}))
+                        await ws.send(error_response(action, str(e)))
 
-            # 5) health check
-            elif action == "get_health":
-                sid = data.get("source_id")
-                with _app.app_context():
+                elif action == "get_health":
+                    if not sid:
+                        await ws.send(error_response(action, "missing source_id")); continue
                     vp = _app.video_pipelines.get(sid)
                     if vp:
                         h = vp.health()
                         await ws.send(json.dumps({"action": "health", "data": h, "source_id": sid}))
                     else:
-                        await ws.send(json.dumps({"action": "health", "error": "not running"}))
+                        await ws.send(error_response(action, "not running"))
 
-            # 6) metriche
-            elif action == "get_metrics":
-                sid = data.get("source_id")
-                with _app.app_context():
+                elif action == "get_metrics":
+                    if not sid:
+                        await ws.send(error_response(action, "missing source_id")); continue
                     vp = _app.video_pipelines.get(sid)
                     if vp:
                         m = vp.metrics()
                         await ws.send(json.dumps({"action": "metrics", "data": m, "source_id": sid}))
                     else:
-                        await ws.send(json.dumps({"action": "metrics", "error": "not running"}))
+                        await ws.send(error_response(action, "not running"))
 
-            else:
-                await ws.send(json.dumps({"error": "unknown action"}))
+                elif action == "get_config":
+                    if not sid:
+                        await ws.send(error_response(action, "missing source_id")); continue
+                    vp = _app.video_pipelines.get(sid)
+                    if vp:
+                        c = vp.export_config()
+                        await ws.send(json.dumps({"action": "get_config", "data": c, "source_id": sid}))
+                    else:
+                        await ws.send(error_response(action, "not running"))
+
+                else:
+                    await ws.send(error_response("unknown", "unknown action"))
 
     except websockets.exceptions.ConnectionClosed:
         pass
@@ -117,16 +127,13 @@ async def socket_handler(ws, path):
 
 
 async def _broadcast(msg: str):
-    """Invia a tutti i client connessi."""
     if _connected:
         await asyncio.gather(*[ws.send(msg) for ws in _connected if ws.open], return_exceptions=True)
 
 
 async def _queue_reader():
-    """Legge dalla coda websocket_queue e rilancia via WebSocket."""
     while True:
         message = await asyncio.to_thread(websocket_queue.get)
-        # ci si aspetta che message sia già un dict JSON-serializable
         await _broadcast(json.dumps(message))
 
 
@@ -138,13 +145,11 @@ async def _start_server():
 
 
 def run(app):
-    """Avviato automaticamente da app/__init__.py come thread."""
     global _app, _loop
     _app = app
     _loop = asyncio.new_event_loop()
     asyncio.set_event_loop(_loop)
 
-    # metti in coda la lettura eventi dalla pipeline
     _loop.create_task(_start_server())
     _loop.create_task(_queue_reader())
     _loop.run_forever()

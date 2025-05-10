@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, current_app, jsonify, request, render_template, abort
 from datetime import datetime
-from app.utils.video_pipeline import VideoPipeline, PipelineConfig
+from app.utils.video_pipeline import VideoPipeline, PipelineSettings
 
 ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
 
@@ -15,9 +15,12 @@ def _log_event(source_id: str, event_type: str, seq: int = None, details: dict =
     })
 
 @ip_camera_blueprint.route('/monitor')
-def render_monitor_page():
-    # Rende solo la pagina: la lista camere la chiede il JS via WS
+def render_monitor():
     return render_template("ip_camera_monitor.html")
+
+@ip_camera_blueprint.route('/camera_monitor')
+def render_camera_monitor():
+    return render_template("camera_monitor.html")
 
 @ip_camera_blueprint.route('/start/<source_id>', methods=['POST'])
 def start(source_id):
@@ -28,7 +31,7 @@ def start(source_id):
 
     # se non esiste la pipeline, la creo
     if source_id not in current_app.video_pipelines:
-        cfg = PipelineConfig(**cfgs[source_id])
+        cfg = PipelineSettings(**cfgs[source_id])
         vp = VideoPipeline(cfg, logger=current_app.logger)
         # registro i callback di log
         vp.register_callback('on_frame', lambda fr, sid=source_id:

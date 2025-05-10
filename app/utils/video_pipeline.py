@@ -7,64 +7,94 @@ import requests
 import queue
 import uuid
 import numpy as np
-from typing import Callable, Dict, Any, Optional, Tuple, List, Union
+from typing import Optional, List, Tuple, Dict, Any, Union, Type, Callable
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
+from ultralytics import YOLO
+from app.utils.object_counter import ObjectCounter
 
-
+# --- FRAME DATA STRUCTURE ---
 class Frame(BaseModel):
     data: bytes
     timestamp: float
     seq: int
     meta: Optional[Dict[str, Any]] = None
 
+# --- COUNTING CONFIGURATION ---
+class CountingSettings(BaseModel):
+    region: Optional[List[Tuple[int, int]]] = None
+    show_in: bool = False
+    show_out: bool = False
+    draw_line: bool = True
+    draw_count: bool = True
+    colormap: Optional[int] = None
+    json_file: Optional[str] = None
+    records: int = 5
+    show_window: bool = False
+    verbose: bool = False
 
-class ModelBehavior(BaseModel):
+    @property
+    def enabled(self) -> bool:
+        return self.region is not None
+
+# --- MODEL SETTINGS ---
+class ModelSettings(BaseModel):
+    path: str
     draw: bool = False
-    count: bool = False
     confidence: float = 0.5
     iou: float = 0.45
+    counting: Optional[CountingSettings] = None
 
+    @property
+    def use_counter(self) -> bool:
+        return self.counting is not None and self.counting.enabled
 
-class PipelineConfig(BaseModel):
+# --- PIPELINE CONFIGURATION ---
+class PipelineSettings(BaseModel):
     source: Union[str, 'VideoPipeline']
     width: Optional[int] = None
     height: Optional[int] = None
     fps: Optional[int] = None
     prefetch: int = 10
     skip_on_full_queue: bool = True
-    quality: int = 100
+    quality: int = 80
     use_cuda: bool = True
     max_workers: int = 1
-    model_behaviors: Dict[str, ModelBehavior] = Field(default_factory=dict)
-    count_line: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
+
+    models: List[ModelSettings] = Field(default_factory=list)
+
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
+    counter_cls: Type[Any] = ObjectCounter
 
     model_config = {'arbitrary_types_allowed': True}
 
-
+# --- SOURCE HANDLER ---
 class SourceHandler:
     def __init__(self, source: str, width=None, height=None, fps=None):
         self.is_http = source.startswith(('http://', 'https://'))
+        self.source = source
         if self.is_http:
             self.session = requests.Session()
             self.resp = self.session.get(source, stream=True)
             self.boundary = self._find_boundary()
-            self.buffer = b''
         else:
             idx = int(source) if source.isdigit() else source
             self.cap = cv2.VideoCapture(idx)
-            if width:  self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
-            if height: self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            if fps:    self.cap.set(cv2.CAP_PROP_FPS,          fps)
+            if width:
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            if height:
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if fps:
+                self.cap.set(cv2.CAP_PROP_FPS, fps)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     def _find_boundary(self) -> bytes:
         ct = self.resp.headers.get('Content-Type', '')
         if 'boundary=' in ct:
             b = ct.split('boundary=')[-1]
-            if not b.startswith('--'): b = '--' + b
+            if not b.startswith('--'):
+                b = '--' + b
             return b.encode()
         return b'--frame'
 
@@ -73,12 +103,14 @@ class SourceHandler:
             try:
                 while True:
                     line = self.resp.raw.readline()
-                    if not line: return None
+                    if not line:
+                        return None
                     if self.boundary in line:
                         headers = {}
                         while True:
                             h = self.resp.raw.readline()
-                            if not h or not h.strip(): break
+                            if not h or not h.strip():
+                                break
                             k, v = h.decode().split(':', 1)
                             headers[k.strip()] = v.strip()
                         length = int(headers.get('Content-Length', '0'))
@@ -88,7 +120,8 @@ class SourceHandler:
                 return None
         else:
             ok, frame = self.cap.read()
-            if not ok: return None
+            if not ok:
+                return None
             _, buf = cv2.imencode('.jpg', frame)
             return buf.tobytes()
 
@@ -102,150 +135,101 @@ class SourceHandler:
         else:
             self.cap.release()
 
-
+# --- TRACKER FOR AGGREGATE COUNTS ---
 class Tracker:
     def __init__(self):
         self.history: Dict[str, int] = {}
 
-    def update(self, detections: Dict[str, int]) -> Dict[str, int]:
-        for cls, cnt in detections.items():
+    def update(self, counts: Dict[str, int]) -> Dict[str, int]:
+        for cls, cnt in counts.items():
             self.history[cls] = self.history.get(cls, 0) + cnt
         return dict(self.history)
 
-
+# --- VIDEO PIPELINE ---
 class VideoPipeline:
-    def __init__(self, config: PipelineConfig, logger: Optional[Any]=None):
+    def __init__(self, config: PipelineSettings, logger: Optional[Any] = None):
         self.config = config
         self._log = logger.info if logger else print
         self._setup()
 
     def _setup(self):
-        self._frame_q     = queue.Queue(maxsize=self.config.prefetch)
-        self._stop        = threading.Event()
-        self._seq         = 0
-        self._last_frame  = None
-        self._metrics     = {
-            "frames_received":   0,
-            "frames_processed":  0,
-            "inference_times":   [],
-            "last_error":        None
-        }
+        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
+        self._stop = threading.Event()
+        self._seq = 0
+        self._last_frame = None
+        self._metrics = {'frames_received': 0, 'frames_processed': 0, 'inference_times': [], 'last_error': None}
         self.clients_active = 0
-        self.frames_served  = 0
-        self.bytes_served   = 0
+        self.frames_served = 0
+        self.bytes_served = 0
 
         self.tracker = Tracker()
         self._load_models()
 
-        if isinstance(self.config.source, VideoPipeline):
-            self.pipeline_source = self.config.source
-            self.source_handler  = None
-        else:
-            self.pipeline_source = None
-            self.source_handler  = None
+        self.pipeline_source = self.config.source if isinstance(self.config.source, VideoPipeline) else None
+        self.source_handler = None
 
         self._clients: Dict[str, queue.Queue] = {}
-        self._processing_enabled = bool(self.config.model_behaviors) or bool(self.config.count_line)
-
-        self._on_frame_cb     = []
-        self._on_inference_cb = []
-        self._on_count_cb     = []
-        self._on_error_cb     = []
+        self._on_frame_cb: List[Callable] = []
+        self._on_inference_cb: List[Callable] = []
+        self._on_count_cb: List[Callable] = []
+        self._on_error_cb: List[Callable] = []
+        self._processing_enabled = bool(self.config.models)
 
     def _load_models(self):
-        from ultralytics import YOLO
-        self.models = {}
-        for path, beh in self.config.model_behaviors.items():
-            if not os.path.isfile(path): 
+        self.models: Dict[str, Dict[str, Any]] = {}
+        for setting in self.config.models:
+            path = setting.path
+            if not os.path.isfile(path):
                 self._log(f"Model not found: {path}")
                 continue
-            if not (beh.draw or beh.count): 
-                continue
             try:
-                m = YOLO(path, verbose=False)
-                self.models[path] = {"model": m, "beh": beh}
-                self._log(f"Loaded {os.path.basename(path)}")
+                yolo = YOLO(path, verbose=False)
+                entry = {'yolo': yolo, 'setting': setting}
+                if setting.use_counter:
+                    os.environ['ULTRALYTICS_VERBOSE'] = 'False'
+                    cnt_cfg = setting.counting.dict()
+                    cnt_cfg['show'] = False
+                    counter = self.config.counter_cls(**cnt_cfg)
+                    entry['counter'] = counter
+                self.models[path] = entry
+                self._log(f"Loaded model: {os.path.basename(path)}")
             except Exception as e:
                 self._log(f"Error loading {path}: {e}")
 
     def register_callback(self, event: str, fn: Callable):
-        if event == 'on_frame':     self._on_frame_cb.append(fn)
-        elif event == 'on_inference':self._on_inference_cb.append(fn)
-        elif event == 'on_count':    self._on_count_cb.append(fn)
-        elif event == 'on_error':    self._on_error_cb.append(fn)
-        else: raise KeyError(f"Unknown event {event}")
+        if event not in ('frame', 'inference', 'count', 'error'):
+            raise KeyError(f"Unknown event: {event}")
+        getattr(self, f"_on_{event}_cb").append(fn)
 
     def _emit(self, event: str, *args):
-        lst = getattr(self, f"_{event}_cb")
-        for cb in lst:
+        for cb in getattr(self, f"_on_{event}_cb"): 
             try: cb(*args)
             except Exception as e: self._log(f"Callback {event} error: {e}")
 
     def start(self):
-        if self._stop.is_set():
-            self._stop.clear()
-
-        # Reset coda, frame e metriche
+        self._stop.clear()
         self._frame_q = queue.Queue(maxsize=self.config.prefetch)
         self._last_frame = None
-        self._metrics["inference_times"].clear()
-        self._metrics["frames_received"] = 0
-        self._metrics["frames_processed"] = 0
+        self._metrics['frames_received'] = 0
+        self._metrics['frames_processed'] = 0
         self.frames_served = 0
         self.bytes_served = 0
 
-        # Ricrea l'executor
         self._executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
-
-        # Reinstanzia sorgente se non è pipeline condivisa
         if not self.pipeline_source:
-            src = str(self.config.source)
-            self.source_handler = SourceHandler(src,
-                                                self.config.width,
-                                                self.config.height,
-                                                self.config.fps)
-
-        # Avvia i thread
-        self._ingest_thread = threading.Thread(target=self._ingest_loop, daemon=True, name="VP-Ingest")
-        self._process_thread = threading.Thread(target=self._process_loop, daemon=True, name="VP-Proc")
-        self._ingest_thread.start()
-        self._process_thread.start()
-
-        # Pulisce le code client
-        for q in self._clients.values():
-            with q.mutex:
-                q.queue.clear()
-
+            self.source_handler = SourceHandler(str(self.config.source), self.config.width, self.config.height, self.config.fps)
+        threading.Thread(target=self._ingest_loop, daemon=True).start()
+        threading.Thread(target=self._process_loop, daemon=True).start()
         self._log("Pipeline started")
 
     def stop(self):
         self._stop.set()
         time.sleep(0.05)
-
         if self.source_handler:
             self.source_handler.release()
             self.source_handler = None
-
-        # Stop e join thread
-        if hasattr(self, '_ingest_thread'):
-            self._ingest_thread.join(timeout=0.5)
-            del self._ingest_thread
-        if hasattr(self, '_process_thread'):
-            self._process_thread.join(timeout=0.5)
-            del self._process_thread
-
-        # Shutdown executor
         if hasattr(self, '_executor'):
             self._executor.shutdown(wait=False, cancel_futures=True)
-            del self._executor
-
-        # Reset frame e code client
-        self._last_frame = None
-        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
-        for q in self._clients.values():
-            with q.mutex:
-                q.queue.clear()
-
         self._log("Pipeline stopped")
 
     def _ingest_loop(self):
@@ -254,159 +238,124 @@ class VideoPipeline:
             if not data:
                 time.sleep(0.005)
                 continue
-
-            self._metrics["frames_received"] += 1
-            f = Frame(data=data, timestamp=time.time(), seq=self._seq)
+            frm = Frame(data=data, timestamp=time.time(), seq=self._seq)
             self._seq += 1
-            self._emit('on_frame', f)
+            self._metrics['frames_received'] += 1
+            self._emit('frame', frm)
             try:
-                self._frame_q.put(f,
-                    block=not self.config.skip_on_full_queue,
-                    timeout=0.01)
+                self._frame_q.put(frm, block=not self.config.skip_on_full_queue, timeout=0.01)
             except queue.Full:
                 if not self.config.skip_on_full_queue:
                     time.sleep(0.005)
 
     def _process_loop(self):
-        def worker(fr: Frame):
+        def worker(frm: Frame):
             try:
-                img = cv2.imdecode(np.frombuffer(fr.data, np.uint8), cv2.IMREAD_COLOR)
+                orig = cv2.imdecode(np.frombuffer(frm.data, np.uint8), cv2.IMREAD_COLOR)
+                canvas = orig.copy()
                 start = time.time()
-                counts = {}
                 for path, info in self.models.items():
-                    beh = info["beh"]
-                    dev = 'cuda' if self.config.use_cuda else 'cpu'
-                    res = info["model"](img, conf=beh.confidence, iou=beh.iou, verbose=False, device=dev)[0]
-                    self._emit('on_inference', fr, path, res)
-                    if beh.draw:
-                        img = res.plot()
-                    if beh.count:
-                        filter_set = set(self.config.classes_filter or [])
-                        for b in res.boxes:
-                            cid = int(b.cls)
-                            cls_name = res.names.get(cid, None)
-                            if filter_set and cid not in filter_set and cls_name not in filter_set:
-                                continue
-                            name = cls_name or str(cid)
-                            counts[name] = counts.get(name, 0) + 1
-
-                tracked = self.tracker.update(counts)
-                self._emit('on_count', fr, tracked)
-
+                    setting: ModelSettings = info['setting']
+                    res = info['yolo'](orig, conf=setting.confidence, iou=setting.iou, verbose=False, device='cuda' if self.config.use_cuda else 'cpu')[0]
+                    self._emit('inference', frm, path, res)
+                    if setting.draw:
+                        canvas = res.plot()
+                    if setting.use_counter:
+                        counter: ObjectCounter = info['counter']
+                        if setting.counting.enabled:
+                            counter.region = setting.counting.region
+                        result = counter.process(canvas)
+                        if result:
+                            canvas = result.plot_im
+                            tracked = {'in_count': result.in_count, 'out_count': result.out_count, 'classwise_count': result.classwise_count}
+                            self._emit('count', frm, tracked)
+                        elif setting.counting.draw_line and setting.counting.region:
+                            cv2.line(canvas, setting.counting.region[0], setting.counting.region[1], (0, 255, 0), 2)
                 dt = (time.time() - start) * 1000
-                self._metrics["inference_times"].append(dt)
-
-                _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
-                self._last_frame = buf.tobytes()
-                self._metrics["frames_processed"] += 1
-
+                self._metrics['inference_times'].append(dt)
+                _, buf = cv2.imencode('.jpg', canvas, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
+                jpg = buf.tobytes()
+                self._last_frame = jpg
+                self._metrics['frames_processed'] += 1
                 for q in list(self._clients.values()):
                     try:
-                        q.put_nowait(self._last_frame)
+                        q.put_nowait(jpg)
                     except queue.Full:
-                        try:
-                            q.get_nowait()
-                        except queue.Empty:
-                            pass
-                        q.put_nowait(self._last_frame)
-
-            except Exception as e:
+                        try: q.get_nowait()
+                        except queue.Empty: pass
+                        q.put_nowait(jpg)
+            except Exception:
                 err = traceback.format_exc()
-                self._metrics["last_error"] = err
-                self._emit('on_error', err)
+                self._metrics['last_error'] = err
+                self._emit('error', err)
 
         while not self._stop.is_set():
             try:
-                fr = self._frame_q.get(timeout=0.01)
-                self._executor.submit(worker, fr)
+                frm = self._frame_q.get(timeout=0.01)
+                self._executor.submit(worker, frm)
             except queue.Empty:
                 continue
 
     def stream_response(self):
         from flask import Response, stream_with_context, request
-        client_id = str(uuid.uuid4())
+        cid = str(uuid.uuid4())
         q = queue.Queue(maxsize=1)
-        self._clients[client_id] = q
+        self._clients[cid] = q
         self.clients_active += 1
-
-        fps     = float(request.args.get('fps',    self.config.fps or 30))
-        timeout = float(request.args.get('timeout', self.config.count_line and 5 or 10))
-        boundary= b'--frame'
-
+        fps = float(request.args.get('fps', self.config.fps or 30))
+        timeout = float(request.args.get('timeout', 5))
+        boundary = b'--frame'
+        fallback = np.zeros((480, 640, 3), np.uint8)
+        cv2.putText(fallback, "No signal", (200,240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+        _, fb_buf = cv2.imencode('.jpg', fallback)
+        fb_jpg = fb_buf.tobytes()
         def gen():
-            last = time.time()
             try:
                 while not self._stop.is_set():
                     try:
                         frame = q.get(timeout=timeout)
-                        last = time.time()
                     except queue.Empty:
-                        break
-                    yield (boundary +
-                           b'\r\nContent-Type: image/jpeg\r\n\r\n' +
-                           frame + b'\r\n')
+                        frame = fb_jpg
+                        self._log("Sending fallback frame")
+                    yield (boundary + b'\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
                     self.frames_served += 1
                     self.bytes_served += len(frame)
                     time.sleep(1.0/fps)
             finally:
                 self.clients_active -= 1
-                self._clients.pop(client_id, None)
-
-        return Response(
-            stream_with_context(gen()),
-            mimetype='multipart/x-mixed-replace; boundary=frame'
-        )
+                self._clients.pop(cid, None)
+        return Response(stream_with_context(gen()), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     def update_config(self, **kwargs):
-        reload = False
+        reload_models = False
         restart = False
-        if 'source' in kwargs: del kwargs['source']
-        if 'model_behaviors' in kwargs:
-            mb = {}
-            for p, b in kwargs['model_behaviors'].items():
-                mb[p] = ModelBehavior(**b) if isinstance(b, dict) else b
-            kwargs['model_behaviors'] = mb
-            reload = True
-        if 'prefetch' in kwargs or 'max_workers' in kwargs:
-            restart = True
-
-        self.config = self.config.copy(update=kwargs)
-        if reload:
-            self._load_models()
-            self._processing_enabled = bool(self.config.model_behaviors) or bool(self.config.count_line)
-
-        if restart:
-            self._stop.set()
-            time.sleep(0.05)
-            self._stop.clear()
-            self._frame_q = queue.Queue(maxsize=self.config.prefetch)
-            self.start()
-
+        if 'models' in kwargs:
+            new_list = [ModelSettings(**m) if isinstance(m, dict) else m for m in kwargs.pop('models')]
+            self.config.models = new_list
+            reload_models = True
+        for key in ('prefetch','max_workers'):
+            if key in kwargs:
+                restart = True
+        for k,v in kwargs.items(): setattr(self.config, k, v)
+        if reload_models: self._load_models()
+        if restart: self.stop(); time.sleep(0.05); self.start()
         self._log(f"Config updated: {kwargs}")
 
     def health(self) -> Dict[str, Any]:
-        times = self._metrics["inference_times"]
-        return {
-            "running":        not self._stop.is_set(),
-            "frames_received": self._metrics["frames_received"],
-            "frames_processed": self._metrics["frames_processed"],
-            "clients_active": self.clients_active,
-            "last_error": self._metrics["last_error"],
-            "avg_inf_ms": round(np.mean(times), 2) if times else 0,
-            "min_inf_ms": round(np.min(times), 2) if times else 0,
-            "max_inf_ms": round(np.max(times), 2) if times else 0
-        }
+        t = self._metrics['inference_times']
+        return {'running': not self._stop.is_set(), 'frames_received': self._metrics['frames_received'],
+                'frames_processed': self._metrics['frames_processed'], 'clients_active': self.clients_active,
+                'last_error': self._metrics['last_error'], 'avg_inf_ms': round(np.mean(t),2) if t else 0,
+                'min_inf_ms': round(np.min(t),2) if t else 0, 'max_inf_ms': round(np.max(t),2) if t else 0}
 
     def metrics(self) -> Dict[str, Any]:
-        avg = (np.mean(self._metrics["inference_times"])
-               if self._metrics["inference_times"] else 0)
-        return {
-            "avg_inf_ms":    avg,
-            "counters":      self.tracker.history,
-            "frames_served": self.frames_served,
-            "bytes_served":  self.bytes_served,
-            "last_error":    self._metrics["last_error"]
-        }
+        avg = np.mean(self._metrics['inference_times']) if self._metrics['inference_times'] else 0
+        return {'avg_inf_ms': avg, 'counters': self.tracker.history,
+                'frames_served': self.frames_served, 'bytes_served': self.bytes_served,
+                'last_error': self._metrics['last_error']}
 
     def export_config(self) -> Dict[str, Any]:
-        return self.config.dict()
+        cfg = self.config.dict()
+        cfg['models'] = [m.dict() for m in self.config.models]
+        cfg['counter_cls'] = cfg['counter_cls'].__name__
+        return cfg

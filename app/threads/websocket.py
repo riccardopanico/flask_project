@@ -3,7 +3,7 @@ import websockets
 import json
 from flask import Flask
 from app import websocket_queue
-from app.utils.video_pipeline import VideoPipeline, PipelineConfig
+from app.utils.video_pipeline import VideoPipeline, PipelineSettings
 
 HOST = '0.0.0.0'
 PORT = 8765
@@ -73,7 +73,7 @@ async def socket_handler(ws, path):
                         await ws.send(ws_response("start", success=False, error="unknown source_id"))
                         continue
                     if sid not in _app.video_pipelines:
-                        pc = PipelineConfig(**cfgs[sid])
+                        pc = PipelineSettings(**cfgs[sid])
                         vp = VideoPipeline(pc, logger=_app.logger)
                         _app.video_pipelines[sid] = vp
                     _app.video_pipelines[sid].start()

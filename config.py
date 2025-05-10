@@ -71,10 +71,12 @@ class Config:
                         "region": [(320, 0), (320, 480)],
                         "show_in": True,
                         "show_out": True,
-                        "draw_line": True,
-                        "draw_count": True,
-                        "show_window": False,
-                        "verbose": False
+                        "tracking": {
+                            "show": False,
+                            "show_labels": False,
+                            "show_conf": False,
+                            "verbose": False
+                        }
                     }
                 }
             ]

@@ -13,31 +13,32 @@ from concurrent.futures import ThreadPoolExecutor
 from ultralytics import YOLO
 from app.utils.object_counter import ObjectCounter
 
-# --- FRAME DATA STRUCTURE ---
+class TrackingConfig(BaseModel):
+    show: bool = False
+    show_labels: bool = False
+    show_conf: bool = False
+    verbose: bool = False
+
+
+class CountingSettings(BaseModel):
+    region: Optional[List[Tuple[int, int]]] = None
+    show_in: bool = False
+    show_out: bool = False
+    colormap: Optional[int] = None
+    json_file: Optional[str] = None
+    records: int = 5
+    tracking: TrackingConfig = Field(default_factory=TrackingConfig)
+
+    @property
+    def enabled(self) -> bool:
+        return self.region is not None
+
 class Frame(BaseModel):
     data: bytes
     timestamp: float
     seq: int
     meta: Optional[Dict[str, Any]] = None
 
-# --- COUNTING CONFIGURATION ---
-class CountingSettings(BaseModel):
-    region: Optional[List[Tuple[int, int]]] = None
-    show_in: bool = False
-    show_out: bool = False
-    draw_line: bool = True
-    draw_count: bool = True
-    colormap: Optional[int] = None
-    json_file: Optional[str] = None
-    records: int = 5
-    show_window: bool = False
-    verbose: bool = False
-
-    @property
-    def enabled(self) -> bool:
-        return self.region is not None
-
-# --- MODEL SETTINGS ---
 class ModelSettings(BaseModel):
     path: str
     draw: bool = False
@@ -49,7 +50,6 @@ class ModelSettings(BaseModel):
     def use_counter(self) -> bool:
         return self.counting is not None and self.counting.enabled
 
-# --- PIPELINE CONFIGURATION ---
 class PipelineSettings(BaseModel):
     source: Union[str, 'VideoPipeline']
     width: Optional[int] = None
@@ -69,7 +69,6 @@ class PipelineSettings(BaseModel):
 
     model_config = {'arbitrary_types_allowed': True}
 
-# --- SOURCE HANDLER ---
 class SourceHandler:
     def __init__(self, source: str, width=None, height=None, fps=None):
         self.is_http = source.startswith(('http://', 'https://'))
@@ -135,7 +134,6 @@ class SourceHandler:
         else:
             self.cap.release()
 
-# --- TRACKER FOR AGGREGATE COUNTS ---
 class Tracker:
     def __init__(self):
         self.history: Dict[str, int] = {}
@@ -145,7 +143,6 @@ class Tracker:
             self.history[cls] = self.history.get(cls, 0) + cnt
         return dict(self.history)
 
-# --- VIDEO PIPELINE ---
 class VideoPipeline:
     def __init__(self, config: PipelineSettings, logger: Optional[Any] = None):
         self.config = config
@@ -189,6 +186,8 @@ class VideoPipeline:
                     os.environ['ULTRALYTICS_VERBOSE'] = 'False'
                     cnt_cfg = setting.counting.dict()
                     cnt_cfg['show'] = False
+                    tracking_params = cnt_cfg.pop('tracking', {})
+                    entry['track_params'] = tracking_params
                     counter = self.config.counter_cls(**cnt_cfg)
                     entry['counter'] = counter
                 self.models[path] = entry
@@ -256,7 +255,9 @@ class VideoPipeline:
                 start = time.time()
                 for path, info in self.models.items():
                     setting: ModelSettings = info['setting']
-                    res = info['yolo'](orig, conf=setting.confidence, iou=setting.iou, verbose=False, device='cuda' if self.config.use_cuda else 'cpu')[0]
+                    track_params = info.get('track_params', {})
+                    track_params.pop('verbose', None)
+                    res = info['yolo'](orig, conf=setting.confidence, iou=setting.iou, verbose=False, device='cuda' if self.config.use_cuda else 'cpu', **track_params)[0]
                     self._emit('inference', frm, path, res)
                     if setting.draw:
                         canvas = res.plot()
@@ -264,12 +265,14 @@ class VideoPipeline:
                         counter: ObjectCounter = info['counter']
                         if setting.counting.enabled:
                             counter.region = setting.counting.region
+                            counter.show_in = setting.counting.show_in
+                            counter.show_out = setting.counting.show_out
                         result = counter.process(canvas)
                         if result:
                             canvas = result.plot_im
                             tracked = {'in_count': result.in_count, 'out_count': result.out_count, 'classwise_count': result.classwise_count}
                             self._emit('count', frm, tracked)
-                        elif setting.counting.draw_line and setting.counting.region:
+                        elif setting.counting.region:
                             cv2.line(canvas, setting.counting.region[0], setting.counting.region[1], (0, 255, 0), 2)
                 dt = (time.time() - start) * 1000
                 self._metrics['inference_times'].append(dt)

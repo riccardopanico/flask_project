@@ -1,4 +1,4 @@
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from app.utils.solutions import BaseSolution, SolutionAnnotator, SolutionResults
 from ultralytics.utils.plotting import colors
 
 class ObjectCounter(BaseSolution):
@@ -82,6 +82,7 @@ class ObjectCounter(BaseSolution):
             self.count_objects(current_centroid, track_id, prev_position, cls)
 
         plot_im = self.annotator.result()
+        # Mostra sempre i conteggi
         self.display_counts(plot_im)
 
         return SolutionResults(
@@ -91,3 +92,15 @@ class ObjectCounter(BaseSolution):
             classwise_count=self.classwise_counts,
             total_tracks=len(self.track_ids),
         )
+
+    # Sovrascrivi il metodo display_output per non fare nulla
+    # def display_output(self, *args, **kwargs):
+    #     pass
+
+    # Sovrascrivi il metodo show per non fare nulla
+    # def show(self, *args, **kwargs):
+    #     pass
+
+    # Sovrascrivi il metodo display per non fare nulla
+    # def display(self, *args, **kwargs):
+    #     pass

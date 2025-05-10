@@ -12,11 +12,16 @@ class ObjectCounter(BaseSolution):
         self.boxes = []
         self.clss = []
         self.track_ids = []
+        self.confs = []
+        self.confidence_threshold = 0.5
         self.show_in = self.CFG.get("show_in", True)
         self.show_out = self.CFG.get("show_out", True)
         self.margin = self.line_width * 2
 
-    def count_objects(self, current_centroid, track_id, prev_position, cls):
+    def count_objects(self, current_centroid, track_id, prev_position, cls, conf):
+        if conf < self.confidence_threshold:
+            return
+            
         if prev_position is None or track_id in self.counted_ids:
             return
 
@@ -74,15 +79,14 @@ class ObjectCounter(BaseSolution):
         self.annotator = SolutionAnnotator(im0, line_width=self.line_width)
         self.annotator.draw_region(reg_pts=self.region, color=(104, 0, 123), thickness=self.line_width * 2)
 
-        for box, track_id, cls in zip(self.boxes, self.track_ids, self.clss):
+        for box, track_id, cls, conf in zip(self.boxes, self.track_ids, self.clss, self.confs):
             self.store_tracking_history(track_id, box)
             self.store_classwise_counts(cls)
             current_centroid = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
             prev_position = self.track_history[track_id][-2] if len(self.track_history[track_id]) > 1 else None
-            self.count_objects(current_centroid, track_id, prev_position, cls)
+            self.count_objects(current_centroid, track_id, prev_position, cls, conf)
 
         plot_im = self.annotator.result()
-        # Mostra sempre i conteggi
         self.display_counts(plot_im)
 
         return SolutionResults(
@@ -92,15 +96,3 @@ class ObjectCounter(BaseSolution):
             classwise_count=self.classwise_counts,
             total_tracks=len(self.track_ids),
         )
-
-    # Sovrascrivi il metodo display_output per non fare nulla
-    # def display_output(self, *args, **kwargs):
-    #     pass
-
-    # Sovrascrivi il metodo show per non fare nulla
-    # def show(self, *args, **kwargs):
-    #     pass
-
-    # Sovrascrivi il metodo display per non fare nulla
-    # def display(self, *args, **kwargs):
-    #     pass

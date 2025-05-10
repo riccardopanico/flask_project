@@ -267,11 +267,17 @@ class VideoPipeline:
                             counter.region = setting.counting.region
                             counter.show_in = setting.counting.show_in
                             counter.show_out = setting.counting.show_out
-                        result = counter.process(canvas)
-                        if result:
-                            canvas = result.plot_im
-                            tracked = {'in_count': result.in_count, 'out_count': result.out_count, 'classwise_count': result.classwise_count}
-                            self._emit('count', frm, tracked)
+                            counter.confidence_threshold = setting.confidence
+                            counter.boxes = res.boxes.data
+                            counter.track_ids = res.boxes.id if res.boxes.id is not None else [None] * len(res.boxes.data)
+                            counter.clss = res.boxes.cls
+                            counter.confs = res.boxes.conf
+                            
+                            result = counter.process(canvas)
+                            if result:
+                                canvas = result.plot_im
+                                tracked = {'in_count': result.in_count, 'out_count': result.out_count, 'classwise_count': result.classwise_count}
+                                self._emit('count', frm, tracked)
                         elif setting.counting.region:
                             cv2.line(canvas, setting.counting.region[0], setting.counting.region[1], (0, 255, 0), 2)
                 dt = (time.time() - start) * 1000

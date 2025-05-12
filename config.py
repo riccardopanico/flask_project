@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
+from ultralytics import YOLO
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ class Config:
             "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
             "models": [
                 {
-                    "path": os.path.join(DATA_DIR, "models", "yolo11n.pt"),
+                    "path": "data/models/yolo11n.pt",
                     "draw": True,
                     "confidence": 0.5,
                     "iou": 0.45
@@ -63,7 +64,7 @@ class Config:
             "classes_filter": None,
             "models": [
                 {
-                    "path": os.path.join(DATA_DIR, "models", "yolo11n.pt"),
+                    "path": "data/models/yolo11n.pt",
                     "draw": True,
                     "confidence": 0.4,
                     "iou": 0.45,
@@ -121,3 +122,11 @@ class DevelopmentConfig(Config):
     DEBUG = True
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=15)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=30)
+
+def get_model_classes(model_path):
+    model = YOLO(model_path)
+    # model.names è un dict: {0: 'person', 1: 'car', ...}
+    if hasattr(model, 'names'):
+        return list(model.names.values())
+    # fallback: nessuna classe trovata
+    return []

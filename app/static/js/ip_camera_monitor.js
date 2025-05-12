@@ -21,6 +21,35 @@ $(function() {
       { label: '1m Refresh',  value: 60000 }
     ];
 
+    // Carica la lista dei modelli disponibili da data/models e popola tutte le select
+    let availableModels = [];
+    function fetchModelListAndPopulateSelects() {
+      $.get('/api/ip_camera/models/list', function(list) {
+        availableModels = list;
+        console.log('Modelli disponibili:', availableModels); // DEBUG
+        // Popola tutte le select già presenti
+        $('#models-container .model-path').each(function() {
+          const current = $(this).val();
+          $(this).empty().append('<option value="">Seleziona modello...</option>');
+          if (availableModels.length) {
+            availableModels.forEach(m => $(this).append(`<option value="${m}">${m}</option>`));
+          } else {
+            $(this).append('<option value="">(Nessun modello trovato)</option>');
+          }
+          if (current) $(this).val(current);
+        });
+        // Forza popolamento hardcoded se la lista è vuota (debug)
+        if (!availableModels.length) {
+          $('#models-container .model-path').each(function() {
+            $(this).append('<option value="data/models/yolo11n.pt">data/models/yolo11n.pt</option>');
+            $(this).append('<option value="data/models/scarpe_25k_305ep.pt">data/models/scarpe_25k_305ep.pt</option>');
+            $(this).append('<option value="data/models/shoes_25k_best_hyp.pt">data/models/shoes_25k_best_hyp.pt</option>');
+          });
+        }
+      });
+    }
+    fetchModelListAndPopulateSelects();
+
     // -------- UTIL --------
     function send(msg) {
       queue.push(msg);
@@ -229,7 +258,11 @@ $(function() {
       // Aggiungi blocchi per ogni modello
       (cfg.models||[]).forEach(m => {
         const $item = $($('#model-item-template').html()).addClass('model-item');
-        $item.find('.model-path').val(m.path);
+        // Popola la select dei modelli
+        const $select = $item.find('.model-path');
+        $select.empty().append('<option value="">Seleziona modello...</option>');
+        availableModels.forEach(opt => $select.append(`<option value="${opt}">${opt}</option>`));
+        if (m.path) $select.val(m.path);
         $item.find('.draw-boxes').prop('checked', m.draw);
         $item.find('.confidence').val(m.confidence).trigger('change');
         $item.find('.iou').val(m.iou).trigger('change');
@@ -239,9 +272,20 @@ $(function() {
           if (m.counting.region) {
             const [[x1, y1], [x2, y2]] = m.counting.region;
             $item.find('.count-line').val(`${x1},${y1},${x2},${y2}`);
+            $item.find('.count-x1').val(x1);
+            $item.find('.count-y1').val(y1);
+            $item.find('.count-x2').val(x2);
+            $item.find('.count-y2').val(y2);
           }
         }
+        // Gestisci classes_filter per modello
+        if (m.classes_filter) {
+          loadAvailableClassesForModel($item, m.path, m.classes_filter);
+        } else {
+          loadAvailableClassesForModel($item, m.path, []);
+        }
         $('#models-container').append($item);
+        setupModelItem($item);
       });
       
       updateJson();
@@ -273,16 +317,22 @@ $(function() {
         cfg.classes_filter = classes;
       }
 
-      // Popola array models
+      // Popola array models SOLO se la select ha un valore
       $('#models-container .model-item').each((i, el) => {
         const $m = $(el);
+        const path = $m.find('.model-path').val();
+        if (!path) return; // ignora modelli non selezionati
         const model = {
-          path: $m.find('.model-path').val(),
+          path: path,
           draw: $m.find('.draw-boxes').prop('checked'),
           confidence: pf($m.find('.confidence').val()),
           iou: pf($m.find('.iou').val())
         };
-        // Aggiungi configurazione counting se abilitato e count-line valida
+        // Serializza le classi selezionate per ogni modello
+        const classes = $m.find('.classes-filter').val();
+        if (classes && classes.length) {
+          model.classes_filter = classes;
+        }
         if ($m.find('.count-objects').prop('checked')) {
           const countLine = $m.find('.count-line').val();
           const arr = (countLine||'').split(',').map(Number);
@@ -464,6 +514,7 @@ $(function() {
       .on('click','.btn-stop',   function(){ send({ action:'stop',   source_id: $(this).data('src') }); })
       .on('click','.btn-select', function(){
         selectedSource = $(this).data('src');
+        fetchModelListAndPopulateSelects();
         send({ action:'list_cameras' });
         const $art = $(this).closest('article');
         const isRunning = $art.find('span').text().includes('running');
@@ -484,6 +535,8 @@ $(function() {
       $('#models-container').append($item);
       setupModelItem($item);
       updateCountObjectsAvailability();
+      updateJson();
+      fetchModelListAndPopulateSelects(); // Popola la select dopo aggiunta
     });
 
     function setupModelItem($item) {
@@ -557,6 +610,34 @@ $(function() {
 
     // Aggiorna setupModelItem per i modelli esistenti
     $('#models-container .model-item').each((i, el) => setupModelItem($(el)));
+
+    // Quando selezioni dalla tendina, aggiorna il valore path
+    $('#models-container').on('change', '.model-path', function() {
+      // Se serve, puoi gestire altro qui
+      updateJson();
+    });
+
+    // Carica le classi disponibili per un modello
+    function loadAvailableClassesForModel($modelItem, modelPath, selected) {
+      if (!modelPath) return;
+      $.get('/api/ip_camera/model_classes?path=' + encodeURIComponent(modelPath), function(classes) {
+        const $select = $modelItem.find('.classes-filter');
+        $select.empty();
+        classes.forEach(cls => {
+          $select.append(`<option value="${cls}">${cls}</option>`);
+        });
+        if (selected && selected.length) {
+          $select.val(selected);
+        }
+      });
+    }
+
+    // Quando selezioni un modello, carica le classi
+    $('#models-container').on('change', '.model-path', function() {
+      const $m = $(this).closest('.model-item');
+      const path = $(this).val();
+      loadAvailableClassesForModel($m, path, $m.find('.classes-filter').val());
+    });
 
     // -------- START --------
     connect();

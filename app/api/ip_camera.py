@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, current_app, jsonify, request, render_template, abort
 from datetime import datetime
 from app.utils.video_pipeline import VideoPipeline, PipelineSettings
+from ultralytics import YOLO
 
 ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
 
@@ -122,3 +123,43 @@ def config(source_id):
         current_app.logger.error(f"Errore update config: {e}")
         _log_event(source_id, 'config_error', details={'error': str(e)})
         return jsonify(success=False, error=str(e)), 400
+
+@ip_camera_blueprint.route('/models/list')
+def list_models():
+    import sys
+    # Vai su di due livelli rispetto a questo file per arrivare alla root del progetto
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    models_dir = os.path.join(base_dir, 'data', 'models')
+    print(f"[DEBUG] base_dir: {base_dir}", file=sys.stderr)
+    print(f"[DEBUG] models_dir: {models_dir}", file=sys.stderr)
+    files = []
+    if os.path.isdir(models_dir):
+        print(f"[DEBUG] models_dir exists: {models_dir}", file=sys.stderr)
+        for f in os.listdir(models_dir):
+            print(f"[DEBUG] found file: {f}", file=sys.stderr)
+            if f.endswith('.pt'):
+                files.append(f'data/models/{f}')
+    else:
+        print(f"[DEBUG] models_dir does NOT exist: {models_dir}", file=sys.stderr)
+    print(f"[DEBUG] files to return: {files}", file=sys.stderr)
+    return jsonify(files)
+
+@ip_camera_blueprint.route('/model_classes')
+def model_classes():
+    path = request.args.get('path')
+    if not path:
+        return jsonify([])
+    # Costruisci il path assoluto
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    model_path = os.path.join(base_dir, path)
+    if not os.path.isfile(model_path):
+        return jsonify([])
+    try:
+        model = YOLO(model_path)
+        if hasattr(model, 'names'):
+            return jsonify(list(model.names.values()))
+        else:
+            return jsonify([])
+    except Exception as e:
+        print(f"[ERROR] Impossibile caricare le classi dal modello {model_path}: {e}")
+        return jsonify([])

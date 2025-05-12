@@ -127,21 +127,15 @@ def config(source_id):
 @ip_camera_blueprint.route('/models/list')
 def list_models():
     import sys
-    # Vai su di due livelli rispetto a questo file per arrivare alla root del progetto
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     models_dir = os.path.join(base_dir, 'data', 'models')
-    print(f"[DEBUG] base_dir: {base_dir}", file=sys.stderr)
-    print(f"[DEBUG] models_dir: {models_dir}", file=sys.stderr)
     files = []
     if os.path.isdir(models_dir):
-        print(f"[DEBUG] models_dir exists: {models_dir}", file=sys.stderr)
         for f in os.listdir(models_dir):
-            print(f"[DEBUG] found file: {f}", file=sys.stderr)
             if f.endswith('.pt'):
                 files.append(f'data/models/{f}')
     else:
         print(f"[DEBUG] models_dir does NOT exist: {models_dir}", file=sys.stderr)
-    print(f"[DEBUG] files to return: {files}", file=sys.stderr)
     return jsonify(files)
 
 @ip_camera_blueprint.route('/model_classes')

@@ -64,6 +64,23 @@ class Config:
             "classes_filter": None,
             "models": [
                 {
+                    "path": "data/models/scarpe_25k_305ep.pt",
+                    "draw": True,
+                    "confidence": 0.1,
+                    "iou": 0.45,
+                    "counting": {
+                        "region": [(100, 0), (100, 480)],
+                        "show_in": True,
+                        "show_out": True,
+                        "tracking": {
+                            "show": False,
+                            "show_labels": False,
+                            "show_conf": False,
+                            "verbose": False
+                        }
+                    }
+                },
+                {
                     "path": "data/models/yolo11n.pt",
                     "draw": True,
                     "confidence": 0.4,

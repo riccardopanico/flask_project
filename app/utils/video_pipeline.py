@@ -251,9 +251,13 @@ class VideoPipeline:
         def worker(frm: Frame):
             try:
                 orig = cv2.imdecode(np.frombuffer(frm.data, np.uint8), cv2.IMREAD_COLOR)
+                # Resize del frame secondo la config, se necessario
+                if self.config.width and self.config.height:
+                    if orig.shape[1] != self.config.width or orig.shape[0] != self.config.height:
+                        orig = cv2.resize(orig, (self.config.width, self.config.height), interpolation=cv2.INTER_LINEAR)
                 canvas = orig.copy()
                 start = time.time()
-                for path, info in self.models.items():
+                for path, info in list(self.models.items()):
                     setting: ModelSettings = info['setting']
                     track_params = info.get('track_params', {})
                     track_params.pop('verbose', None)

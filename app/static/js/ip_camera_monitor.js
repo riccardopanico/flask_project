@@ -32,6 +32,17 @@ $(function() {
         waiting = true;
       }
     }
+    function debounce(fn, delay) {
+      let timer;
+      return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+    const liveUpdateConfig = debounce(() => {
+      if (!selectedSource) return;
+      send({ action: 'update_config', source_id: selectedSource, config: buildConfig() });
+    }, 500);
 
     function onMessage(raw) {
       waiting = false;
@@ -195,36 +206,54 @@ $(function() {
     // -------- CONFIG Form & JSON --------
     function renderConfig(src, cfg) {
       if (src !== selectedSource) return;
+      
+      // Campi base
       $('#stream-url').val(cfg.source);
-      $('#width').val(cfg.width||'');
-      $('#height').val(cfg.height||'');
-      $('#fps').val(cfg.fps||30).trigger('input');
-      $('#quality').val(cfg.quality).trigger('input');
+      $('#width').val(cfg.width);
+      $('#height').val(cfg.height);
+      $('#fps').val(cfg.fps);
+      $('#quality').val(cfg.quality);
       $('#use-cuda').prop('checked', cfg.use_cuda);
       $('#metrics-enabled').prop('checked', cfg.metrics_enabled);
-
-      const [mname, mb] = Object.entries(cfg.model_behaviors)[0]||[];
-      $('#model-name').val(mname||'');
-      $('#draw-boxes').prop('checked', mb?.draw||false);
-      $('#count-objects').prop('checked', mb?.count||false);
-      $('#confidence').val(mb?.confidence||0).trigger('change');
-      $('#iou').val(mb?.iou||0).trigger('change');
-      $('#count-line').val(cfg.count_line||'');
-
-      const cls = cfg.classes_filter||[];
-      $('#classes-filter-container input').each((i,e) => {
-        $(e).prop('checked', cls.includes(e.value));
+      
+      // Gestione classes_filter globale
+      if (cfg.classes_filter) {
+        $('#classes-filter-container input').each(function() {
+          $(this).prop('checked', cfg.classes_filter.includes(parseInt(this.value)));
+        });
+      }
+      
+      // Pulisci container modelli
+      $('#models-container').empty();
+      
+      // Aggiungi blocchi per ogni modello
+      (cfg.models||[]).forEach(m => {
+        const $item = $($('#model-item-template').html()).addClass('model-item');
+        $item.find('.model-path').val(m.path);
+        $item.find('.draw-boxes').prop('checked', m.draw);
+        $item.find('.confidence').val(m.confidence).trigger('change');
+        $item.find('.iou').val(m.iou).trigger('change');
+        // Gestisci counting
+        if (m.counting) {
+          $item.find('.count-objects').prop('checked', true);
+          if (m.counting.region) {
+            const [[x1, y1], [x2, y2]] = m.counting.region;
+            $item.find('.count-line').val(`${x1},${y1},${x2},${y2}`);
+          }
+        }
+        $('#models-container').append($item);
       });
-
+      
       updateJson();
       showConfig();
     }
 
     function buildConfig() {
-      const pi=v=>{let n=parseInt(v,10);return isNaN(n)?null:n},
-            pf=v=>{let f=parseFloat(v);return isNaN(f)?null:f};
-      const cls = $('#classes-filter-container input:checked').map((i,e)=>e.value).get();
-      return {
+      const pi = v => { let n = parseInt(v,10); return isNaN(n)?null:n };
+      const pf = v => { let f = parseFloat((v||'').replace(',','.')); return isNaN(f)?null:f };
+      
+      // Config base
+      const cfg = {
         source: $('#stream-url').val(),
         width: pi($('#width').val()),
         height: pi($('#height').val()),
@@ -234,23 +263,74 @@ $(function() {
         quality: pi($('#quality').val()),
         use_cuda: $('#use-cuda').prop('checked'),
         max_workers: 1,
-        model_behaviors: {
-          [$('#model-name').val()]: {
-            draw: $('#draw-boxes').prop('checked'),
-            count: $('#count-objects').prop('checked'),
-            confidence: pf($('#confidence').val()),
-            iou: pf($('#iou').val())
-          }
-        },
-        count_line: $('#count-line').val()||null,
         metrics_enabled: $('#metrics-enabled').prop('checked'),
-        classes_filter: cls.length?cls:null
+        models: []
       };
+
+      // Gestione classes_filter globale
+      const classes = $('#classes-filter-container input:checked').map((i,e) => parseInt(e.value)).get();
+      if (classes.length) {
+        cfg.classes_filter = classes;
+      }
+
+      // Popola array models
+      $('#models-container .model-item').each((i, el) => {
+        const $m = $(el);
+        const model = {
+          path: $m.find('.model-path').val(),
+          draw: $m.find('.draw-boxes').prop('checked'),
+          confidence: pf($m.find('.confidence').val()),
+          iou: pf($m.find('.iou').val())
+        };
+        // Aggiungi configurazione counting se abilitato e count-line valida
+        if ($m.find('.count-objects').prop('checked')) {
+          const countLine = $m.find('.count-line').val();
+          const arr = (countLine||'').split(',').map(Number);
+          if (arr.length === 4 && arr.every(n => !isNaN(n))) {
+            model.counting = {
+              region: [[arr[0], arr[1]], [arr[2], arr[3]]],
+              show_in: true,
+              show_out: true,
+              tracking: {
+                show: false,
+                show_labels: false,
+                show_conf: false,
+                verbose: false
+              }
+            };
+          }
+        }
+        cfg.models.push(model);
+      });
+      return cfg;
     }
 
     function updateJson() {
       $('#advanced-json-textarea').val(JSON.stringify(buildConfig(), null, 2));
     }
+
+    // Miglioria UX: disabilita count-objects se la count line del modello non è valida
+    function updateCountObjectsAvailability() {
+      $('#models-container .model-item').each((i, el) => {
+        const $m = $(el);
+        const arr = ($m.find('.count-line').val()||'').split(',').map(Number);
+        const valid = arr.length === 4 && arr.every(n => !isNaN(n));
+        $m.find('.count-objects').prop('disabled', !valid);
+        if (!valid) $m.find('.count-objects').prop('checked', false);
+      });
+    }
+    $('#models-container').on('input change', '.count-line', updateCountObjectsAvailability);
+
+    // -------- LIVE CONFIG UPDATES --------
+    $('#stream-url,#width,#height,#fps,#quality,#use-cuda,#metrics-enabled,#classes-filter-container input').on('input change', () => { 
+      updateJson(); 
+      liveUpdateConfig(); 
+    });
+    $('#models-container').on('input change', '.count-line,.count-objects,.model-path,.draw-boxes,.confidence,.iou', function() {
+      updateJson();
+      liveUpdateConfig();
+      updateCountObjectsAvailability();
+    });
 
     // -------- CONFIG UI Show/Hide & Tabs --------
     function showConfig() {
@@ -327,6 +407,12 @@ $(function() {
       }
       
     // -------- CONFIG Feedback --------
+    function reloadStream() {
+      if (selectedSource) {
+        $('#camera-stream img').attr('src', `/api/ip_camera/stream/${selectedSource}?_t=${Date.now()}`);
+      }
+    }
+
     function showConfigResult(m) {
       if (m.success) {
         $('#apply-btn')
@@ -337,6 +423,7 @@ $(function() {
             .text('Apply')
             .addClass('bg-blue-600').removeClass('bg-green-500');
         }, 1500);
+        reloadStream(); // reload stream dopo salvataggio config
       } else {
         alert('Errore nel salvataggio: ' + m.error);
       }
@@ -347,8 +434,9 @@ $(function() {
       $(`#${this.id}-val`).text(this.value);
       updateJson();
     });
-    $('#stream-url,#width,#height,#use-cuda,#metrics-enabled,#model-name,#draw-boxes,#count-objects,#confidence,#iou,#count-line,#classes-filter-container input')
-      .on('input change', updateJson);
+
+    $('#model-name,#draw-boxes,#count-objects,#confidence,#iou,#count-line,#classes-filter-container input').on('input change', () => { updateJson(); liveUpdateConfig(); });
+    
 
     // -------- Camera List Buttons --------
     $('#camera-list')
@@ -370,10 +458,56 @@ $(function() {
         }
       });
 
+    // Gestione pulsanti Add/Remove
+    $('#add-model-btn').on('click', () => {
+      const $item = $($('#model-item-template').html()).addClass('model-item');
+      $('#models-container').append($item);
+      setupModelItem($item);
+      updateCountObjectsAvailability();
+    });
+
+    function setupModelItem($item) {
+      // Gestione visibilità count line
+      $item.find('.count-objects').on('change', function() {
+        $item.find('.count-line-container').toggleClass('hidden', !this.checked);
+      });
+
+      // Gestione visibilità classes filter
+      $item.find('.draw-boxes').on('change', function() {
+        $item.find('.classes-filter-container').toggleClass('hidden', !this.checked);
+      });
+
+      // Inizializza visibilità
+      $item.find('.count-line-container').toggleClass('hidden', !$item.find('.count-objects').prop('checked'));
+      $item.find('.classes-filter-container').toggleClass('hidden', !$item.find('.draw-boxes').prop('checked'));
+    }
+
+    $('#models-container').on('click', '.remove-model', function() {
+      $(this).closest('.model-item').remove();
+      updateJson();
+      updateCountObjectsAvailability();
+    });
+
+    // Gestione JSON avanzato
+    $('#advanced-json-textarea').on('input', function() {
+      try {
+        const json = JSON.parse(this.value);
+        // Valida la struttura base
+        if (!json.source || !Array.isArray(json.models)) {
+          throw new Error('JSON non valido');
+        }
+        // Aggiorna la configurazione
+        renderConfig(selectedSource, json);
+      } catch (e) {
+        console.warn('JSON non valido:', e);
+      }
+    });
+
     // Apply config
-    $('#apply-btn').click(()=>{
+    $('#apply-btn').click(() => {
       if (!selectedSource) return;
-      send({ action:'update_config', source_id: selectedSource, config: buildConfig() });
+      const config = buildConfig();
+      send({ action: 'update_config', source_id: selectedSource, config: config });
     });
 
     // header buttons
@@ -401,8 +535,11 @@ $(function() {
       }, ms);
     }
 
+    // Aggiorna setupModelItem per i modelli esistenti
+    $('#models-container .model-item').each((i, el) => setupModelItem($(el)));
+
     // -------- START --------
     connect();
     hideConfig();
-    scheduleRefresh();  // avvia auto-refresh con default
+    scheduleRefresh();  // start auto-refresh
 });

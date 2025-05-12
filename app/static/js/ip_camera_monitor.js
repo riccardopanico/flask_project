@@ -280,9 +280,9 @@ $(function() {
         }
         // Gestisci classes_filter per modello
         if (m.classes_filter) {
-          loadAvailableClassesForModel($item, m.path, m.classes_filter);
+          $item.find('.classes-filter').val(m.classes_filter.join(','));
         } else {
-          loadAvailableClassesForModel($item, m.path, []);
+          $item.find('.classes-filter').val('');
         }
         $('#models-container').append($item);
         setupModelItem($item);
@@ -328,8 +328,8 @@ $(function() {
           confidence: pf($m.find('.confidence').val()),
           iou: pf($m.find('.iou').val())
         };
-        // Serializza le classi selezionate per ogni modello
-        const classes = $m.find('.classes-filter').val();
+        // Serializza le classi solo se non vuote
+        let classes = $m.find('.classes-filter').val().split(',').map(s => s.trim()).filter(Boolean);
         if (classes && classes.length) {
           model.classes_filter = classes;
         }
@@ -389,6 +389,18 @@ $(function() {
         $m.find('.count-x2').val(vals[2]);
         $m.find('.count-y2').val(vals[3]);
       }
+    });
+
+    // Sincronizzazione tra select multi-tag e campo testo per classes_filter
+    $('#models-container').on('change', '.classes-filter', function() {
+      const $m = $(this).closest('.model-item');
+      const val = $(this).val();
+      $m.find('.classes-filter-text').val(val ? val.join(',') : '');
+    });
+    $('#models-container').on('input', '.classes-filter-text', function() {
+      const $m = $(this).closest('.model-item');
+      const arr = $(this).val().split(',').map(s => s.trim()).filter(Boolean);
+      $m.find('.classes-filter').val(arr).trigger('change');
     });
 
     // -------- LIVE CONFIG UPDATES --------

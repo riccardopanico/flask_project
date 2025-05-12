@@ -45,6 +45,7 @@ class ModelSettings(BaseModel):
     confidence: float = 0.5
     iou: float = 0.45
     counting: Optional[CountingSettings] = None
+    classes_filter: Optional[List[str]] = None
 
     @property
     def use_counter(self) -> bool:
@@ -261,7 +262,20 @@ class VideoPipeline:
                     setting: ModelSettings = info['setting']
                     track_params = info.get('track_params', {})
                     track_params.pop('verbose', None)
-                    res = info['yolo'](orig, conf=setting.confidence, iou=setting.iou, verbose=False, device='cuda' if self.config.use_cuda else 'cpu', **track_params)[0]
+                    # Filtro classi: converti nomi in indici se necessario
+                    classes = None
+                    if getattr(setting, 'classes_filter', None):
+                        name_to_idx = {v: k for k, v in info['yolo'].names.items()}
+                        classes = [name_to_idx[c] for c in setting.classes_filter if c in name_to_idx]
+                    res = info['yolo'](
+                        orig,
+                        conf=setting.confidence,
+                        iou=setting.iou,
+                        classes=classes if classes else None,
+                        verbose=False,
+                        device='cuda' if self.config.use_cuda else 'cpu',
+                        **track_params
+                    )[0]
                     self._emit('inference', frm, path, res)
                     if setting.draw:
                         canvas = res.plot()
@@ -352,7 +366,7 @@ class VideoPipeline:
         for k,v in kwargs.items(): setattr(self.config, k, v)
         if reload_models: self._load_models()
         if restart: self.stop(); time.sleep(0.05); self.start()
-        self._log(f"Config updated: {kwargs}")
+        self._log(f"Config updated: {kwargs}, models: {[m.dict() for m in self.config.models]}")
 
     def health(self) -> Dict[str, Any]:
         t = self._metrics['inference_times']

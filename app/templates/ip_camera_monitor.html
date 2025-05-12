@@ -211,6 +211,24 @@
             <div class="count-line-container">
               <label class="block font-semibold mb-1 select-none">Count Line (x1,y1,x2,y2)</label>
               <input type="text" class="count-line w-full rounded border border-gray-300 px-3 py-2 text-xs" placeholder="320,0,320,480">
+              <div class="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label class="block text-xs font-semibold">x1</label>
+                  <input type="range" min="0" max="640" class="count-x1 w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold">y1</label>
+                  <input type="range" min="0" max="480" class="count-y1 w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold">x2</label>
+                  <input type="range" min="0" max="640" class="count-x2 w-full" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold">y2</label>
+                  <input type="range" min="0" max="480" class="count-y2 w-full" />
+                </div>
+              </div>
             </div>
           </div>
         </template>

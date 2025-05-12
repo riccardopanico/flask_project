@@ -321,6 +321,26 @@ $(function() {
     }
     $('#models-container').on('input change', '.count-line', updateCountObjectsAvailability);
 
+    // Sincronizza slider e campo count-line per ogni modello
+    $('#models-container').on('input change', '.count-x1, .count-y1, .count-x2, .count-y2', function() {
+      const $m = $(this).closest('.model-item');
+      const x1 = $m.find('.count-x1').val();
+      const y1 = $m.find('.count-y1').val();
+      const x2 = $m.find('.count-x2').val();
+      const y2 = $m.find('.count-y2').val();
+      $m.find('.count-line').val(`${x1},${y1},${x2},${y2}`).trigger('input');
+    });
+    $('#models-container').on('input change', '.count-line', function() {
+      const $m = $(this).closest('.model-item');
+      const vals = $(this).val().split(',');
+      if (vals.length === 4) {
+        $m.find('.count-x1').val(vals[0]);
+        $m.find('.count-y1').val(vals[1]);
+        $m.find('.count-x2').val(vals[2]);
+        $m.find('.count-y2').val(vals[3]);
+      }
+    });
+
     // -------- LIVE CONFIG UPDATES --------
     $('#stream-url,#width,#height,#fps,#quality,#use-cuda,#metrics-enabled,#classes-filter-container input').on('input change', () => { 
       updateJson(); 

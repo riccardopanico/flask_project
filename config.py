@@ -51,7 +51,7 @@ class Config:
 
         # 3. Inferenza + conteggio attivo
         "cam_counting_example": {
-            "source": "0",
+            "source": "http://0.0.0.0:5000/api/ip_camera/irayple",
             "width": 640,
             "height": 480,
             "fps": 30,

@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, current_app, jsonify, request, render_template, abort
 from datetime import datetime
 from app.utils.video_pipeline import VideoPipeline, PipelineSettings
+from app.utils.irayple import CameraStreamer
 from ultralytics import YOLO
 
 ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
@@ -14,6 +15,17 @@ def _log_event(source_id: str, event_type: str, seq: int = None, details: dict =
         "seq": seq,
         "details": details or {}
     })
+
+camera_instances = {}
+
+@ip_camera_blueprint.route('/irayple')
+def render_irayple():
+    if "irayple" not in camera_instances:
+        log = current_app.logger  # qui è valido
+        streamer = CameraStreamer(ip="192.168.1.123", log=log)
+        streamer.start()
+        camera_instances["irayple"] = streamer
+    return camera_instances["irayple"].stream_response()
 
 @ip_camera_blueprint.route('/monitor')
 def render_monitor():
@@ -73,6 +85,7 @@ def stop(source_id):
 
 @ip_camera_blueprint.route('/stream/<source_id>')
 def stream(source_id):
+    # return render_irayple()
     """Stream MJPEG: serve solo se la pipeline è già in esecuzione."""
     vp = current_app.video_pipelines.get(source_id)
     if not vp or vp._stop.is_set():

@@ -74,6 +74,21 @@ class CameraStreamer:
         self.cam.IMV_CreateHandle(IMV_ECreateHandleMode.modeByIndex, byref(handle_index))
         self.cam.IMV_Open()
 
+        ## Settaggio autobalance white
+        feature = "BalanceWhiteAutoReg"
+        value_continuous = 2  # l'enum Continuous ha Value=2 
+
+        # controlli
+        if self.cam.IMV_FeatureIsAvailable(feature) and self.cam.IMV_FeatureIsWriteable(feature):
+            ret = self.cam.IMV_SetIntFeatureValue(feature, value_continuous)
+            if ret == IMV_OK:
+                print(f"{feature} impostato a {value_continuous} (Continuous)")
+            else:
+                print(f"Errore IMV_SetIntFeatureValue({feature}):", ret)
+        else:
+            print(f"{feature} non disponibile o non scrivibile")
+        ## fine settaggio
+
         # 4) Configura trigger software
         self.cam.IMV_SetEnumFeatureSymbol("TriggerSource", "Software")
         self.cam.IMV_SetEnumFeatureSymbol("TriggerSelector", "FrameStart")

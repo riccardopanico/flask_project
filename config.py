@@ -51,7 +51,8 @@ class Config:
 
         # 3. Inferenza + conteggio attivo
         "cam_counting_example": {
-            "source": "http://0.0.0.0:5000/api/ip_camera/irayple",
+            "source": "0",
+            # "source": "http://0.0.0.0:5000/api/ip_camera/irayple",
             "width": 640,
             "height": 480,
             "fps": 30,
@@ -74,8 +75,8 @@ class Config:
                         "show_out": True,
                         "tracking": {
                             "show": False,
-                            "show_labels": False,
-                            "show_conf": False,
+                            "show_labels": True,
+                            "show_conf": True,
                             "verbose": False
                         }
                     }
@@ -91,8 +92,8 @@ class Config:
                         "show_out": True,
                         "tracking": {
                             "show": False,
-                            "show_labels": False,
-                            "show_conf": False,
+                            "show_labels": True,
+                            "show_conf": True,
                             "verbose": False
                         }
                     }

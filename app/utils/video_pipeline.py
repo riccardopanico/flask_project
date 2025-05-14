@@ -11,6 +11,8 @@ from typing import Optional, List, Dict, Any, Union, Callable
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 from ultralytics import YOLO
+from ultralytics.solutions.object_counter import ObjectCounter
+from collections import defaultdict
 
 
 class Frame(BaseModel):
@@ -26,6 +28,7 @@ class ModelSettings(BaseModel):
     confidence: float = 0.5
     iou: float = 0.45
     classes_filter: Optional[List[str]] = None
+    counting: Optional[Dict[str, Any]] = None
 
 
 class PipelineSettings(BaseModel):
@@ -38,12 +41,9 @@ class PipelineSettings(BaseModel):
     quality: int = 80
     use_cuda: bool = True
     max_workers: int = 1
-
     models: List[ModelSettings] = Field(default_factory=list)
-
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
-
     model_config = {'arbitrary_types_allowed': True}
 
 
@@ -113,43 +113,100 @@ class SourceHandler:
             self.cap.release()
 
 
+class EnhancedObjectCounter(ObjectCounter):
+    def __init__(
+        self,
+        **kwargs
+    ):
+        self.id_timeout = kwargs.pop('id_timeout', 5.0)
+        self.min_frames_before_count = kwargs.pop('min_frames_before_count', 3)
+        super().__init__(**kwargs)
+        self.id_timestamps = {}
+        self.id_directions = {}
+        self.id_positions = defaultdict(list)
+        self.last_cleanup_time = time.time()
+        self.cleanup_interval = 1.0
+
+    def extract_tracks(self, im0):
+        pass
+
+    def set_external_results(self, result):
+        boxes = result.boxes
+        self.track_data = boxes
+        self.tracks = [result]
+        self.boxes = boxes.xyxy.cpu()
+        self.clss = [int(c) for c in boxes.cls.cpu().tolist()]
+        self.track_ids = (
+            boxes.id.int().cpu().tolist()
+            if boxes.id is not None else [None] * len(self.boxes)
+        )
+        self.confs = boxes.conf.cpu().tolist()
+
+    def count_objects(self, current_centroid, track_id, prev_position, cls):
+        if prev_position is None:
+            return
+        positions = self.id_positions[track_id]
+        positions.append(current_centroid)
+        if len(positions) > 30:
+            positions.pop(0)
+        if len(positions) < self.min_frames_before_count:
+            return
+        line = self.LineString(self.region)
+        if line.intersects(self.LineString([prev_position, current_centroid])):
+            is_vertical = (
+                abs(self.region[0][0] - self.region[1][0]) <
+                abs(self.region[0][1] - self.region[1][1])
+            )
+            oldest = positions[0]
+            direction = None
+            if is_vertical:
+                direction = 'in' if current_centroid[0] > oldest[0] else 'out'
+            else:
+                direction = 'in' if current_centroid[1] > oldest[1] else 'out'
+            now = time.time()
+            if track_id in self.id_directions:
+                prev_dir = self.id_directions[track_id]
+                prev_ts = self.id_timestamps[track_id]
+                if prev_dir == direction or now - prev_ts < self.id_timeout:
+                    return
+            if direction == 'in':
+                self.in_count += 1
+                self.classwise_counts[self.names[cls]]['IN'] += 1
+            else:
+                self.out_count += 1
+                self.classwise_counts[self.names[cls]]['OUT'] += 1
+            self.counted_ids.append(track_id)
+            self.id_timestamps[track_id] = now
+            self.id_directions[track_id] = direction
+
+    def cleanup_expired_ids(self):
+        now = time.time()
+        if now - self.last_cleanup_time < self.cleanup_interval:
+            return
+        self.last_cleanup_time = now
+        expired = [tid for tid, ts in self.id_timestamps.items() if now - ts > self.id_timeout]
+        for tid in expired:
+            if tid in self.counted_ids:
+                self.counted_ids.remove(tid)
+            self.id_timestamps.pop(tid, None)
+            self.id_directions.pop(tid, None)
+            self.id_positions.pop(tid, None)
+
+    def process(self, im0):
+        self.cleanup_expired_ids()
+        if not hasattr(self, 'track_data') or self.boxes is None:
+            return None
+        return super().process(im0)
+
+
 class VideoPipeline:
     def __init__(self, config: PipelineSettings, logger: Optional[Any] = None):
         self.config = config
         self._log = logger.info if logger else print
         self._setup()
 
-    def _setup(self):
-        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
-        self._stop = threading.Event()
-        self._seq = 0
-        self._last_frame = None
-        self._metrics = {
-            'frames_received': 0,
-            'frames_processed': 0,
-            'inference_times': [],
-            'last_error': None
-        }
-        self.clients_active = 0
-        self.frames_served = 0
-        self.bytes_served = 0
-
-        self._load_models()
-        self.pipeline_source = (
-            self.config.source
-            if isinstance(self.config.source, VideoPipeline)
-            else None
-        )
-        self.source_handler = None
-
-        self._clients: Dict[str, queue.Queue] = {}
-        self._on_frame_cb: List[Callable] = []
-        self._on_inference_cb: List[Callable] = []
-        self._on_error_cb: List[Callable] = []
-        self._processing_enabled = bool(self.config.models)
-
     def _load_models(self):
-        self.models: Dict[str, Dict[str, Any]] = {}
+        self.models = {}
         for setting in self.config.models:
             path = setting.path
             if not os.path.isfile(path):
@@ -157,11 +214,56 @@ class VideoPipeline:
                 continue
             try:
                 yolo = YOLO(path, verbose=False)
-                entry = {'yolo': yolo, 'setting': setting}
-                self.models[path] = entry
+                self.models[path] = {'yolo': yolo, 'setting': setting}
                 self._log(f"Loaded model: {os.path.basename(path)}")
             except Exception as e:
                 self._log(f"Error loading {path}: {e}")
+
+    def _setup(self):
+        self._load_models()
+        self.counters = {}
+        for path, info in self.models.items():
+            setting = info['setting']
+            cinfo = setting.counting
+            if not cinfo:
+                continue
+            region   = cinfo['region']
+            show_in  = cinfo.get('show_in', True)
+            show_out = cinfo.get('show_out', True)
+            tck      = cinfo.get('tracking', {})
+            cnt = EnhancedObjectCounter(
+                model=None,
+                region=region,
+                classes=None,
+                conf=setting.confidence,
+                tracker=tck.get('tracker', 'botsort.yaml'),
+                show=tck.get('show', False),
+                show_conf=tck.get('show_conf', False),
+                show_labels=tck.get('show_labels', False),
+                verbose=tck.get('verbose', False),
+                show_in=show_in,
+                show_out=show_out,
+                id_timeout=cinfo.get('id_timeout', 5.0),
+                min_frames_before_count=cinfo.get('min_frames_before_count', 3)
+            )
+            cnt.names = info['yolo'].names
+            self.counters[path] = cnt
+
+        self.pipeline_source = self.config.source if isinstance(self.config.source, VideoPipeline) else None
+        self.source_handler = None
+        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
+        self._stop = threading.Event()
+        self._seq = 0
+        self._last_frame = None
+        self._metrics = {'frames_received': 0, 'frames_processed': 0, 'inference_times': [], 'last_error': None}
+        self.clients_active = 0
+        self.frames_served = 0
+        self.bytes_served = 0
+        self._clients = {}
+        self._on_frame_cb = []
+        self._on_inference_cb = []
+        self._on_error_cb = []
+        self._processing_enabled = bool(self.config.models)
 
     def register_callback(self, event: str, fn: Callable):
         if event not in ('frame', 'inference', 'error'):
@@ -169,29 +271,18 @@ class VideoPipeline:
         getattr(self, f"_on_{event}_cb").append(fn)
 
     def _emit(self, event: str, *args):
-        for cb in getattr(self, f"_on_{event}_cb"): 
-            try:
-                cb(*args)
-            except Exception as e:
-                self._log(f"Callback {event} error: {e}")
+        for cb in getattr(self, f"_on_{event}_cb"): cb(*args)
 
     def start(self):
         self._stop.clear()
-        self._frame_q = queue.Queue(maxsize=self.config.prefetch)
+        self._frame_q.queue.clear()
         self._last_frame = None
-        self._metrics['frames_received'] = 0
-        self._metrics['frames_processed'] = 0
+        self._metrics.update(frames_received=0, frames_processed=0, inference_times=[], last_error=None)
         self.frames_served = 0
-        self.bytes_served = 0
-
+        self.bytes_served  = 0
         self._executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
         if not self.pipeline_source:
-            self.source_handler = SourceHandler(
-                str(self.config.source),
-                self.config.width,
-                self.config.height,
-                self.config.fps
-            )
+            self.source_handler = SourceHandler(str(self.config.source), self.config.width, self.config.height, self.config.fps)
         threading.Thread(target=self._ingest_loop, daemon=True).start()
         threading.Thread(target=self._process_loop, daemon=True).start()
         self._log("Pipeline started")
@@ -202,17 +293,12 @@ class VideoPipeline:
         if self.source_handler:
             self.source_handler.release()
             self.source_handler = None
-        if hasattr(self, '_executor'):
-            self._executor.shutdown(wait=False, cancel_futures=True)
+        self._executor.shutdown(wait=False, cancel_futures=True)
         self._log("Pipeline stopped")
 
     def _ingest_loop(self):
         while not self._stop.is_set():
-            data = (
-                self.pipeline_source._last_frame
-                if self.pipeline_source
-                else self.source_handler.read()
-            )
+            data = (self.pipeline_source._last_frame if self.pipeline_source else self.source_handler.read())
             if not data:
                 time.sleep(0.005)
                 continue
@@ -221,11 +307,7 @@ class VideoPipeline:
             self._metrics['frames_received'] += 1
             self._emit('frame', frm)
             try:
-                self._frame_q.put(
-                    frm,
-                    block=not self.config.skip_on_full_queue,
-                    timeout=0.01
-                )
+                self._frame_q.put(frm, block=not self.config.skip_on_full_queue, timeout=0.01)
             except queue.Full:
                 if not self.config.skip_on_full_queue:
                     time.sleep(0.005)
@@ -233,71 +315,55 @@ class VideoPipeline:
     def _process_loop(self):
         def worker(frm: Frame):
             try:
-                # Decodifica il frame JPEG in immagine OpenCV
                 orig = cv2.imdecode(np.frombuffer(frm.data, np.uint8), cv2.IMREAD_COLOR)
-
-                # Ridimensionamento se richiesto
                 if self.config.width and self.config.height:
-                    if orig.shape[1] != self.config.width or orig.shape[0] != self.config.height:
-                        orig = cv2.resize(orig, (self.config.width, self.config.height), interpolation=cv2.INTER_LINEAR)
-
+                    orig = cv2.resize(orig, (self.config.width, self.config.height), interpolation=cv2.INTER_LINEAR)
                 canvas = orig.copy()
                 start = time.time()
-
                 for path, info in list(self.models.items()):
-                    setting: ModelSettings = info['setting']
-                    model = info['yolo']
-
-                    # Filtro classi (converti nomi in indici)
+                    setting = info['setting']
+                    model   = info['yolo']
                     classes = None
                     if setting.classes_filter:
-                        name_to_idx = {v: k for k, v in model.names.items()}
+                        name_to_idx = {v: k for k,v in model.names.items()}
                         classes = [name_to_idx[c] for c in setting.classes_filter if c in name_to_idx]
-
-                    # Inference
-                    res = model(
+                    res = model.track(
                         orig,
                         conf=setting.confidence,
                         iou=setting.iou,
                         classes=classes,
                         verbose=False,
-                        device='cuda' if self.config.use_cuda else 'cpu'
+                        device='cuda' if self.config.use_cuda else 'cpu',
+                        persist=True,
+                        tracker='botsort.yaml'
                     )[0]
-
                     self._emit('inference', frm, path, res)
-
-                    # Se disegno attivo
-                    if setting.draw:
-                        overlay = res.plot()[:, :, :3]
+                    if path in self.counters:
+                        cnt = self.counters[path]
+                        cnt.set_external_results(res)
+                        out = cnt.process(canvas)
+                        if out is not None and hasattr(out, 'plot_im'):
+                            canvas = out.plot_im
+                    elif setting.draw:
+                        overlay = res.plot()[:,:,:3]
                         mask = np.any(overlay != orig, axis=-1)
                         canvas[mask] = overlay[mask]
-
-                # Tempo di inferenza
                 dt = (time.time() - start) * 1000
                 self._metrics['inference_times'].append(dt)
-
-                # Codifica JPEG e salva l'ultimo frame
                 _, buf = cv2.imencode('.jpg', canvas, [int(cv2.IMWRITE_JPEG_QUALITY), self.config.quality])
                 jpg = buf.tobytes()
                 self._last_frame = jpg
                 self._metrics['frames_processed'] += 1
-
-                # Invia il frame ai client connessi
                 for q in list(self._clients.values()):
-                    try:
-                        q.put_nowait(jpg)
+                    try: q.put_nowait(jpg)
                     except queue.Full:
-                        try:
-                            q.get_nowait()
-                        except queue.Empty:
-                            pass
+                        try: q.get_nowait()
+                        except: pass
                         q.put_nowait(jpg)
-
             except Exception:
                 err = traceback.format_exc()
                 self._metrics['last_error'] = err
                 self._emit('error', err)
-
         while not self._stop.is_set():
             try:
                 frm = self._frame_q.get(timeout=0.01)
@@ -314,60 +380,34 @@ class VideoPipeline:
         fps = float(request.args.get('fps', self.config.fps or 30))
         timeout = float(request.args.get('timeout', 5))
         boundary = b'--frame'
-        fallback = np.zeros((480, 640, 3), np.uint8)
-        cv2.putText(
-            fallback,
-            "No signal",
-            (200, 240),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255, 255, 255),
-            2
-        )
-        _, fb_buf = cv2.imencode('.jpg', fallback)
-        fb_jpg = fb_buf.tobytes()
-
+        fallback = np.zeros((480,640,3), np.uint8)
+        cv2.putText(fallback,'No signal',(200,240),cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,255),2)
+        _, fb = cv2.imencode('.jpg', fallback)
+        fb_jpg = fb.tobytes()
         def gen():
             try:
                 while not self._stop.is_set():
-                    try:
-                        frame = q.get(timeout=timeout)
+                    try: frame = q.get(timeout=timeout)
                     except queue.Empty:
                         frame = fb_jpg
-                        self._log("Sending fallback frame")
-                    yield (
-                        boundary
-                        + b'\r\nContent-Type: image/jpeg\r\n\r\n'
-                        + frame
-                        + b'\r\n'
-                    )
+                    yield boundary + b'\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n'
                     self.frames_served += 1
                     self.bytes_served += len(frame)
                     time.sleep(1.0 / fps)
             finally:
                 self.clients_active -= 1
                 self._clients.pop(cid, None)
-
-        return Response(
-            stream_with_context(gen()),
-            mimetype='multipart/x-mixed-replace; boundary=frame'
-        )
+        return Response(stream_with_context(gen()), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     def update_config(self, **kwargs):
         reload_models = False
         restart = False
         if 'models' in kwargs:
-            new_list = [
-                ModelSettings(**m) if isinstance(m, dict) else m
-                for m in kwargs.pop('models')
-            ]
-            self.config.models = new_list
+            self.config.models = [ModelSettings(**m) if isinstance(m, dict) else m for m in kwargs.pop('models')]
             reload_models = True
-        for key in ('prefetch', 'max_workers'):
-            if key in kwargs:
-                restart = True
-        for k, v in kwargs.items():
-            setattr(self.config, k, v)
+        for k in ('prefetch','max_workers'):
+            if k in kwargs: restart = True
+        for k,v in kwargs.items(): setattr(self.config,k,v)
         if reload_models:
             self._load_models()
         if restart:
@@ -375,6 +415,44 @@ class VideoPipeline:
             time.sleep(0.05)
             self.start()
         self._log(f"Config updated: {kwargs}, models: {[m.dict() for m in self.config.models]}")
+        # aggiorna contatori
+        for path in list(self.counters):
+            setting = next((m for m in self.config.models if m.path==path), None)
+            if not setting or not setting.counting:
+                del self.counters[path]
+            else:
+                cinfo = setting.counting
+                cnt = self.counters[path]
+                cnt.region = cinfo['region']
+                cnt.show_in = cinfo.get('show_in', cnt.show_in)
+                cnt.show_out = cinfo.get('show_out', cnt.show_out)
+                cnt.id_timeout = cinfo.get('id_timeout', cnt.id_timeout)
+                cnt.min_frames_before_count = cinfo.get('min_frames_before_count', cnt.min_frames_before_count)
+        for setting in self.config.models:
+            path = setting.path
+            cinfo = setting.counting
+            if cinfo and path not in self.counters:
+                region   = cinfo['region']
+                show_in  = cinfo.get('show_in', True)
+                show_out = cinfo.get('show_out', True)
+                tck      = cinfo.get('tracking', {})
+                cnt = EnhancedObjectCounter(
+                    model=None,
+                    region=region,
+                    classes=None,
+                    conf=setting.confidence,
+                    tracker=tck.get('tracker','botsort.yaml'),
+                    show=tck.get('show',False),
+                    show_conf=tck.get('show_conf',False),
+                    show_labels=tck.get('show_labels',False),
+                    verbose=tck.get('verbose',False),
+                    show_in=show_in,
+                    show_out=show_out,
+                    id_timeout=cinfo.get('id_timeout',5.0),
+                    min_frames_before_count=cinfo.get('min_frames_before_count',3)
+                )
+                cnt.names = self.models[path]['yolo'].names
+                self.counters[path] = cnt
 
     def health(self) -> Dict[str, Any]:
         t = self._metrics['inference_times']
@@ -384,18 +462,20 @@ class VideoPipeline:
             'frames_processed': self._metrics['frames_processed'],
             'clients_active': self.clients_active,
             'last_error': self._metrics['last_error'],
-            'avg_inf_ms': round(np.mean(t), 2) if t else 0,
-            'min_inf_ms': round(np.min(t), 2) if t else 0,
-            'max_inf_ms': round(np.max(t), 2) if t else 0
+            'avg_inf_ms': round(np.mean(t),2) if t else 0,
+            'min_inf_ms': round(np.min(t),2) if t else 0,
+            'max_inf_ms': round(np.max(t),2) if t else 0
         }
 
     def metrics(self) -> Dict[str, Any]:
         avg = np.mean(self._metrics['inference_times']) if self._metrics['inference_times'] else 0
+        counters = {n: c.in_count + c.out_count for n,c in self.counters.items()}
         return {
             'avg_inf_ms': avg,
             'frames_served': self.frames_served,
             'bytes_served': self.bytes_served,
-            'last_error': self._metrics['last_error']
+            'last_error': self._metrics['last_error'],
+            'counters': counters
         }
 
     def export_config(self) -> Dict[str, Any]:

@@ -21,13 +21,12 @@ class Config:
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, "data")
+    MODELS_DIR = os.path.join(DATA_DIR, "models")
     os.makedirs(DATA_DIR, exist_ok=True)
     for sub in ["models", "datasets", "output", "temp", "logs", "config"]:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
     PIPELINE_CONFIGS = {
-
-        # 1. Configurazione base: non fa nulla (nessun modello)
         "default": {
             "source": "0",
             "width": 640,
@@ -35,8 +34,6 @@ class Config:
             "fps": 30,
             "models": []
         },
-
-        # 2. Solo inferenza (disegna bbox, no conteggio)
         "external_rtsp": {
             "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
             "models": [
@@ -48,11 +45,8 @@ class Config:
                 }
             ]
         },
-
-        # 3. Inferenza + conteggio attivo
         "cam_counting_example": {
-            #"source": "0",
-            "source": "http://0.0.0.0:5000/api/ip_camera/irayple",
+            "source": "http://0.0.0.0:5000/api/ip_camera/irayple/1",  # <- nome logico
             "width": 640,
             "height": 480,
             "fps": 30,

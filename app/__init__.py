@@ -18,6 +18,8 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 
 from config import ProductionConfig, DevelopmentConfig
 from app.utils.streamlit_manager import StreamlitManager
+from app.utils.irayple import IraypleStreamer
+from app.utils.video_pipeline import VideoPipeline
 
 db = SQLAlchemy()
 jwt = JWTManager()
@@ -57,8 +59,8 @@ def create_app():
     migrate.init_app(app, db)
 
     # 3. Registry delle pipeline: nessuna partenza automatica
-    app.video_pipelines: Dict[str, Any] = {}
-    app.video_pipelines: Dict[str, Any] = {}
+    app.video_pipelines: Dict[str, VideoPipeline] = {}
+    app.irayple_cameras: Dict[str, IraypleStreamer] = {}
 
     # 4. Streamlit e scheduler (resta invariato)
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})

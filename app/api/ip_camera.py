@@ -34,16 +34,13 @@ def render_camera_monitor():
 
 @ip_camera_blueprint.route('/start/<source_id>', methods=['POST'])
 def start(source_id):
-    """REST fallback per avviare la pipeline (ma preferite WS)."""
     cfgs = current_app.config.get('PIPELINE_CONFIGS', {})
     if source_id not in cfgs:
         return jsonify(success=False, error="Config non trovata"), 404
 
-    # se non esiste la pipeline, la creo
     if source_id not in current_app.video_pipelines:
         cfg = PipelineSettings(**cfgs[source_id])
         vp = VideoPipeline(cfg, logger=current_app.logger)
-        # registro i callback di log
         vp.register_callback('on_frame', lambda fr, sid=source_id:
             _log_event(sid, 'frame', fr.seq, {'timestamp': fr.timestamp})
         )
@@ -70,7 +67,6 @@ def start(source_id):
 
 @ip_camera_blueprint.route('/stop/<source_id>', methods=['POST'])
 def stop(source_id):
-    """REST fallback per fermare la pipeline."""
     vp = current_app.video_pipelines.get(source_id)
     if not vp:
         return jsonify(success=False, error="Pipeline non esistente"), 404
@@ -82,8 +78,6 @@ def stop(source_id):
 
 @ip_camera_blueprint.route('/stream/<source_id>')
 def stream(source_id):
-    # return render_irayple()
-    """Stream MJPEG: serve solo se la pipeline è già in esecuzione."""
     vp = current_app.video_pipelines.get(source_id)
     if not vp or vp._stop.is_set():
         abort(404)
@@ -91,7 +85,6 @@ def stream(source_id):
 
 @ip_camera_blueprint.route('/healthz/<source_id>')
 def healthz(source_id):
-    """Health check via REST."""
     vp = current_app.video_pipelines.get(source_id)
     if not vp:
         return jsonify(success=False, error="Pipeline non trovata"), 404
@@ -101,7 +94,6 @@ def healthz(source_id):
 
 @ip_camera_blueprint.route('/metrics/<source_id>')
 def metrics(source_id):
-    """Metrics via REST."""
     vp = current_app.video_pipelines.get(source_id)
     if not vp:
         return jsonify(success=False, error="Pipeline non trovata"), 404
@@ -111,10 +103,6 @@ def metrics(source_id):
 
 @ip_camera_blueprint.route('/config/<source_id>', methods=['GET', 'PATCH'])
 def config(source_id):
-    """
-    - GET: ritorna la config corrente (export_config).
-    - PATCH: aggiorna via REST (fallback).
-    """
     vp = current_app.video_pipelines.get(source_id)
     if not vp:
         return jsonify(success=False, error="Pipeline non trovata"), 404
@@ -123,7 +111,6 @@ def config(source_id):
         cfg = vp.export_config()
         return jsonify(success=True, config=cfg), 200
 
-    # PATCH
     try:
         payload = request.get_json(force=True)
         vp.update_config(**payload)
@@ -133,37 +120,25 @@ def config(source_id):
         current_app.logger.error(f"Errore update config: {e}")
         _log_event(source_id, 'config_error', details={'error': str(e)})
         return jsonify(success=False, error=str(e)), 400
-
+    
 @ip_camera_blueprint.route('/models/list')
 def list_models():
-    import sys
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    models_dir = os.path.join(base_dir, 'data', 'models')
-    files = []
-    if os.path.isdir(models_dir):
-        for f in os.listdir(models_dir):
-            if f.endswith('.pt'):
-                files.append(f'data/models/{f}')
-    else:
-        print(f"[DEBUG] models_dir does NOT exist: {models_dir}", file=sys.stderr)
-    return jsonify(files)
+    models_dir = current_app.config['MODELS_DIR']
+    return jsonify([f'data/models/{f}' for f in os.listdir(models_dir) if f.endswith('.pt')] or [])
 
 @ip_camera_blueprint.route('/model_classes')
 def model_classes():
     path = request.args.get('path')
     if not path:
         return jsonify([])
-    # Costruisci il path assoluto
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    model_path = os.path.join(base_dir, path)
+        
+    model_path = os.path.join(current_app.config['BASE_DIR'], path)
     if not os.path.isfile(model_path):
         return jsonify([])
+        
     try:
         model = YOLO(model_path)
-        if hasattr(model, 'names'):
-            return jsonify(list(model.names.values()))
-        else:
-            return jsonify([])
+        return jsonify(list(model.names.values()) if hasattr(model, 'names') else [])
     except Exception as e:
-        print(f"[ERROR] Impossibile caricare le classi dal modello {model_path}: {e}")
+        current_app.logger.error(f"Errore caricamento classi modello {model_path}: {e}")
         return jsonify([])

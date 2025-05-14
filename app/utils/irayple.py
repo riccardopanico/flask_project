@@ -27,7 +27,7 @@ class IraypleStreamer:
         """
         self.ip = ip
         self.cam = None
-        self.output_frame = None
+        self._last_frame = None
         self.lock = threading.Lock()
         self._thread = None
         self._stop_event = threading.Event()
@@ -142,7 +142,7 @@ class IraypleStreamer:
 
         # Salva frame
         with self.lock:
-            self.output_frame = img.copy()
+            self._last_frame = img.copy()
 
     def start(self):
         """Avvia il thread di grabbing."""
@@ -180,7 +180,7 @@ class IraypleStreamer:
         def gen():
             while True:
                 with self.lock:
-                    frame = self.output_frame
+                    frame = self._last_frame
                 if frame is None:
                     continue
                 ok, jpg = cv2.imencode('.jpg', frame)

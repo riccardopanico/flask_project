@@ -2,7 +2,7 @@ import os
 from flask import Blueprint, current_app, jsonify, request, render_template, abort
 from datetime import datetime
 from app.utils.video_pipeline import VideoPipeline, PipelineSettings
-from app.utils.irayple import CameraStreamer
+from app.utils.irayple import IraypleStreamer
 from ultralytics import YOLO
 
 ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camera')
@@ -16,16 +16,13 @@ def _log_event(source_id: str, event_type: str, seq: int = None, details: dict =
         "details": details or {}
     })
 
-camera_instances = {}
-
-@ip_camera_blueprint.route('/irayple')
-def render_irayple():
-    if "irayple" not in camera_instances:
-        log = current_app.logger  # qui è valido
-        streamer = CameraStreamer(ip="192.168.1.123", log=log)
+@ip_camera_blueprint.route('/irayple/<cam_id>')
+def get_irayple_stream(cam_id):
+    if cam_id not in current_app.irayple_cameras:
+        streamer = IraypleStreamer(ip='192.168.1.123', log=current_app.logger)
         streamer.start()
-        camera_instances["irayple"] = streamer
-    return camera_instances["irayple"].stream_response()
+        current_app.irayple_cameras[cam_id] = streamer
+    return current_app.irayple_cameras[cam_id].stream_response()
 
 @ip_camera_blueprint.route('/monitor')
 def render_monitor():

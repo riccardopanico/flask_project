@@ -58,6 +58,7 @@ def create_app():
 
     # 3. Registry delle pipeline: nessuna partenza automatica
     app.video_pipelines: Dict[str, Any] = {}
+    app.video_pipelines: Dict[str, Any] = {}
 
     # 4. Streamlit e scheduler (resta invariato)
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})

@@ -19,7 +19,7 @@ if sys.platform == 'win32' and hasattr(os, 'add_dll_directory'):
 sys.path.append("/opt/HuarayTech/MVviewer/share/Python/MVSDK")
 from IMVApi import *
 
-class CameraStreamer:
+class IraypleStreamer:
     def __init__(self, ip: str, log=None):
         """
         ip: indirizzo IP della camera da selezionare automaticamente
@@ -36,7 +36,7 @@ class CameraStreamer:
         if log:
             self.logger = log
         else:
-            self.logger = logging.getLogger(f"{__name__}.CameraStreamer")
+            self.logger = logging.getLogger(f"{__name__}.IraypleStreamer")
             if not self.logger.handlers:
                 handler = logging.StreamHandler(sys.stdout)
                 handler.setFormatter(logging.Formatter(

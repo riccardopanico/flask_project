@@ -165,12 +165,19 @@ class IraypleStreamer:
                 if not ok:
                     self.logger.warning("JPEG encode fallito")
                     continue
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' +
-                       jpg.tobytes() + b'\r\n')
+                data = jpg.tobytes()
+                yield (
+                    b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n'
+                    b'Content-Length: ' + str(len(data)).encode() + b'\r\n'
+                    b'\r\n' + data + b'\r\n'
+                )
                 time.sleep(0.03)
-        return Response(gen(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
+        return Response(
+            gen(),
+            mimetype='multipart/x-mixed-replace; boundary=frame'
+        )
+
     def read(self) -> Optional[bytes]:
         with self.lock:
             frame = self._last_frame

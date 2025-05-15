@@ -46,7 +46,7 @@ class Config:
             ]
         },
         "cam_counting_example": {
-            "source": "http://0.0.0.0:5000/api/ip_camera/irayple/1",  # <- nome logico
+            "source": "irayple:1",  # <- nome logico
             "width": 640,
             "height": 480,
             "fps": 30,
@@ -95,10 +95,13 @@ class Config:
             ]
         }
     }
-
+    
+    IRAYPLE_CAMERAS = {
+        "1": "192.168.1.123",
+    }
 
     MODULES = {
-        "api": {"enabled": True, "prefix": "/api", "modules": ["ip_camera"]},
+        "api": {"enabled": True, "prefix": "/api", "modules": ["ip_camera", "irayple"]},
         "models": {"enabled": True, "modules": []},
         "jobs": {
             "enabled": True,

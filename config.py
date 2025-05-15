@@ -28,7 +28,7 @@ class Config:
 
     PIPELINE_CONFIGS = {
         "default": {
-            "source": "0",
+            "source": "http://0.0.0.0:5000/api/irayple/1/stream",
             "width": 640,
             "height": 480,
             "fps": 30,

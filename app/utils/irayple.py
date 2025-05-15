@@ -10,21 +10,16 @@ from ctypes import *
 import numpy as np
 import cv2
 from flask import Flask, Response
+from typing import Optional
 
-# Se serve Windows DLL path
 if sys.platform == 'win32' and hasattr(os, 'add_dll_directory'):
     os.add_dll_directory(r"C:\Program Files\HuarayTech\MV Viewer\Runtime\x64")
 
-# SDK HuarayTech
 sys.path.append("/opt/HuarayTech/MVviewer/share/Python/MVSDK")
 from IMVApi import *
 
 class IraypleStreamer:
     def __init__(self, ip: str, log=None):
-        """
-        ip: indirizzo IP della camera da selezionare automaticamente
-        log: logger esterno (es. app.logger); se None, se ne crea uno interno
-        """
         self.ip = ip
         self.cam = None
         self._last_frame = None
@@ -32,7 +27,6 @@ class IraypleStreamer:
         self._thread = None
         self._stop_event = threading.Event()
 
-        # Logger: usa quello passato o ne crea uno semplice
         if log:
             self.logger = log
         else:
@@ -45,19 +39,16 @@ class IraypleStreamer:
                 self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
 
-        # Callback C
         self._cb_type = CFUNCTYPE(None, POINTER(IMV_Frame), c_void_p)
         self._cb_fun = self._cb_type(self._image_callback)
 
         self._open_camera()
 
     def _open_camera(self):
-        # 1) Enumerazione device
         devList = IMV_DeviceList()
         if MvCamera.IMV_EnumDevices(devList, IMV_EInterfaceType.interfaceTypeAll) != IMV_OK:
             raise RuntimeError("Errore enumerazione device")
 
-        # 2) Cerca device con IP corrispondente
         idx = None
         for i in range(devList.nDevNum):
             info = devList.pDevInfo[i].DeviceSpecificInfo.gigeDeviceInfo
@@ -68,33 +59,27 @@ class IraypleStreamer:
             raise ValueError(f"Nessuna camera trovata con IP {self.ip}")
         self.logger.info(f"Camera trovata all'indice {idx} (IP: {self.ip})")
 
-        # 3) Crea handle e apri
         self.cam = MvCamera()
         handle_index = c_void_p(idx)
         self.cam.IMV_CreateHandle(IMV_ECreateHandleMode.modeByIndex, byref(handle_index))
         self.cam.IMV_Open()
 
-        ## Settaggio autobalance white
         feature = "BalanceWhiteAutoReg"
-        value_continuous = 2  # l'enum Continuous ha Value=2 
+        value_continuous = 2
 
-        # controlli
         if self.cam.IMV_FeatureIsAvailable(feature) and self.cam.IMV_FeatureIsWriteable(feature):
             ret = self.cam.IMV_SetIntFeatureValue(feature, value_continuous)
             if ret == IMV_OK:
-                print(f"{feature} impostato a {value_continuous} (Continuous)")
+                self.logger.info(f"{feature} impostato a {value_continuous} (Continuous)")
             else:
-                print(f"Errore IMV_SetIntFeatureValue({feature}):", ret)
+                self.logger.error(f"Errore IMV_SetIntFeatureValue({feature}): {ret}")
         else:
-            print(f"{feature} non disponibile o non scrivibile")
-        ## fine settaggio
+            self.logger.warning(f"{feature} non disponibile o non scrivibile")
 
-        # 4) Configura trigger software
         self.cam.IMV_SetEnumFeatureSymbol("TriggerSource", "Software")
         self.cam.IMV_SetEnumFeatureSymbol("TriggerSelector", "FrameStart")
         self.cam.IMV_SetEnumFeatureSymbol("TriggerMode", "Off")
 
-        # 5) Attacca callback
         self.cam.IMV_AttachGrabbing(self._cb_fun, None)
 
     def _image_callback(self, pFrame, pUser):
@@ -102,7 +87,6 @@ class IraypleStreamer:
             return
         frame = cast(pFrame, POINTER(IMV_Frame)).contents
 
-        # Parametri conversione
         stParam = IMV_PixelConvertParam()
         mono = frame.frameInfo.pixelFormat == IMV_EPixelType.gvspPixelMono8
         dstSize = frame.frameInfo.width * frame.frameInfo.height * (1 if mono else 3)
@@ -120,10 +104,8 @@ class IraypleStreamer:
         stParam.pDstBuf = pDstBuf
         stParam.nDstBufSize = dstSize
 
-        # Rilascia subito la memoria driver
         self.cam.IMV_ReleaseFrame(frame)
 
-        # Costruisci numpy array
         if mono:
             buf = (c_ubyte * dstSize)()
             memmove(buf, stParam.pSrcData, dstSize)
@@ -140,12 +122,10 @@ class IraypleStreamer:
                 stParam.nHeight, stParam.nWidth, 3
             )
 
-        # Salva frame
         with self.lock:
             self._last_frame = img.copy()
 
     def start(self):
-        """Avvia il thread di grabbing."""
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
@@ -154,7 +134,6 @@ class IraypleStreamer:
         self.logger.info("Thread di grabbing avviato")
 
     def _grab_loop(self):
-        # Avvia grabbing
         nRet = self.cam.IMV_StartGrabbing()
         if nRet != IMV_OK:
             raise RuntimeError(f"StartGrabbing failed: {nRet}")
@@ -167,16 +146,15 @@ class IraypleStreamer:
             self.logger.info("Grabbing fermato")
 
     def stop(self):
-        """Ferma il grabbing e pulisce le risorse."""
         self._stop_event.set()
         if self._thread:
             self._thread.join()
-        self.cam.IMV_CloseDevice()
-        self.cam.IMV_DestroyHandle()
+        if self.cam:
+            self.cam.IMV_CloseDevice()
+            self.cam.IMV_DestroyHandle()
         self.logger.info("Camera fermata e risorse liberate")
 
     def stream_response(self):
-        """Restituisce un Flask Response con MJPEG stream."""
         def gen():
             while True:
                 with self.lock:
@@ -193,3 +171,17 @@ class IraypleStreamer:
                 time.sleep(0.03)
         return Response(gen(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
+    def read(self) -> Optional[bytes]:
+        with self.lock:
+            frame = self._last_frame
+        if frame is None:
+            self.logger.warning("No frame available yet")
+            return None
+        ok, buf = cv2.imencode('.jpg', frame)
+        if not ok:
+            self.logger.warning("JPEG encode fallito")
+            return None
+        return buf.tobytes()
+
+    def is_running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()

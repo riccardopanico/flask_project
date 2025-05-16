@@ -7,19 +7,35 @@ import requests
 import queue
 import uuid
 import numpy as np
-from typing import Optional, List, Dict, Any, Union, Callable
+from typing import Optional, List, Tuple, Dict, Any, Union, Callable
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 from ultralytics import YOLO
 from ultralytics.solutions.object_counter import ObjectCounter
 from collections import defaultdict
-
-
 class Frame(BaseModel):
     data: bytes
     timestamp: float
     seq: int
     meta: Optional[Dict[str, Any]] = None
+
+
+class TrackingSettings(BaseModel):
+    show: bool = False
+    show_labels: bool = True
+    show_conf: bool = True
+    verbose: bool = False
+    tracker: str = "botsort.yaml"
+
+
+class ModelCountingSettings(BaseModel):
+    region: List[Tuple[int, int]]
+    show_in: bool = True
+    show_out: bool = True
+    show: bool = False
+    id_timeout: float = 5.0
+    min_frames_before_count: int = 3
+    tracking: TrackingSettings = Field(default_factory=TrackingSettings)
 
 
 class ModelSettings(BaseModel):
@@ -28,7 +44,7 @@ class ModelSettings(BaseModel):
     confidence: float = 0.5
     iou: float = 0.45
     classes_filter: Optional[List[str]] = None
-    counting: Optional[Dict[str, Any]] = None
+    counting: Optional[ModelCountingSettings] = None
 
 
 class PipelineSettings(BaseModel):
@@ -44,8 +60,13 @@ class PipelineSettings(BaseModel):
     models: List[ModelSettings] = Field(default_factory=list)
     metrics_enabled: bool = True
     classes_filter: Optional[List[int]] = None
-    model_config = {'arbitrary_types_allowed': True}
+    source_name: Optional[str] = None
+    log_level: Optional[str] = "INFO"
+    enable_counting: Optional[bool] = True
+    show_window: Optional[bool] = False
+    tracker: Optional[str] = 'botsort.yaml'
 
+    model_config = {'arbitrary_types_allowed': True}
 
 class SourceHandler:
     def __init__(self, source: str, width=None, height=None, fps=None):
@@ -112,20 +133,21 @@ class SourceHandler:
         else:
             self.cap.release()
 
-
 class EnhancedObjectCounter(ObjectCounter):
-    def __init__(
-        self,
-        **kwargs
-    ):
+    def __init__(self, **kwargs):
         self.id_timeout = kwargs.pop('id_timeout', 5.0)
         self.min_frames_before_count = kwargs.pop('min_frames_before_count', 3)
+        self.on_count_callback = kwargs.pop('on_count_callback', None)
         super().__init__(**kwargs)
         self.id_timestamps = {}
         self.id_directions = {}
         self.id_positions = defaultdict(list)
         self.last_cleanup_time = time.time()
         self.cleanup_interval = 1.0
+        self._callback_executor = ThreadPoolExecutor(max_workers=2)
+
+    def display_output(self, plot_im):
+        pass
 
     def extract_tracks(self, im0):
         pass
@@ -137,10 +159,47 @@ class EnhancedObjectCounter(ObjectCounter):
         self.boxes = boxes.xyxy.cpu()
         self.clss = [int(c) for c in boxes.cls.cpu().tolist()]
         self.track_ids = (
-            boxes.id.int().cpu().tolist()
-            if boxes.id is not None else [None] * len(self.boxes)
+            boxes.id.int().cpu().tolist() if boxes.id is not None else [None] * len(self.boxes)
         )
         self.confs = boxes.conf.cpu().tolist()
+
+    def _trigger_count_event(self, track_id, cls, direction, position, now):
+        if not self.on_count_callback:
+            return
+
+        count_data = {
+            'track_id': track_id,
+            'class': self.names[cls],
+            'direction': direction,
+            'timestamp': now,
+            'position': position,
+            'model_path': getattr(self, 'model_path', None)
+        }
+
+        if not all(k in count_data for k in ('track_id', 'class', 'direction', 'timestamp')):
+            return
+
+        def safe_callback(data):
+            try:
+                self.on_count_callback(data)
+            except Exception as e:
+                print(f"[WARN] Count callback failed: {e}")
+
+        self._callback_executor.submit(safe_callback, count_data)
+
+    def _update_counts(self, track_id, cls, direction, current_centroid, now):
+        if direction == 'in':
+            self.in_count += 1
+            self.classwise_counts[self.names[cls]]['IN'] += 1
+        else:
+            self.out_count += 1
+            self.classwise_counts[self.names[cls]]['OUT'] += 1
+
+        self.counted_ids.append(track_id)
+        self.id_timestamps[track_id] = now
+        self.id_directions[track_id] = direction
+
+        self._trigger_count_event(track_id, cls, direction, current_centroid, now)
 
     def count_objects(self, current_centroid, track_id, prev_position, cls):
         if prev_position is None:
@@ -151,33 +210,21 @@ class EnhancedObjectCounter(ObjectCounter):
             positions.pop(0)
         if len(positions) < self.min_frames_before_count:
             return
+
         line = self.LineString(self.region)
         if line.intersects(self.LineString([prev_position, current_centroid])):
             is_vertical = (
-                abs(self.region[0][0] - self.region[1][0]) <
-                abs(self.region[0][1] - self.region[1][1])
+                abs(self.region[0][0] - self.region[1][0]) < abs(self.region[0][1] - self.region[1][1])
             )
             oldest = positions[0]
-            direction = None
-            if is_vertical:
-                direction = 'in' if current_centroid[0] > oldest[0] else 'out'
-            else:
-                direction = 'in' if current_centroid[1] > oldest[1] else 'out'
+            direction = 'in' if (current_centroid[0] > oldest[0] if is_vertical else current_centroid[1] > oldest[1]) else 'out'
             now = time.time()
             if track_id in self.id_directions:
                 prev_dir = self.id_directions[track_id]
                 prev_ts = self.id_timestamps[track_id]
                 if prev_dir == direction or now - prev_ts < self.id_timeout:
                     return
-            if direction == 'in':
-                self.in_count += 1
-                self.classwise_counts[self.names[cls]]['IN'] += 1
-            else:
-                self.out_count += 1
-                self.classwise_counts[self.names[cls]]['OUT'] += 1
-            self.counted_ids.append(track_id)
-            self.id_timestamps[track_id] = now
-            self.id_directions[track_id] = direction
+            self._update_counts(track_id, cls, direction, current_centroid, now)
 
     def cleanup_expired_ids(self):
         now = time.time()
@@ -197,7 +244,6 @@ class EnhancedObjectCounter(ObjectCounter):
         if not hasattr(self, 'track_data') or self.boxes is None:
             return None
         return super().process(im0)
-
 
 class VideoPipeline:
     def __init__(self, config: PipelineSettings, logger: Optional[Any] = None):
@@ -227,26 +273,28 @@ class VideoPipeline:
             cinfo = setting.counting
             if not cinfo:
                 continue
-            region   = cinfo['region']
-            show_in  = cinfo.get('show_in', True)
-            show_out = cinfo.get('show_out', True)
-            tck      = cinfo.get('tracking', {})
+            region   = cinfo.region
+            show_in  = cinfo.show_in
+            show_out = cinfo.show_out
+            tck      = cinfo.tracking
             cnt = EnhancedObjectCounter(
+                show=False,
                 model=None,
                 region=region,
                 classes=None,
                 conf=setting.confidence,
-                tracker=tck.get('tracker', 'botsort.yaml'),
-                show=tck.get('show', False),
-                show_conf=tck.get('show_conf', False),
-                show_labels=tck.get('show_labels', False),
-                verbose=tck.get('verbose', False),
+                tracker=tck.tracker,
+                show_conf=tck.show_conf,
+                show_labels=tck.show_labels,
+                verbose=tck.verbose,
                 show_in=show_in,
                 show_out=show_out,
-                id_timeout=cinfo.get('id_timeout', 5.0),
-                min_frames_before_count=cinfo.get('min_frames_before_count', 3)
+                id_timeout=cinfo.id_timeout,
+                min_frames_before_count=cinfo.min_frames_before_count,
+                on_count_callback=lambda data: self._emit('count', {**data, 'model_path': path})
             )
             cnt.names = info['yolo'].names
+            cnt.model_path = path
             self.counters[path] = cnt
 
         self.pipeline_source = self.config.source if isinstance(self.config.source, VideoPipeline) else None
@@ -263,10 +311,11 @@ class VideoPipeline:
         self._on_frame_cb = []
         self._on_inference_cb = []
         self._on_error_cb = []
+        self._on_count_cb = []
         self._processing_enabled = bool(self.config.models)
 
     def register_callback(self, event: str, fn: Callable):
-        if event not in ('frame', 'inference', 'error'):
+        if event not in ('frame', 'inference', 'error', 'count'):
             raise KeyError(f"Unknown event: {event}")
         getattr(self, f"_on_{event}_cb").append(fn)
 
@@ -423,35 +472,37 @@ class VideoPipeline:
             else:
                 cinfo = setting.counting
                 cnt = self.counters[path]
-                cnt.region = cinfo['region']
-                cnt.show_in = cinfo.get('show_in', cnt.show_in)
-                cnt.show_out = cinfo.get('show_out', cnt.show_out)
-                cnt.id_timeout = cinfo.get('id_timeout', cnt.id_timeout)
-                cnt.min_frames_before_count = cinfo.get('min_frames_before_count', cnt.min_frames_before_count)
+                cnt.region = cinfo.region
+                cnt.show_in = cinfo.show_in
+                cnt.show_out = cinfo.show_out
+                cnt.id_timeout = cinfo.id_timeout
+                cnt.min_frames_before_count = cinfo.min_frames_before_count
         for setting in self.config.models:
             path = setting.path
             cinfo = setting.counting
             if cinfo and path not in self.counters:
-                region   = cinfo['region']
-                show_in  = cinfo.get('show_in', True)
-                show_out = cinfo.get('show_out', True)
-                tck      = cinfo.get('tracking', {})
+                region   = cinfo.region
+                show_in  = cinfo.show_in
+                show_out = cinfo.show_out
+                tck      = cinfo.tracking
                 cnt = EnhancedObjectCounter(
                     model=None,
                     region=region,
                     classes=None,
                     conf=setting.confidence,
-                    tracker=tck.get('tracker','botsort.yaml'),
-                    show=tck.get('show',False),
-                    show_conf=tck.get('show_conf',False),
-                    show_labels=tck.get('show_labels',False),
-                    verbose=tck.get('verbose',False),
+                    tracker=tck.tracker,
+                    show=False,
+                    show_conf=tck.show_conf,
+                    show_labels=tck.show_labels,
+                    verbose=tck.verbose,
                     show_in=show_in,
                     show_out=show_out,
-                    id_timeout=cinfo.get('id_timeout',5.0),
-                    min_frames_before_count=cinfo.get('min_frames_before_count',3)
+                    id_timeout=cinfo.id_timeout,
+                    min_frames_before_count=cinfo.min_frames_before_count,
+                    on_count_callback=lambda data: self._emit('count', {**data, 'model_path': path})
                 )
                 cnt.names = self.models[path]['yolo'].names
+                cnt.model_path = path
                 self.counters[path] = cnt
 
     def health(self) -> Dict[str, Any]:

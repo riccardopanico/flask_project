@@ -46,7 +46,8 @@ class Config:
             ]
         },
         "cam_counting_example": {
-            "source": "irayple:1",  # <- nome logico
+            "source": "0",
+            # "source": "http://0.0.0.0:5000/api/irayple/2/stream",  # <- nome logico
             "width": 640,
             "height": 480,
             "fps": 30,
@@ -67,6 +68,7 @@ class Config:
                         "region": [(100, 0), (100, 480)],
                         "show_in": True,
                         "show_out": True,
+                        "show": False,
                         "tracking": {
                             "show": False,
                             "show_labels": True,
@@ -98,6 +100,7 @@ class Config:
     
     IRAYPLE_CAMERAS = {
         "1": "192.168.1.123",
+        "2": "192.168.1.111",
     }
 
     MODULES = {

@@ -76,7 +76,10 @@ async def socket_handler(ws, path):
                         pc = PipelineSettings(**cfgs[sid])
                         vp = VideoPipeline(pc, logger=_app.logger)
                         _app.video_pipelines[sid] = vp
-                    _app.video_pipelines[sid].start()
+                    vp = _app.video_pipelines[sid]
+                    # Registra il callback per l'evento on_count in forma compatta
+                    vp.register_callback('count', lambda data: _app.logger.info(data))
+                    vp.start()
                     await ws.send(ws_response("start", source_id=sid))
                     continue
 

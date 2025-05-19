@@ -4,7 +4,7 @@ from app import db
 from app.models.user import User
 from app.models.device import Device
 from app.models.variables import Variables
-from app.models.task import Task
+from app.models.tasks import Task
 from app.models.log_data import LogData
 
 # Ora che tutti i modelli sono importati, possiamo definire le relazioni

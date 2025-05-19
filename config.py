@@ -105,7 +105,7 @@ class Config:
 
     MODULES = {
         "api": {"enabled": True, "prefix": "/api", "modules": ["ip_camera", "irayple"]},
-        "models": {"enabled": True, "modules": []},
+        "models": {"enabled": True, "modules": ["device", "task", "log_data", "variables"]},
         "jobs": {
             "enabled": True,
             "interval": timedelta(minutes=15),
@@ -143,8 +143,6 @@ class DevelopmentConfig(Config):
 
 def get_model_classes(model_path):
     model = YOLO(model_path)
-    # model.names è un dict: {0: 'person', 1: 'car', ...}
     if hasattr(model, 'names'):
         return list(model.names.values())
-    # fallback: nessuna classe trovata
     return []

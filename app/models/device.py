@@ -2,6 +2,7 @@ from app import db
 
 class Device(db.Model):
     __tablename__ = 'devices'
+    __table_args__ = {'extend_existing': True}
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     interconnection_id = db.Column(db.Integer, unique=True, nullable=True)
@@ -16,24 +17,16 @@ class Device(db.Model):
     password = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
-    # Relazione con LogData: ogni dispositivo può avere molti dati di log
-    log_data = db.relationship('LogData', backref='device', passive_deletes=True)
-
-    # Relazione con Task: ogni dispositivo può avere molti task associati
-    tasks = db.relationship('Task', backref='device', passive_deletes=True)
-
-    # Relazione con Variables: ogni dispositivo può avere molte variabili
-    variables = db.relationship('Variables', backref='device', passive_deletes=True)
-
-    # Relazione con User: ogni dispositivo appartiene a un utente
     user = db.relationship('User', back_populates='devices')
+    variables = db.relationship('Variables', back_populates='device', passive_deletes=True)
+    log_data = db.relationship('LogData', back_populates='device', passive_deletes=True)
+    tasks = db.relationship('Task', back_populates='device', passive_deletes=True)
 
-    def to_dict(self):
-        """Rappresentazione del modello come dizionario."""
+    def to_dict(self) -> dict:
         return {
             'id': self.id,
             'interconnection_id': self.interconnection_id,
-            'user_id': self.user_id,  # Include l'utente associato (se esiste)
+            'user_id': self.user_id,
             'mac_address': self.mac_address,
             'ip_address': self.ip_address,
             'gateway': self.gateway,
@@ -41,6 +34,6 @@ class Device(db.Model):
             'dns_address': self.dns_address,
             'port_address': self.port_address,
             'username': self.username,
-            'password': self.password,  # Escludere dalle API pubbliche
+            'password': self.password,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

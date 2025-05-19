@@ -13,6 +13,10 @@ from concurrent.futures import ThreadPoolExecutor
 from ultralytics import YOLO
 from ultralytics.solutions.object_counter import ObjectCounter
 from collections import defaultdict
+
+from ultralytics.utils import LOGGER
+LOGGER.setLevel('ERROR')
+
 class Frame(BaseModel):
     data: bytes
     timestamp: float

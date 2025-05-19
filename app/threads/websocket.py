@@ -78,16 +78,39 @@ async def socket_handler(ws, path):
                             try:
                                 with _app.app_context():
                                     device = Device.query.filter_by(interconnection_id=sid).first()
-                                    entry = LogData(
-                                        user_id=None,
-                                        device_id=device.id if device else None,
-                                        variable_id=None,
-                                        numeric_value=1,
-                                        string_value=json.dumps(data)
-                                    )
-                                    db.session.add(entry)
-                                    db.session.commit()
+                                    if not device:
+                                        _app.logger.error(f"Device not found for interconnection_id: {sid}")
+                                        return
 
+                                    # Funzione helper per gestire le variabili
+                                    def get_or_create_variable(code, name, value_type='string'):
+                                        var = Variables.query.filter_by(device_id=device.id, variable_code=code).first()
+                                        if not var:
+                                            var = Variables(device_id=device.id, variable_code=code, variable_name=name)
+                                            db.session.add(var)
+                                            db.session.commit()
+                                        return var
+
+                                    # Gestione dei dati
+                                    track_var = get_or_create_variable('track_id', 'Track ID', 'numeric')
+                                    track_var.set_value(data.get('track_id'))
+
+                                    class_var = get_or_create_variable('class', 'Class')
+                                    class_var.set_value(data.get('class'))
+
+                                    direction_var = get_or_create_variable('direction', 'Direction')
+                                    direction_var.set_value(data.get('direction'))
+
+                                    # if isinstance(data.get('position'), tuple):
+                                    #     pos_x_var = get_or_create_variable('position_x', 'Position X', 'numeric')
+                                    #     pos_x_var.set_value(float(data['position'][0]))
+                                    #     pos_y_var = get_or_create_variable('position_y', 'Position Y', 'numeric')
+                                    #     pos_y_var.set_value(float(data['position'][1]))
+
+                                    model_var = get_or_create_variable('model_path', 'Model Path')
+                                    model_var.set_value(data.get('model_path'))
+
+                                    # Aggiungi i dati al batch buffer
                                     _batch_buffer.append({
                                         'action': 'get_metrics',
                                         'source_id': sid,

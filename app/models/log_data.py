@@ -1,5 +1,4 @@
 from app import db
-from sqlalchemy.orm import relationship
 
 class LogData(db.Model):
     __tablename__ = 'log_data'
@@ -14,11 +13,6 @@ class LogData(db.Model):
     string_value = db.Column(db.String(4000))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     sent = db.Column(db.Integer, nullable=True, server_default='0')
-
-    # Relazioni
-    user = relationship('User', back_populates='log_data', lazy='joined')
-    device = relationship('Device', back_populates='log_data', lazy='joined')
-    variable = relationship('Variables', back_populates='log_data', lazy='joined')
 
     def to_dict(self) -> dict:
         return {

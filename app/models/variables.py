@@ -2,10 +2,7 @@ from app import db
 
 class Variables(db.Model):
     __tablename__ = 'variables'
-    __table_args__ = (
-        db.UniqueConstraint('device_id', 'variable_code', name='uq_device_variable'),
-        {'extend_existing': True}
-    )
+    __table_args__ = {'extend_existing': True}
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False)
@@ -43,6 +40,7 @@ class Variables(db.Model):
         self.boolean_value = None
         self.string_value = None
         self.numeric_value = None
+
         if isinstance(value, bool):
             self.boolean_value = int(value)
         elif isinstance(value, str):
@@ -51,12 +49,14 @@ class Variables(db.Model):
             self.numeric_value = value
         else:
             raise TypeError('Value must be bool, str, int or float')
+
         db.session.add(self)
         db.session.commit()
 
         from app.models.log_data import LogData
         user_var = Variables.query.filter_by(variable_code='user_id').first()
         user_id = user_var.get_value() if user_var else None
+
         entry = LogData(
             user_id=user_id,
             device_id=self.device_id,

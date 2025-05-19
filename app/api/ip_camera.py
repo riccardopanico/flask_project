@@ -38,3 +38,4 @@ def model_classes():
     except Exception as e:
         current_app.logger.error(f"Errore caricamento classi modello {abs_path}: {e}")
         return jsonify([])
+#bè'!

@@ -37,4 +37,4 @@ def model_classes():
         return jsonify(list(model.names.values()) if hasattr(model, 'names') else [])
     except Exception as e:
         current_app.logger.error(f"Errore caricamento classi modello {abs_path}: {e}")
-        return jsonify([])
+        return jsonify([])#SSccccc

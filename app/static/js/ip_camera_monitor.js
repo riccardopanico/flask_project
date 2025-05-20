@@ -76,8 +76,20 @@ $(function() {
     function onMessage(raw) {
       waiting = false;
       const m = JSON.parse(raw);
-      const sid = m.source_id;
+      
+      // Se è un array, è un messaggio batch di metriche
+      if (Array.isArray(m)) {
+        m.forEach(msg => {
+          if (msg.action === 'get_metrics' && String(msg.source_id) === String(selectedSource)) {
+            renderMetrics(msg.source_id, msg.data);
+          }
+        });
+        return flushQueue();
+      }
 
+      console.log('[WS] Received message:', m); // DEBUG
+      const sid = String(m.source_id);
+      
       // Always update camera list
       if (m.action === 'list_cameras') {
         renderCameraList(m.data);
@@ -85,7 +97,8 @@ $(function() {
       }
 
       // Ignore messages for other sources, except start/stop for UI badge
-      if (sid && sid !== selectedSource) {
+      if (sid && sid !== String(selectedSource)) {
+        console.log('[WS] Ignoring message for other source:', sid, 'selected:', selectedSource); // DEBUG
         if (m.action === 'start' || m.action === 'stop') {
           updateCameraUI(m.source_id, m.action === 'start' ? 'running' : 'stopped');
         }
@@ -111,6 +124,7 @@ $(function() {
           updateCameraUI(sid, 'stopped');
           break;
         case 'get_config':
+          console.log('[WS] Rendering config for source:', sid, 'data:', m.data); // DEBUG
           renderConfig(sid, m.data);
           break;
         case 'get_health':
@@ -184,7 +198,7 @@ $(function() {
     // -------- STREAM + PANELS --------
     function loadStream(sid) {
       $('#camera-stream .flex-grow').html(
-        `<img class="w-full h-full object-contain" src="/api/ip_camera/stream/${sid}?_t=${Date.now()}">`
+        `<img class="w-full h-full object-contain" src="/api/ip_camera/stream/${String(sid)}?_t=${Date.now()}">`
       );
       showConfig();
     }
@@ -234,7 +248,11 @@ $(function() {
 
     // -------- CONFIG Form & JSON --------
     function renderConfig(src, cfg) {
-      if (src !== selectedSource) return;
+      console.log('[WS] renderConfig called with:', {src, cfg, selectedSource}); // DEBUG
+      if (String(src) !== String(selectedSource)) {
+        console.log('[WS] Skipping config render - source mismatch'); // DEBUG
+        return;
+      }
       
       // Campi base
       $('#stream-url').val(cfg.source);
@@ -447,7 +465,7 @@ $(function() {
       }
       
     function updateCameraUI(sourceId, status) {
-        const $article = $(`#camera-list [data-src="${sourceId}"]`).closest('article');
+        const $article = $(`#camera-list [data-src="${String(sourceId)}"]`).closest('article');
         const isRunning = status === 'running';
       
         // Badge
@@ -474,13 +492,13 @@ $(function() {
           .toggleClass('border-gray-200', !isRunning);
       
         // Se selezionata, aggiorna contenuti
-        if (sourceId === selectedSource) {
+        if (String(sourceId) === String(selectedSource)) {
           if (isRunning) {
             clearStream();
             setTimeout(() => loadStream(sourceId), 100);
-            send({ action: 'get_config',  source_id: selectedSource });
-            send({ action: 'get_health',  source_id: selectedSource });
-            send({ action: 'get_metrics', source_id: selectedSource });
+            send({ action: 'get_config',  source_id: String(sourceId) });
+            send({ action: 'get_health',  source_id: String(sourceId) });
+            send({ action: 'get_metrics', source_id: String(sourceId) });
           } else {
             clearStream();
             clearPanels();
@@ -522,10 +540,10 @@ $(function() {
 
     // -------- Camera List Buttons --------
     $('#camera-list')
-      .on('click','.btn-start',  function(){ send({ action:'start',  source_id: $(this).data('src') }); })
-      .on('click','.btn-stop',   function(){ send({ action:'stop',   source_id: $(this).data('src') }); })
+      .on('click','.btn-start',  function(){ send({ action:'start',  source_id: String($(this).data('src')) }); })
+      .on('click','.btn-stop',   function(){ send({ action:'stop',   source_id: String($(this).data('src')) }); })
       .on('click','.btn-select', function(){
-        selectedSource = $(this).data('src');
+        selectedSource = String($(this).data('src'));
         fetchModelListAndPopulateSelects();
         send({ action:'list_cameras' });
         const $art = $(this).closest('article');
@@ -592,7 +610,7 @@ $(function() {
     $('#apply-btn').click(() => {
       if (!selectedSource) return;
       const config = buildConfig();
-      send({ action: 'update_config', source_id: selectedSource, config: config });
+      send({ action: 'update_config', source_id: String(selectedSource), config: config });
     });
 
     // header buttons

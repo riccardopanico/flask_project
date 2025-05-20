@@ -295,7 +295,7 @@ class VideoPipeline:
                 show_out=show_out,
                 id_timeout=cinfo.id_timeout,
                 min_frames_before_count=cinfo.min_frames_before_count,
-                on_count_callback=lambda data: self._emit('count', {**data, 'model_path': path})
+                on_count_callback=lambda data, p=path: self._emit('count', {**data, 'model_path': p})
             )
             cnt.names = info['yolo'].names
             cnt.model_path = path
@@ -503,7 +503,7 @@ class VideoPipeline:
                     show_out=show_out,
                     id_timeout=cinfo.id_timeout,
                     min_frames_before_count=cinfo.min_frames_before_count,
-                    on_count_callback=lambda data: self._emit('count', {**data, 'model_path': path})
+                    on_count_callback=lambda data, p=path: self._emit('count', {**data, 'model_path': p})
                 )
                 cnt.names = self.models[path]['yolo'].names
                 cnt.model_path = path

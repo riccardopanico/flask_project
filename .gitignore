@@ -72,10 +72,6 @@ temp/
 *.mkv
 *.webm
 
-# Configurations
-*.yaml
-*.yml
-config/
 
 # Outputs
 output/

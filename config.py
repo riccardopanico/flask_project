@@ -108,9 +108,9 @@ class Config:
         "models": {"enabled": True, "modules": ["device", "task", "log_data", "variables"]},
         "jobs": {
             "enabled": True,
-            "interval": timedelta(minutes=15),
+            "interval": timedelta(seconds=15),
             "max_instances": 10,
-            "modules": [],
+            "modules": ["sync_devices_from_cloud"],
         },
         "threads": {
             "enabled": True,

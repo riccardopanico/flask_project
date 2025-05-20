@@ -20,6 +20,7 @@ from config import ProductionConfig, DevelopmentConfig
 from app.utils.streamlit_manager import StreamlitManager
 from app.utils.irayple import IraypleStreamer
 from app.utils.video_pipeline import VideoPipeline
+from app.utils.api_oracle_manager import ApiOracleManager
 
 db = SQLAlchemy()
 jwt = JWTManager()
@@ -61,6 +62,8 @@ def create_app():
     # 3. Registry delle pipeline: nessuna partenza automatica
     app.video_pipelines: Dict[str, VideoPipeline] = {}
     app.irayple_cameras: Dict[str, IraypleStreamer] = {}
+    app.api_device_manager = {}
+    app.api_oracle_manager = ApiOracleManager()
 
     # 4. Streamlit e scheduler (resta invariato)
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
@@ -87,9 +90,8 @@ def create_app():
             if (mods:=cfg_mod.get('modules')) is not None and name not in mods:
                 continue
 
-            spec   = importlib.util.spec_from_file_location(name, path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module_name = f"app.{key}.{name}"
+            module = importlib.import_module(module_name)
 
             if key=='api':
                 bp = getattr(module, f"{name}_blueprint", None)
@@ -98,8 +100,10 @@ def create_app():
                     app.logger.info(f"Register API: {name}")
                     app.register_blueprint(bp, url_prefix=f"{prefix}/{name}")
             elif key=='models':
-                importlib.import_module(f"app.models.{name}")
+                # importlib.import_module(f"app.models.{name}")
+                pass
             elif key=='jobs' and hasattr(module,'run'):
+                app.logger.info(f"Register job: {name}")
                 interval = cfg_mod.get('interval', timedelta(minutes=15))
                 scheduler.add_job(
                     module.run,'interval',

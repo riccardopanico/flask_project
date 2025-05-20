@@ -5,6 +5,7 @@ import websockets
 from flask import Flask, current_app
 from app import websocket_queue, db
 from app.models.device import Device
+from app.models.user import User
 from app.models.log_data import LogData
 from app.models.variables import Variables
 from app.utils.video_pipeline import VideoPipeline, PipelineSettings
@@ -54,33 +55,35 @@ async def socket_handler(ws, path):
 
             action = payload.get('action')
             sid = payload.get('source_id')
-            cfgs = _app.config.get('PIPELINE_CONFIGS', {})
 
             with _app.app_context():
                 if action == 'list_cameras':
+                    devices = Device.query.join(User).filter(User.user_type == 'ip_camera').all()
                     cams = [{
-                        'name': src,
-                        'status': 'running' if (vp := _app.video_pipelines.get(src)) and not vp._stop.is_set() else 'stopped',
+                        'name': str(d.id),
+                        'status': 'running' if (vp := _app.video_pipelines.get(str(d.id))) and not vp._stop.is_set() else 'stopped',
                         'clients': vp.clients_active if vp else 0
-                    } for src in cfgs]
+                    } for d in devices]
                     await ws.send(ws_response('list_cameras', True, data=cams))
                     continue
 
                 if action == 'start':
-                    if sid not in cfgs:
+                    device = Device.query.join(User).filter(Device.id == int(sid), User.user_type == 'ip_camera').first()
+                    if not device:
                         await ws.send(ws_response('start', False, error='unknown source_id'))
                         continue
                     if sid not in _app.video_pipelines:
-                        pc = PipelineSettings(**cfgs[sid])
+                        device_cfg = json.loads(device.config)
+                        pc = PipelineSettings(**device_cfg)
                         vp = VideoPipeline(pc, logger=_app.logger)
 
                         def _count_cb(data):
                             try:
                                 with _app.app_context():
-                                    device = Device.query.filter_by(interconnection_id=sid).first()
-                                    if not device:
-                                        _app.logger.error(f"Device not found for interconnection_id: {sid}")
-                                        return
+                                    # device = Device.query.filter_by(id=int(sid)).first()
+                                    # if not device:
+                                    #     _app.logger.error(f"Device not found for id: {sid}")
+                                    #     return
 
                                     # Funzione helper per gestire le variabili
                                     def get_or_create_variable(code, name, value_type='string'):
@@ -100,13 +103,6 @@ async def socket_handler(ws, path):
 
                                     direction_var = get_or_create_variable('direction', 'Direction')
                                     direction_var.set_value(data.get('direction'))
-
-                                    # if isinstance(data.get('position'), tuple):
-                                    #     pos_x_var = get_or_create_variable('position_x', 'Position X', 'numeric')
-                                    #     pos_x_var.set_value(float(data['position'][0]))
-                                    #     pos_y_var = get_or_create_variable('position_y', 'Position Y', 'numeric')
-                                    #     pos_y_var.set_value(float(data['position'][1]))
-
                                     model_var = get_or_create_variable('model_path', 'Model Path')
                                     model_var.set_value(data.get('model_path'))
 
@@ -114,17 +110,17 @@ async def socket_handler(ws, path):
                                     _batch_buffer.append({
                                         'action': 'get_metrics',
                                         'source_id': sid,
-                                        'data': _app.video_pipelines[sid].metrics()
+                                        'data': _app.video_pipelines[str(sid)].metrics()
                                     })
                             except Exception as e:
                                 _app.logger.error(f"Error in count callback: {str(e)}")
 
                         vp.register_callback('count', _count_cb)
-                        _app.video_pipelines[sid] = vp
+                        _app.video_pipelines[str(sid)] = vp
 
-                    _app.video_pipelines[sid].start()
-                    await ws.send(ws_response('start', True, sid))
-                    continue
+                        _app.video_pipelines[str(sid)].start()
+                        await ws.send(ws_response('start', True, sid))
+                        continue
 
                 if action == 'stop':
                     vp = _app.video_pipelines.pop(sid, None)

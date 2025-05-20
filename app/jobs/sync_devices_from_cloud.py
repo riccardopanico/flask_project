@@ -211,7 +211,8 @@ def run(app):
                         device.dns_address = record.get('dns_address', device.dns_address)
                         device.username = record.get('username', device.username)
                         device.password = record.get('password', device.password)
-
+                        device.config = record.get('configurazione', device.config)
+                        
                         if api_manager:
                             api_manager.ip_address = device.ip_address
                         current_app.logger.info(f"Dispositivo aggiornato: {device.interconnection_id}")

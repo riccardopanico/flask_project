@@ -1,3 +1,4 @@
+import json
 from app import db
 
 class Device(db.Model):
@@ -9,6 +10,7 @@ class Device(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     mac_address = db.Column(db.String(17), nullable=True)
     ip_address = db.Column(db.String(45), nullable=False)
+    config = db.Column(db.Text, nullable=True)
     gateway = db.Column(db.String(45), nullable=True)
     subnet_mask = db.Column(db.String(45), nullable=True)
     dns_address = db.Column(db.String(45), nullable=True)
@@ -35,5 +37,6 @@ class Device(db.Model):
             'port_address': self.port_address,
             'username': self.username,
             'password': self.password,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'config': json.loads(self.config)
         }

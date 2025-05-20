@@ -16,14 +16,14 @@ def initialize_api_manager(app, device, record):
     with app.app_context():
         # Se il dispositivo è di tipo ip_camera, non creiamo l'ApiDeviceManager
         if record.get('user_type') == 'ip_camera':
-            current_app.logger.info(f"Dispositivo {record['interconnection_id']} è di tipo ip_camera, non creo ApiDeviceManager")
+            current_app.logger.debug(f"Dispositivo {record['interconnection_id']} è di tipo ip_camera, non creo ApiDeviceManager")
             return None
 
         old_username = device.username if device else None
         api_manager = app.api_device_manager.get(old_username)
 
         if device is None:
-            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}")
+            current_app.logger.debug(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}")
             api_manager = ApiDeviceManager(
                 ip_address=record['ip_address'],
                 username=record['username'],
@@ -32,14 +32,14 @@ def initialize_api_manager(app, device, record):
             app.api_device_manager[record['username']] = api_manager
 
         elif api_manager is not None and api_manager.username == record['username']:
-            current_app.logger.info(f"Utilizzo dell'ApiDeviceManager esistente per il dispositivo: {record['interconnection_id']}")
+            current_app.logger.debug(f"Utilizzo dell'ApiDeviceManager esistente per il dispositivo: {record['interconnection_id']}")
 
         elif api_manager is not None and api_manager.username != record['username']:
-            current_app.logger.info(f"ApiDeviceManager con username cambiato: {record['interconnection_id']}")
-            current_app.logger.info(f"Usando vecchie credenziali per aggiornare il dispositivo: {device.interconnection_id}")
+            current_app.logger.debug(f"ApiDeviceManager con username cambiato: {record['interconnection_id']}")
+            current_app.logger.debug(f"Usando vecchie credenziali per aggiornare il dispositivo: {device.interconnection_id}")
 
         elif api_manager is None:
-            current_app.logger.info(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}. Il manager non esisteva.")
+            current_app.logger.debug(f"Creazione di un nuovo ApiDeviceManager per il dispositivo: {record['interconnection_id']}. Il manager non esisteva.")
             api_manager = ApiDeviceManager(
                 ip_address=record.get('ip_address', device.ip_address if device else None),
                 username=record.get('username', device.username if device else None),
@@ -47,7 +47,7 @@ def initialize_api_manager(app, device, record):
             )
             app.api_device_manager[record['username']] = api_manager
         else:
-            current_app.logger.info(f"(Anomalia) Dispositivo con api_manager Non Trovato per il dispositivo: {record['interconnection_id']}")
+            current_app.logger.debug(f"(Anomalia) Dispositivo con api_manager Non Trovato per il dispositivo: {record['interconnection_id']}")
 
         return api_manager
 

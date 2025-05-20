@@ -57,6 +57,7 @@ def run(app):
 
                 try:
                     current_app.logger.debug(f"Invio dei log: {log_payloads}")
+                    # return
                     response = api_oracle_manager.call(
                         url='/device/data',
                         params={"logs": log_payloads},

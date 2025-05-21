@@ -1,3 +1,15 @@
+git clone https://github.com/riccardopanico/flask_project.git flask_project_datacenter
+cd ~/flask_project_datacenter
+conda env create -f environment.yml
+
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+source ~/miniconda3/bin/activate
+
+
+which gunicorn
+/home/webserver/miniconda3/envs/flask_project_datacenter/bin/gunicorn --workers 1 --threads 8 --timeout 60 --bind 0.0.0.0:5000 manage:app
+
 rm -rf migrations/
 
 DATABASE_NAME="IndustrySyncDB"

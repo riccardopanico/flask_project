@@ -172,7 +172,7 @@ $(function() {
         const $a = $(`
           <article class="border ${border} ${selCls} rounded-md bg-white p-4 space-y-2">
             <div class="flex justify-between items-center">
-              <span class="font-semibold text-sm">${cam.name}</span>
+              <span class="font-semibold text-sm">IP Camera: ${cam.name}</span>
               <span class="${run ? 'bg-blue-500' : 'bg-red-500'} text-white text-[10px] font-semibold rounded-full px-2 py-[2px] flex items-center space-x-1">
                 ${run && isSel ? '<span class="w-2 h-2 rounded-full bg-green-400 block"></span>' : ''}
                 <span>${cam.status}</span>

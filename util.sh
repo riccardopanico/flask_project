@@ -1,10 +1,11 @@
-git clone https://github.com/riccardopanico/flask_project.git flask_project_datacenter
-cd ~/flask_project_datacenter
-conda env create -f environment.yml
 
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh
 conda init bash
+
+git clone https://github.com/riccardopanico/flask_project.git flask_project_datacenter
+cd ~/flask_project_datacenter
+conda env create -f environment.yml
 
 
 

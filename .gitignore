@@ -44,7 +44,7 @@ data/
 logs/
 
 # Environment variables
-.env
+# .env
 .env.*
 
 # Temporary files

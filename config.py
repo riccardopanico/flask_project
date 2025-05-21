@@ -26,6 +26,10 @@ class Config:
     for sub in ["models", "datasets", "output", "temp", "logs", "config"]:
         os.makedirs(os.path.join(DATA_DIR, sub), exist_ok=True)
 
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+    LOG_DIR = os.path.join(DATA_DIR, "logs")
+    LOG_FILE = os.path.join(LOG_DIR, "app.log")
+
     PIPELINE_CONFIGS = {
         "default": {
             "source": "http://0.0.0.0:5000/api/irayple/1/stream",

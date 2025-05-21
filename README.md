@@ -85,6 +85,7 @@ flask_project/
 
 4. **Configura l'ambiente**
    - Crea un file `.env` nella directory principale e aggiungi le variabili di configurazione necessarie (come `SECRET_KEY`, `DATABASE_URL`, etc).
+   - Puoi impostare `LOG_LEVEL` per controllare il livello di verbosità dei log (`DEBUG`, `INFO`, `WARNING`, ...). I log vengono salvati in `data/logs/app.log`.
 
 5. **Inizializza il database**
    ```bash

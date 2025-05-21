@@ -28,18 +28,25 @@ migrate = Migrate()
 websocket_queue = queue.Queue()
 
 def configure_logging(app):
-    lvl = logging.DEBUG if app.debug else logging.INFO
+    level_str = app.config.get("LOG_LEVEL", "INFO").upper()
+    lvl = getattr(logging, level_str, logging.INFO)
     fmt = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
     formatter = logging.Formatter(fmt)
 
     if app.logger.hasHandlers():
         app.logger.handlers.clear()
 
-    fh = RotatingFileHandler('app.log', maxBytes=10*1024*1024, backupCount=5)
-    fh.setFormatter(formatter); fh.setLevel(lvl); app.logger.addHandler(fh)
+    log_path = app.config.get("LOG_FILE", "app.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    fh = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5)
+    fh.setFormatter(formatter)
+    fh.setLevel(lvl)
+    app.logger.addHandler(fh)
 
     ch = logging.StreamHandler()
-    ch.setFormatter(formatter); ch.setLevel(lvl); app.logger.addHandler(ch)
+    ch.setFormatter(formatter)
+    ch.setLevel(lvl)
+    app.logger.addHandler(ch)
 
     app.logger.setLevel(lvl)
     app.logger.propagate = False

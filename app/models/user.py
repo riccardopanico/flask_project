@@ -3,6 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(db.Model):
     __tablename__ = 'users'
+    __table_args__ = {'extend_existing': True}
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     badge = db.Column(db.String(50), nullable=True)
@@ -14,11 +15,8 @@ class User(db.Model):
     email = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
-    # Relazione con Device: un utente può avere molti dispositivi
-    devices = db.relationship('Device', back_populates='user', passive_deletes=True)
-
-    # Relazione con LogData: un utente può avere molti log
-    log_data = db.relationship('LogData', backref='user', passive_deletes=True)
+    devices = db.relationship('Device', back_populates='user')
+    log_data = db.relationship('LogData', back_populates='user', passive_deletes=True)
 
     def set_password(self, password):
         """Hash della password."""
@@ -28,7 +26,7 @@ class User(db.Model):
         """Verifica della password hashata."""
         return check_password_hash(self.password_hash, password)
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Rappresentazione del modello come dizionario."""
         return {
             'id': self.id,

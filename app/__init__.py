@@ -1,134 +1,132 @@
 import os
 import threading
+import glob
+import importlib.util
+import importlib
+import queue
+import atexit
+import logging
+from logging.handlers import RotatingFileHandler
+from datetime import timedelta
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
-from datetime import timedelta
-import atexit
-import logging
-from logging.handlers import RotatingFileHandler
-from config.config import ProductionConfig, DevelopmentConfig
-import importlib.util
-import glob
-import queue
-from app.utils.api_device_manager import ApiDeviceManager
+
+from config import ProductionConfig, DevelopmentConfig
+# from app.utils.streamlit_manager import StreamlitManager
+# from app.utils.irayple import IraypleStreamer
+# from app.utils.video_pipeline import VideoPipeline
 from app.utils.api_oracle_manager import ApiOracleManager
 
-# Inizializzazione delle estensioni Flask
 db = SQLAlchemy()
 jwt = JWTManager()
 migrate = Migrate()
-
 websocket_queue = queue.Queue()
 
+def configure_logging(app):
+    level_str = app.config.get("LOG_LEVEL", "INFO").upper()
+    lvl = getattr(logging, level_str, logging.INFO)
+    fmt = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+    formatter = logging.Formatter(fmt)
+
+    if app.logger.hasHandlers():
+        app.logger.handlers.clear()
+
+    log_path = app.config.get("LOG_FILE", "app.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    fh = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5)
+    fh.setFormatter(formatter)
+    fh.setLevel(lvl)
+    app.logger.addHandler(fh)
+
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    ch.setLevel(lvl)
+    app.logger.addHandler(ch)
+
+    app.logger.setLevel(lvl)
+    app.logger.propagate = False
+
 def create_app():
-    # Ottieni l'ambiente dal file di configurazione o da una variabile di ambiente
+    # 1. Configurazione ambiente
     env = os.getenv("FLASK_ENV", "development").lower()
-    print(f"L'ambiente di esecuzione corrente è: {env}")
+    cfg_cls = ProductionConfig if env=="production" else DevelopmentConfig
 
-    # Imposta la configurazione in base all'ambiente
-    config_class = ProductionConfig if env == "production" else DevelopmentConfig
+    app = Flask(__name__, template_folder='templates')
+    
+    app.config.from_object(cfg_cls)
+    configure_logging(app)
 
-    # Inizializzazione dell'app Flask e delle estensioni
-    app = Flask(__name__)
-    app.config.from_object(config_class)
-
-    # Configurazione logger personalizzato
-    log_level = logging.DEBUG if app.debug else logging.INFO
-    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler = RotatingFileHandler('app.log', maxBytes=10 * 1024 * 1024, backupCount=5)
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(log_formatter)
-    app.logger.setLevel(log_level)
-    app.logger.addHandler(file_handler)
-
-    # Inizializza estensioni con l'app Flask
+    # 2. Inizializza estensioni
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
 
+    # 3. Registry delle pipeline: nessuna partenza automatica
+    # app.video_pipelines: Dict[str, VideoPipeline] = {}
+    # app.irayple_cameras: Dict[str, IraypleStreamer] = {}
+    app.api_device_manager = {}
+    app.api_oracle_manager = ApiOracleManager()
 
-    run_from_cli = os.getenv("FLASK_RUN_FROM_CLI") == "true"
-    modules_to_import = {
-        'models': os.path.join(os.path.dirname(__file__), 'models', '*.py')
-    }
-    if not run_from_cli:
-        modules_to_import.update({
-            'api': os.path.join(os.path.dirname(__file__), 'api', '*.py'),
-            'jobs': os.path.join(os.path.dirname(__file__), 'jobs', '*.py'),
-            'threads': os.path.join(os.path.dirname(__file__), 'threads', '*.py')
-        })
-
-        # Inizializzazione di ApiDeviceManager e ApiOracleManager
-        with app.app_context():
-            from app.models.device import Device
-            from app.models.user import User
-
-            # Ottieni tutti i dispositivi associati a utenti di tipo 'device'
-            devices = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'device').all()
-            app.api_device_manager = {
-                device.username: ApiDeviceManager(
-                    ip_address=device.ip_address,
-                    username=device.username,
-                    password=device.password
-                ) for device in devices
-            }
-
-            # Ottieni il primo record associato a un utente di tipo 'datacenter'
-            datacenter_device = Device.query.join(User).filter(User.id == Device.user_id, User.user_type == 'datacenter').first()
-            if datacenter_device:
-                app.api_datacenter_manager = ApiDeviceManager(
-                    ip_address=datacenter_device.ip_address,
-                    username=datacenter_device.username,
-                    password=datacenter_device.password
-                )
-            else:
-                app.api_datacenter_manager = None
-                app.logger.warning("Nessun dispositivo trovato per il tipo 'datacenter'.")
-
-            app.api_oracle_manager = ApiOracleManager()
-
-    # Inizializzazione di Scheduler
+    # 4. Streamlit e scheduler (resta invariato)
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
-    for key, path in modules_to_import.items():
-        enabled_key = f'ENABLED_{key.upper()}'
-        enabled_modules = app.config.get(enabled_key, [])
+    # # app.streamlit_manager = StreamlitManager(logger=app.logger# )
 
-        for file_path in glob.glob(path):
-            module_name = os.path.basename(file_path)[:-3]
-            if module_name not in enabled_modules:
+    # 5. Caricamento dinamico di api/models/jobs/threads
+    run_cli = os.getenv("FLASK_RUN_FROM_CLI")=="true"
+    base = os.path.dirname(__file__)
+    patterns = {
+        'api':     os.path.join(base, 'api',    '*.py'),
+        'models':  os.path.join(base, 'models',  '*.py'),
+        'jobs':    os.path.join(base, 'jobs',    '*.py'),
+        'threads': os.path.join(base, 'threads', '*.py'),
+    }
+    if run_cli:
+        patterns={'models':patterns['models']}
+
+    for key, pattern in patterns.items():
+        cfg_mod = app.config['MODULES'][key]
+        if not cfg_mod.get('enabled', False):
+            continue
+        for path in glob.glob(pattern):
+            name = os.path.basename(path)[:-3]
+            if (mods:=cfg_mod.get('modules')) is not None and name not in mods:
                 continue
 
-            if key == 'api':
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                blueprint_name = f"{module_name}_blueprint"
-                if hasattr(module, blueprint_name):
-                    blueprint = getattr(module, blueprint_name)
-                    app.register_blueprint(blueprint, url_prefix=f'/api/{module_name}')
-            elif key == 'models':
-                importlib.import_module(f'app.models.{module_name}')
-            elif key == 'jobs':
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                if hasattr(module, 'run'):
-                    job_interval = getattr(module, 'JOB_INTERVAL', timedelta(minutes=15))
-                    scheduler.add_job(module.run, 'interval', seconds=job_interval.total_seconds(), id=module_name, max_instances=10, args=(app,))
-            elif key == 'threads':
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                if hasattr(module, 'run'):
-                    thread = threading.Thread(target=module.run, args=(app,))
-                    thread.daemon = True
-                    thread.start()
+            module_name = f"app.{key}.{name}"
+            module = importlib.import_module(module_name)
 
+            if key=='api':
+                bp = getattr(module, f"{name}_blueprint", None)
+                if bp:
+                    prefix = cfg_mod.get('prefix','/api')
+                    app.logger.info(f"Register API: {name}")
+                    app.register_blueprint(bp, url_prefix=f"{prefix}/{name}")
+            elif key=='models':
+                # importlib.import_module(f"app.models.{name}")
+                pass
+            elif key=='jobs' and hasattr(module,'run'):
+                app.logger.info(f"Register job: {name}")
+                interval = cfg_mod.get('interval', timedelta(minutes=15))
+                scheduler.add_job(
+                    module.run,'interval',
+                    seconds=interval.total_seconds(),
+                    id=name,
+                    max_instances=cfg_mod.get('max_instances',1),
+                    args=(app,)
+                )
+            elif key=='threads' and hasattr(module,'run'):
+                t = threading.Thread(target=module.run, args=(app,), daemon=True, name=name)
+                t.start()
+
+    # 6. Avvia scheduler e Streamlit Manager
     scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
+    atexit.register(lambda: scheduler.shutdown(wait=False))
+    # app.streamlit_manager.start()
+    # atexit.register(lambda: app.streamlit_manager.stop())
 
     return app

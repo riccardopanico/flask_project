@@ -51,7 +51,7 @@ class Config:
         },
         "cam_counting_example": {
             "source": "0",
-            # "source": "http://0.0.0.0:5000/api/irayple/2/stream",  # <- nome logico
+            # "source": "http://192.168.1.118:5000/api/irayple/3/stream",
             "width": 640,
             "height": 480,
             "fps": 30,
@@ -114,7 +114,8 @@ class Config:
             "enabled": True,
             "interval": timedelta(seconds=15),
             "max_instances": 10,
-            "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
+            "modules": [],
+            # "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
         },
         "threads": {
             "enabled": True,

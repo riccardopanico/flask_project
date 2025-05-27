@@ -36,7 +36,7 @@ class Config:
             "enabled": True,
             "interval": timedelta(seconds=15),
             "max_instances": 10,
-            "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
+            "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device", "sync_tasks_from_cloud"],
         },
         "threads": {
             "enabled": True,

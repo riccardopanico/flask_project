@@ -158,6 +158,22 @@ L'applicazione sarà disponibile all'indirizzo `http://127.0.0.1:5000/`.
     - `200 OK`: `{"matricola": "12345", "ip_address": "192.168.1.1", "device_type": "sensor", "status": "active", "firmware_version": "1.0.0", ...}`
     - `404 Not Found`: `{"msg": "Device not found"}`
 
+### **Recupero Log Storici** :
+  - **Endpoint**: `/api/log/`
+  - **Metodo**: `GET`
+  - **Headers richiesti**: `Authorization: Bearer [access_token]`
+  - **Parametri Opzionali**:
+    - `device_id`
+    - `user_id`
+    - `variable_id`
+    - `variable_code`
+    - `start_date`
+    - `end_date`
+    - `limit`
+    - `offset`
+  - **Risposta**:
+    - `200 OK`: `{ "success": true, "data": [...], "total": 50 }`
+
 
 ## Gestione dei Thread
 

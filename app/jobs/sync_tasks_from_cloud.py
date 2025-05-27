@@ -4,72 +4,75 @@ from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app import db
-from app.models.tasks import Task 
+from app.models.tasks import Task
 
-# Intervallo di esecuzione del job (es. ogni 5 minuti)
-JOB_INTERVAL = timedelta(seconds=5)
+JOB_INTERVAL = timedelta(minutes=5)
 
 def run(app):
     with app.app_context():
-        current_app.logger.info("Inizio controllo stato interventi in sospeso.")
+        current_app.logger.info("🔁 [Job] Avvio controllo stato interventi in sospeso.")
         Session = sessionmaker(bind=db.engine)
         session = Session()
 
         try:
-            # 1) Recupera tutti i task locali in stato PENDING
-            pending_tasks = session.query(Task).filter(Task.status == 'PENDING').all()
-            if not pending_tasks:
-                current_app.logger.info("Nessun intervento in stato PENDING da controllare.")
+            current_app.logger.debug("🔍 Query: recupero task PENDING dal DB...")
+            pending = session.query(Task).filter(Task.status == 'PENDING').all()
+
+            if not pending:
+                current_app.logger.info("✅ Nessun task in stato PENDING trovato.")
                 return
 
-            task_ids = [t.id for t in pending_tasks]
-            current_app.logger.debug(f"Task locali da verificare: {task_ids}")
+            current_app.logger.info(f"📋 Trovati {len(pending)} task PENDING.")
+            task_ids = [str(t.id) for t in pending]
+            ids_csv = ','.join(task_ids)
+            current_app.logger.debug(f"🔗 Lista task da inviare: {ids_csv}")
 
-            # 2) Chiamata all’endpoint ORDS via api_oracle_manager
-            try:
-                response = app.api_oracle_manager.call(
-                    'task/status',
-                    method='POST',
-                    params={'task_ids': task_ids}
-                )
-            except Exception as e:
-                current_app.logger.error(f"Errore chiamata ORDS /task/status: {e}")
+            # --- Chiamata all’API ORDS ---
+            current_app.logger.debug("🌐 Invio richiesta POST a ORDS (form-urlencoded)...")
+            response = app.api_oracle_manager.call(
+                'task/status',
+                method='POST',
+                params={'task_ids': ids_csv}
+            )
+            current_app.logger.debug(f"📨 Risposta ricevuta da ORDS: {response}")
+
+            if not isinstance(response, dict):
+                current_app.logger.error(f"❌ Risposta non JSON: {response}")
                 return
 
-            # L’endpoint restituisce i risultati nel campo “items”
             items = response.get('items')
-            current_app.logger.debug(items)
             if not isinstance(items, list):
-                current_app.logger.error(f"Risposta inattesa da ORDS: {response}")
+                current_app.logger.error(f"❌ 'items' non è una lista valida: {items}")
                 return
 
-            # 3) Per ogni task aggiornalo localmente
+            current_app.logger.info(f"📦 Ricevuti {len(items)} task da aggiornare.")
+            # --- Loop aggiornamento task ---
             for entry in items:
-                tid       = entry.get('task_id')
-                new_state = entry.get('task_state')
-                if tid is None or new_state is None:
-                    current_app.logger.warning(f"Voce incompleta in risposta ORDS: {entry}")
+                current_app.logger.debug(f"➡️ Processing entry: {entry}")
+                tid = entry.get('task_id')
+                st  = entry.get('task_state')
+
+                if not tid or not st:
+                    current_app.logger.warning(f"⚠️ Entry incompleta: {entry}")
                     continue
 
-                try:
-                    task = session.query(Task).get(tid)
-                    if not task:
-                        current_app.logger.warning(f"Task locale non trovato: {tid}")
-                        continue
+                current_app.logger.debug(f"🔄 Cerco task con ID {tid} nel DB...")
+                task = session.get(Task, tid)
+                if not task:
+                    current_app.logger.warning(f"⚠️ Nessun task trovato con ID {tid}.")
+                    continue
 
-                    task.status = new_state
-                    session.add(task)
-                    current_app.logger.info(f"Task {tid} aggiornato a '{new_state}'.")
-                except SQLAlchemyError as err:
-                    current_app.logger.error(f"Errore aggiornamento task {tid}: {err}")
-                    session.rollback()  # rollback solo per questo update
+                current_app.logger.info(f"✅ Task {tid} aggiornato da '{task.status}' a '{st}'")
+                task.status = st
+                session.add(task)
 
+            current_app.logger.debug("💾 Commit delle modifiche al DB...")
             session.commit()
-            current_app.logger.info("Controllo stato interventi completato con successo.")
+            current_app.logger.info("✅ Controllo completato con successo.")
 
-        except Exception as critical:
+        except Exception as e:
+            current_app.logger.error(f"🔥 Errore critico nel job: {e}")
             session.rollback()
-            current_app.logger.error(f"Errore critico durante il controllo interventi: {critical}")
-
         finally:
+            current_app.logger.debug("🔚 Chiusura sessione DB.")
             session.close()

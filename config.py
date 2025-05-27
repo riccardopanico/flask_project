@@ -30,7 +30,7 @@ class Config:
     LOG_FILE = os.path.join(LOG_DIR, "app.log")
 
     MODULES = {
-        "api": {"enabled": True, "prefix": "/api", "modules": ["ip_camera", "irayple"]},
+        "api": {"enabled": True, "prefix": "/api", "modules": []},
         "models": {"enabled": True, "modules": ["device", "task", "log_data", "variables"]},
         "jobs": {
             "enabled": True,
@@ -40,21 +40,10 @@ class Config:
         },
         "threads": {
             "enabled": True,
-            "modules": ["yolo_tools", "websocket"],
-            "config": {
-                "yolo_tools": {
-                    "port": 8505,
-                    "headless": True,
-                    "enableCORS": False,
-                    "enableXsrfProtection": False,
-                    "runOnSave": False,
-                    "browserServerAddress": "",
-                    "browserGatherUsageStats": False,
-                    "logLevel": "info",
-                }
-            },
+            "modules": [],
+            "config": {},
         },
-        "utils": {"enabled": True, "modules": ["streamlit_manager"]},
+        "utils": {"enabled": True, "modules": []},
     }
 
 

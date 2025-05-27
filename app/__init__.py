@@ -76,6 +76,8 @@ def create_app():
     scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(50)})
     # # app.streamlit_manager = StreamlitManager(logger=app.logger# )
 
+    app.logger.info(f"ENV: {env}")
+
     # 5. Caricamento dinamico di api/models/jobs/threads
     run_cli = os.getenv("FLASK_RUN_FROM_CLI")=="true"
     base = os.path.dirname(__file__)

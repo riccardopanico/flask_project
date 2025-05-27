@@ -30,7 +30,7 @@ class Config:
     LOG_FILE = os.path.join(LOG_DIR, "app.log")
 
     MODULES = {
-        "api": {"enabled": True, "prefix": "/api", "modules": []},
+        "api": {"enabled": True, "prefix": "/api", "modules": ['log_data', 'auth']},
         "models": {"enabled": True, "modules": ["device", "task", "log_data", "variables"]},
         "jobs": {
             "enabled": True,

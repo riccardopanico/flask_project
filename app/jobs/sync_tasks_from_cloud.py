@@ -54,8 +54,13 @@ def run(app):
                     current_app.logger.warning(f"⚠️ Task locale non trovato: {tid}")
                     continue
 
-                current_app.logger.info(f"✅ Task {tid}: '{task.status}' → '{st}'")
-                task.status = st
+                # Se lo stato è cambiato, imposta sent=0 per risincronizzare
+                if task.status != st:
+                    current_app.logger.info(f"✅ Task {tid}: '{task.status}' → '{st}'")
+                    task.status = st
+                    task.sent = 0  # Marca per risincronizzazione
+                    task.updated_at = db.func.now()  # Aggiorna il timestamp
+                    current_app.logger.info(f"🔄 Task {tid} marcato per risincronizzazione con device manager")
 
             session.commit()
             current_app.logger.info("✅ Tutti i task aggiornati con successo.")

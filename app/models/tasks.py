@@ -10,6 +10,7 @@ class Task(db.Model):
     sent = db.Column(db.Integer, nullable=True, server_default='0')
     status = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, nullable=True, onupdate=db.func.now())
 
     device = db.relationship('Device', back_populates='tasks')
 
@@ -19,6 +20,7 @@ class Task(db.Model):
             'device_id': self.device_id,
             'task_type': self.task_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'sent': self.sent,
             'status': self.status
         }

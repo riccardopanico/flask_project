@@ -1,110 +1,103 @@
+import os
+from datetime import timedelta
 from flask import current_app
-from sqlalchemy.exc import SQLAlchemyError, DataError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.log_data import LogData
-from app.models.device import Device
-from app.models.variables import Variables
+from app.models.tasks import Task
 from app.utils.api_oracle_manager import ApiOracleManager
-from datetime import timedelta
 
 JOB_INTERVAL = timedelta(seconds=15)
 
 def run(app):
-    """Job per inviare i log salvati a Oracle in un'unica chiamata e aggiornarne lo stato."""
+    """Invia i log pendenti, marca inviati e salva eventuali task creati."""
     with app.app_context():
+        current_app.logger.info("🔁 [Job] Avvio invio log a Oracle.")
+        Session = sessionmaker(bind=db.engine)
+        session = Session()
+
         try:
-            current_app.logger.info("Inizio del lavoro di invio dei log a Oracle...")
+            # 1) Recupera log non ancora inviati
+            pending_logs = session.query(LogData).filter(LogData.sent == 0).all()
+            if not pending_logs:
+                current_app.logger.info("✅ Nessun log pendente.")
+                return
 
-            Session = sessionmaker(bind=db.engine)
-            with Session() as session:
-                logs_to_send = session.query(LogData).filter(LogData.sent == 0).all()
-                if not logs_to_send:
-                    current_app.logger.info("Nessun log da inviare trovato.")
-                    return
+            current_app.logger.info(f"📋 {len(pending_logs)} log da inviare.")
+            payload = {'logs': []}
+            # costruiamo il body JSON
+            for log in pending_logs:
+                payload['logs'].append({
+                    "user_id":       log.user_id,
+                    "device_id":     log.device.interconnection_id,
+                    "variable_code": log.variable.variable_code,
+                    "variable_name": log.variable.variable_name,
+                    "numeric_value": log.numeric_value,
+                    "boolean_value": log.boolean_value,
+                    "string_value":  log.string_value,
+                    "created_at":    log.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+                })
+            current_app.logger.debug(f"📨 Payload JSON: {payload}")
 
-                api_oracle_manager = ApiOracleManager()
-                log_payloads = []
-
-                for log in logs_to_send:
-                    try:
-                        device = session.query(Device).get(log.device_id)
-                        variable = session.query(Variables).get(log.variable_id)
-                        if not device or not variable:
-                            current_app.logger.warning(
-                                f"Dispositivo o variabile non trovati per il log {log.id}."
-                            )
-                            continue
-
-                        log_payloads.append({
-                            "user_id": log.user_id,
-                            "device_id": device.interconnection_id,
-                            "variable_code": variable.variable_code,
-                            "variable_name": variable.variable_name,
-                            "numeric_value": log.numeric_value,
-                            "boolean_value": log.boolean_value,
-                            "string_value": log.string_value,
-                            "created_at": log.created_at.isoformat()
-                        })
-                    except AttributeError as attr_err:
-                        current_app.logger.error(
-                            f"Errore di attributo per il log {log.id}: {attr_err}"
-                        )
-
-                if not log_payloads:
-                    current_app.logger.info("Nessun log valido da inviare.")
-                    return
-
-                try:
-                    current_app.logger.debug(f"Invio dei log: {log_payloads}")
-                    # return
-                    response = api_oracle_manager.call(
-                        url='/device/data',
-                        params={"logs": log_payloads},
-                        method='POST'
-                    )
-
-                    if response.get('success'):
-                        for log in logs_to_send:
-                            log.sent = 1
-                            session.add(log)
-                        session.commit()
-                        current_app.logger.info("Tutti i log sono stati inviati con successo.")
-                    else:
-                        # Gestione elegante dell'errore
-                        code = response.get('code')
-                        message = response.get('message', 'Errore sconosciuto')
-                        error = response.get('error')
-
-                        if code:
-                            current_app.logger.error(f"[{code}] {message}")
-                        else:
-                            current_app.logger.error(message)
-
-                        if error:
-                            current_app.logger.debug(f"Dettaglio errore: {error}")
-
-                except SQLAlchemyError as db_error:
-                    session.rollback()
-                    current_app.logger.error(
-                        f"Errore del database durante l'invio dei log: {db_error}",
-                        exc_info=True
-                    )
-                except DataError as data_error:
-                    session.rollback()
-                    current_app.logger.error(
-                        f"Errore di dati durante l'invio dei log: {data_error}",
-                        exc_info=True
-                    )
-                except Exception as sync_error:
-                    session.rollback()
-                    current_app.logger.error(
-                        f"Errore imprevisto durante l'invio dei log: {sync_error}",
-                        exc_info=True
-                    )
-
-        except Exception as critical_error:
-            current_app.logger.critical(
-                f"Errore critico nel lavoro di invio dei log: {critical_error}",
-                exc_info=True
+            # 2) Chiamata ad Oracle
+            api = ApiOracleManager()
+            response = api.call(
+                url='device/data',
+                params=payload,
+                method='POST'
             )
+            current_app.logger.debug(f"📥 Risposta Oracle: {response}")
+
+            # 3) Se ok, marca log e salva i task
+            if response.get('success'):
+                # 3a) aggiorna stato dei log
+                for log in pending_logs:
+                    log.sent = 1
+                    session.add(log)
+
+                # 3b) salva i nuovi Task restituiti
+                task_ids = response.get('task_ids', [])
+                current_app.logger.info(f"🔧 Task creati in Oracle: {task_ids}")
+
+                # assumiamo che i task siano restituiti in ordine corrispondente
+                idx = 0
+                for log in pending_logs:
+                    # solo per i log con variable_code che genera task
+                    if log.variable.variable_code in ('richiesta_intervento','richiesta_filato'):
+                        if idx < len(task_ids):
+                            remote_id = task_ids[idx]
+                            idx += 1
+
+                            # crea il record locale
+                            new_task = Task(
+                                id=remote_id,                 # usa lo stesso ID remoto
+                                device_id=log.device_id,
+                                task_type=log.variable.variable_code,
+                                sent=0,
+                                status=None
+                            )
+                            session.add(new_task)
+                            current_app.logger.info(
+                                f"✅ Task locale creato: remote_id={remote_id}, device_id={log.device_id}"
+                            )
+                # 3c) commit finale
+                session.commit()
+                current_app.logger.info("✅ Tutti i log inviati e task salvati.")
+
+            else:
+                # gestione elegante dell’errore in risposta
+                code    = response.get('code', '')
+                message = response.get('message','Errore sconosciuto')
+                current_app.logger.error(f"[{code}] {message}")
+                if response.get('error'):
+                    current_app.logger.debug(f"Dettaglio: {response['error']}")
+
+        except SQLAlchemyError as db_err:
+            session.rollback()
+            current_app.logger.error("🔥 Errore DB durante job invio log", exc_info=True)
+        except Exception as e:
+            session.rollback()
+            current_app.logger.critical(f"🔥 Errore critico nel job: {e}", exc_info=True)
+        finally:
+            session.close()

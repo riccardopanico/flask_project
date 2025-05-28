@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app import db
 from app.models.tasks import Task
 
-JOB_INTERVAL = timedelta(minutes=5)
+JOB_INTERVAL = timedelta(seconds=5)
 
 def run(app):
     with app.app_context():
@@ -15,64 +15,53 @@ def run(app):
         session = Session()
 
         try:
-            current_app.logger.debug("🔍 Query: recupero task PENDING dal DB...")
+            # 1) Prendo i task PENDING
             pending = session.query(Task).filter(Task.status == 'PENDING').all()
-
             if not pending:
-                current_app.logger.info("✅ Nessun task in stato PENDING trovato.")
+                current_app.logger.info("✅ Nessun task PENDING da aggiornare.")
                 return
 
-            current_app.logger.info(f"📋 Trovati {len(pending)} task PENDING.")
-            task_ids = [str(t.id) for t in pending]
-            ids_csv = ','.join(task_ids)
-            current_app.logger.debug(f"🔗 Lista task da inviare: {ids_csv}")
+            task_ids = [t.id for t in pending]
+            current_app.logger.info(f"📋 Task da verificare: {task_ids}")
 
-            # --- Chiamata all’API ORDS ---
-            current_app.logger.debug("🌐 Invio richiesta POST a ORDS (form-urlencoded)...")
+            # 2) Chiamata JSON‐POST (ORDS attende JSON body)
             response = app.api_oracle_manager.call(
                 'task/status',
                 method='POST',
-                params={'task_ids': ids_csv}
+                params={'task_ids': task_ids}
             )
-            current_app.logger.debug(f"📨 Risposta ricevuta da ORDS: {response}")
+            current_app.logger.debug(f"📨 Risposta ORDS: {response}")
 
+            # 3) Controllo risposta valida
             if not isinstance(response, dict):
-                current_app.logger.error(f"❌ Risposta non JSON: {response}")
+                current_app.logger.error(f"❌ Risposta non valida: {response}")
                 return
-
-            items = response.get('items')
+            items = response.get('items', [])
             if not isinstance(items, list):
-                current_app.logger.error(f"❌ 'items' non è una lista valida: {items}")
+                current_app.logger.error(f"❌ Campo 'items' mancante o non list: {response}")
                 return
 
-            current_app.logger.info(f"📦 Ricevuti {len(items)} task da aggiornare.")
-            # --- Loop aggiornamento task ---
+            # 4) Aggiorno localmente
             for entry in items:
-                current_app.logger.debug(f"➡️ Processing entry: {entry}")
                 tid = entry.get('task_id')
                 st  = entry.get('task_state')
-
-                if not tid or not st:
+                if tid is None or st is None:
                     current_app.logger.warning(f"⚠️ Entry incompleta: {entry}")
                     continue
 
-                current_app.logger.debug(f"🔄 Cerco task con ID {tid} nel DB...")
                 task = session.get(Task, tid)
                 if not task:
-                    current_app.logger.warning(f"⚠️ Nessun task trovato con ID {tid}.")
+                    current_app.logger.warning(f"⚠️ Task locale non trovato: {tid}")
                     continue
 
-                current_app.logger.info(f"✅ Task {tid} aggiornato da '{task.status}' a '{st}'")
+                current_app.logger.info(f"✅ Task {tid}: '{task.status}' → '{st}'")
                 task.status = st
-                session.add(task)
 
-            current_app.logger.debug("💾 Commit delle modifiche al DB...")
             session.commit()
-            current_app.logger.info("✅ Controllo completato con successo.")
+            current_app.logger.info("✅ Tutti i task aggiornati con successo.")
 
         except Exception as e:
-            current_app.logger.error(f"🔥 Errore critico nel job: {e}")
             session.rollback()
+            current_app.logger.error(f"🔥 Errore critico nel job: {e}")
         finally:
-            current_app.logger.debug("🔚 Chiusura sessione DB.")
             session.close()

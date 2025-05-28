@@ -93,6 +93,10 @@ $(function() {
       // Always update camera list
       if (m.action === 'list_cameras') {
         renderCameraList(m.data);
+        $(`#tab-stream`).removeClass('hidden');
+        $(`#tab-models, #tab-advanced-json`).addClass('hidden');
+        $('#tab-stream-btn').addClass('bg-white').removeClass('bg-gray-100').attr('aria-selected', 'true');
+        $('#tab-models-btn, #tab-advanced-json-btn').addClass('bg-gray-100').removeClass('bg-white').attr('aria-selected', 'false');
         return flushQueue();
       }
 
@@ -101,6 +105,7 @@ $(function() {
         console.log('[WS] Ignoring message for other source:', sid, 'selected:', selectedSource); // DEBUG
         if (m.action === 'start' || m.action === 'stop') {
           updateCameraUI(m.source_id, m.action === 'start' ? 'running' : 'stopped');
+          $(`#tab-stream`).removeClass('hidden');
         }
         return flushQueue();
       }
@@ -307,7 +312,6 @@ $(function() {
       });
       
       updateJson();
-      showConfig();
     }
 
     function buildConfig() {
@@ -435,11 +439,11 @@ $(function() {
     // -------- CONFIG UI Show/Hide & Tabs --------
     function showConfig() {
         switchTab('stream');
-      }
-      function hideConfig() {
+    }
+    function hideConfig() {
         // non nascondiamo nulla più
-      }
-      
+    }
+    
 
     // tabs
     $('#tab-stream-btn,#tab-models-btn,#tab-advanced-json-btn').on('click', e => {
@@ -504,6 +508,7 @@ $(function() {
             clearPanels();
           }
         }
+        $(`#tab-stream`).removeClass('hidden');
       }
       
     // -------- CONFIG Feedback --------
@@ -544,6 +549,7 @@ $(function() {
       .on('click','.btn-stop',   function(){ send({ action:'stop',   source_id: String($(this).data('src')) }); })
       .on('click','.btn-select', function(){
         selectedSource = String($(this).data('src'));
+        $('#camera-name').text('IP Camera: ' + selectedSource);
         fetchModelListAndPopulateSelects();
         send({ action:'list_cameras' });
         const $art = $(this).closest('article');
@@ -557,6 +563,10 @@ $(function() {
           clearStream();
           clearPanels();
         }
+        $(`#tab-stream`).removeClass('hidden');
+        $(`#tab-models, #tab-advanced-json`).addClass('hidden');
+        $('#tab-stream-btn').addClass('bg-white').removeClass('bg-gray-100').attr('aria-selected', 'true');
+        $('#tab-models-btn, #tab-advanced-json-btn').addClass('bg-gray-100').removeClass('bg-white').attr('aria-selected', 'false');
       });
 
     // Gestione pulsanti Add/Remove
@@ -671,6 +681,6 @@ $(function() {
 
     // -------- START --------
     connect();
-    hideConfig();
     scheduleRefresh();  // start auto-refresh
+    $(`#tab-stream`).removeClass('hidden');
 });

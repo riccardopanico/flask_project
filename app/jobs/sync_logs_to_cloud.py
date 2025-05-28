@@ -58,6 +58,7 @@ def run(app):
 
                 # 3b) salva i nuovi Task restituiti
                 task_ids = response.get('task_ids', [])
+                task_statuses = response.get('task_statuses', [])
                 current_app.logger.info(f"🔧 Task creati in Oracle: {task_ids}")
 
                 # assumiamo che i task siano restituiti in ordine corrispondente
@@ -67,6 +68,7 @@ def run(app):
                     if log.variable.variable_code in ('richiesta_intervento','richiesta_filato'):
                         if idx < len(task_ids):
                             remote_id = task_ids[idx]
+                            status = task_statuses[idx] if idx < len(task_statuses) else 'PENDING'
                             idx += 1
 
                             # crea il record locale
@@ -75,18 +77,18 @@ def run(app):
                                 device_id=log.device_id,
                                 task_type=log.variable.variable_code,
                                 sent=0,
-                                status=None
+                                status=status
                             )
                             session.add(new_task)
                             current_app.logger.info(
-                                f"✅ Task locale creato: remote_id={remote_id}, device_id={log.device_id}"
+                                f"✅ Task locale creato: remote_id={remote_id}, device_id={log.device_id}, status={status}"
                             )
                 # 3c) commit finale
                 session.commit()
                 current_app.logger.info("✅ Tutti i log inviati e task salvati.")
 
             else:
-                # gestione elegante dell’errore in risposta
+                # gestione elegante dell'errore in risposta
                 code    = response.get('code', '')
                 message = response.get('message','Errore sconosciuto')
                 current_app.logger.error(f"[{code}] {message}")

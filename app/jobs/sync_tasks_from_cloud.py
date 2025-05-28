@@ -15,13 +15,13 @@ def run(app):
         session = Session()
 
         try:
-            # 1) Prendo i task PENDING
-            pending = session.query(Task).filter(Task.status == 'PENDING').all()
-            if not pending:
-                current_app.logger.info("✅ Nessun task PENDING da aggiornare.")
+            # 1) Prendo i task che non sono COMPLETED o CANCELED
+            active_tasks = session.query(Task).filter(~Task.status.in_(['COMPLETED', 'CANCELED'])).all()
+            if not active_tasks:
+                current_app.logger.info("✅ Nessun task attivo da aggiornare.")
                 return
 
-            task_ids = [t.id for t in pending]
+            task_ids = [t.id for t in active_tasks]
             current_app.logger.info(f"📋 Task da verificare: {task_ids}")
 
             # 2) Chiamata JSON‐POST (ORDS attende JSON body)

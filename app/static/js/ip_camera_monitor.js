@@ -21,6 +21,36 @@ $(function() {
       { label: '1m Refresh',  value: 60000 }
     ];
 
+    // -------- CUSTOM MODAL FUNCTIONS --------
+    function showCustomConfirm(title, message, onConfirm, onCancel = null) {
+      $('#modal-title').text(title);
+      $('#modal-message').text(message);
+      $('#confirm-modal').removeClass('hidden');
+      
+      // Remove existing event listeners
+      $('#modal-confirm').off('click');
+      $('#modal-cancel').off('click');
+      
+      // Add new event listeners
+      $('#modal-confirm').on('click', function() {
+        $('#confirm-modal').addClass('hidden');
+        if (onConfirm) onConfirm();
+      });
+      
+      $('#modal-cancel').on('click', function() {
+        $('#confirm-modal').addClass('hidden');
+        if (onCancel) onCancel();
+      });
+      
+      // Close modal when clicking outside
+      $('#confirm-modal').on('click', function(e) {
+        if (e.target === this) {
+          $('#confirm-modal').addClass('hidden');
+          if (onCancel) onCancel();
+        }
+      });
+    }
+
     // Carica la lista dei modelli disponibili da data/models e popola tutte le select
     let availableModels = [];
     function fetchModelListAndPopulateSelects() {
@@ -93,13 +123,9 @@ $(function() {
 
       const sid = String(m.source_id);
       
-      // Always update camera list
+      // Always update camera list (but don't force tab switching)
       if (m.action === 'list_cameras') {
         renderCameraList(m.data);
-        $(`#tab-stream`).removeClass('hidden');
-        $(`#tab-models, #tab-advanced-json`).addClass('hidden');
-        $('#tab-stream-btn').addClass('bg-white').removeClass('bg-gray-100').attr('aria-selected', 'true');
-        $('#tab-models-btn, #tab-advanced-json-btn').addClass('bg-gray-100').removeClass('bg-white').attr('aria-selected', 'false');
         return flushQueue();
       }
 
@@ -107,7 +133,6 @@ $(function() {
       if (sid && sid !== String(selectedSource)) {
         if (m.action === 'start' || m.action === 'stop') {
           updateCameraUI(m.source_id, m.action === 'start' ? 'running' : 'stopped');
-          $(`#tab-stream`).removeClass('hidden');
         }
         return flushQueue();
       }
@@ -231,8 +256,7 @@ $(function() {
     // -------- RENDER CAMERA LIST --------
     function renderCameraList(list) {
       const $sec = $('#camera-list').empty()
-        .append(`<h2 class="font-semibold text-base mb-2 select-none">Camera List</h2>
-                 <button class="mb-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded px-3 py-1">+ Add</button>`);
+        .append(`<h2 class="font-semibold text-base mb-2 select-none">Camera List</h2>`);
       if (!list.length) {
         $sec.append(`<article class="border border-dashed border-gray-300 rounded-md bg-white p-4 text-center text-gray-400 italic">Nessuna camera disponibile</article>`);
         return;
@@ -516,7 +540,12 @@ $(function() {
 
     // -------- CONFIG UI Show/Hide & Tabs --------
     function showConfig() {
-        switchTab('stream');
+        // Don't force tab switching - let user keep their current tab selection
+        // Only switch to Stream tab if no tab is currently visible
+        const $visibleTab = $('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden');
+        if ($visibleTab.length === 0) {
+          switchTab('stream');
+        }
     }
     function hideConfig() {
         // non nascondiamo nulla più
@@ -573,7 +602,7 @@ $(function() {
           .toggleClass('border-gray-300', isRunning)
           .toggleClass('border-gray-200', !isRunning);
       
-        // Se selezionata, aggiorna contenuti
+        // Se selezionata, aggiorna contenuti (but don't force tab switching)
         if (String(sourceId) === String(selectedSource)) {
           if (isRunning) {
             clearStream();
@@ -586,7 +615,6 @@ $(function() {
             clearPanels();
           }
         }
-        $(`#tab-stream`).removeClass('hidden');
       }
       
     // -------- CONFIG Feedback --------
@@ -648,14 +676,24 @@ $(function() {
           clearStream();
           clearPanels();
         }
-        $(`#tab-stream`).removeClass('hidden');
-        $(`#tab-models, #tab-advanced-json`).addClass('hidden');
-        $('#tab-stream-btn').addClass('bg-white').removeClass('bg-gray-100').attr('aria-selected', 'true');
-        $('#tab-models-btn, #tab-advanced-json-btn').addClass('bg-gray-100').removeClass('bg-white').attr('aria-selected', 'false');
+        // Only switch to Stream tab if no tab is currently visible
+        const $visibleTab = $('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden');
+        if ($visibleTab.length === 0) {
+          switchTab('stream');
+        }
+        
+        // Aggiorna stato dei bottoni
+        updateButtonStates();
       });
 
     // Gestione pulsanti Add/Remove
     $('#add-model-btn').on('click', () => {
+      // Controlla se c'è una camera selezionata
+      if (!selectedSource) {
+        console.warn('Nessuna camera selezionata');
+        return;
+      }
+      
       const $item = $($('#model-item-template').html()).addClass('model-item');
       $('#models-container').append($item);
       setupModelItem($item);
@@ -703,7 +741,12 @@ $(function() {
 
     // Apply config
     $('#apply-btn').click(() => {
-      if (!selectedSource) return;
+      // Doppio controllo di sicurezza
+      if (!selectedSource) {
+        console.warn('Nessuna camera selezionata');
+        return;
+      }
+      
       const config = buildConfig();
       send({ action: 'update_config', source_id: String(selectedSource), config: config });
     });
@@ -1102,20 +1145,39 @@ $(function() {
         return;
       }
       
-      // Conferma azione
-      if (confirm('Vuoi azzerare tutti i contatori della commessa attiva? (Azione di DEBUG)')) {
-        // Invia richiesta di reset contatori al server
-        send({ 
-          action: 'reset_counters', 
-          source_id: String(selectedSource)
-        });
-        
-        showCommessaStatus('Contatori in fase di reset...', true);
-      }
+      // Mostra il modal personalizzato invece del brutto confirm
+      showCustomConfirm(
+        'Reset Contatori (DEBUG)',
+        'Vuoi azzerare tutti i contatori della commessa attiva?',
+        function() {
+          // Confermato - Invia richiesta di reset contatori al server
+          send({ 
+            action: 'reset_counters', 
+            source_id: String(selectedSource)
+          });
+          
+          showCommessaStatus('Contatori in fase di reset...', true);
+        }
+      );
     });
+
+    // -------- BUTTON STATE MANAGEMENT --------
+    function updateButtonStates() {
+      const hasCameraSelected = selectedSource !== null && selectedSource !== undefined && selectedSource !== '';
+      
+      // Aggiorna stato bottone Add Model
+      $('#add-model-btn').prop('disabled', !hasCameraSelected);
+      
+      // Aggiorna stato bottone Apply
+      $('#apply-btn').prop('disabled', !hasCameraSelected);
+    }
 
     // -------- START --------
     connect();
     scheduleRefresh();  // start auto-refresh
-    $(`#tab-stream`).removeClass('hidden');
+    updateButtonStates();  // Inizializza stato bottoni
+    // Initialize with Stream tab visible by default, but don't force it later
+    if ($('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden').length === 0) {
+      switchTab('stream');
+    }
 });

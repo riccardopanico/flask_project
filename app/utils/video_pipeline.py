@@ -11,7 +11,8 @@ from typing import Optional, List, Tuple, Dict, Any, Union, Callable
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 from ultralytics import YOLO
-from ultralytics.solutions.object_counter import ObjectCounter
+# from ultralytics.solutions.object_counter import ObjectCounter
+from app.utils.ObjectCounter import ObjectCounter
 from collections import defaultdict
 
 from ultralytics.utils import LOGGER
@@ -34,8 +35,8 @@ class TrackingSettings(BaseModel):
 
 class ModelCountingSettings(BaseModel):
     region: List[Tuple[int, int]]
-    show_in: bool = True
-    show_out: bool = True
+    show_in: bool = False
+    show_out: bool = False
     show: bool = False
     id_timeout: float = 5.0
     min_frames_before_count: int = 3
@@ -151,6 +152,10 @@ class EnhancedObjectCounter(ObjectCounter):
         self._callback_executor = ThreadPoolExecutor(max_workers=2)
 
     def display_output(self, plot_im):
+        pass
+
+    def display_counts(self, plot_im):
+        # Sovrascrive il metodo della classe padre per non mostrare i conteggi in alto a destra
         pass
 
     def extract_tracks(self, im0):
@@ -278,8 +283,8 @@ class VideoPipeline:
             if not cinfo:
                 continue
             region   = cinfo.region
-            show_in  = cinfo.show_in
-            show_out = cinfo.show_out
+            show_in  = False
+            show_out = False
             tck      = cinfo.tracking
             cnt = EnhancedObjectCounter(
                 show=False,
@@ -288,11 +293,11 @@ class VideoPipeline:
                 classes=None,
                 conf=setting.confidence,
                 tracker=tck.tracker,
-                show_conf=tck.show_conf,
+                show_conf=False,
                 show_labels=tck.show_labels,
                 verbose=tck.verbose,
-                show_in=show_in,
-                show_out=show_out,
+                show_in=False,
+                show_out=False,
                 id_timeout=cinfo.id_timeout,
                 min_frames_before_count=cinfo.min_frames_before_count,
                 on_count_callback=lambda data, p=path: self._emit('count', {**data, 'model_path': p})
@@ -477,8 +482,8 @@ class VideoPipeline:
                 cinfo = setting.counting
                 cnt = self.counters[path]
                 cnt.region = cinfo.region
-                cnt.show_in = cinfo.show_in
-                cnt.show_out = cinfo.show_out
+                cnt.show_in = False
+                cnt.show_out = False
                 cnt.id_timeout = cinfo.id_timeout
                 cnt.min_frames_before_count = cinfo.min_frames_before_count
         for setting in self.config.models:
@@ -486,8 +491,8 @@ class VideoPipeline:
             cinfo = setting.counting
             if cinfo and path not in self.counters:
                 region   = cinfo.region
-                show_in  = cinfo.show_in
-                show_out = cinfo.show_out
+                show_in  = False
+                show_out = False
                 tck      = cinfo.tracking
                 cnt = EnhancedObjectCounter(
                     model=None,
@@ -496,11 +501,11 @@ class VideoPipeline:
                     conf=setting.confidence,
                     tracker=tck.tracker,
                     show=False,
-                    show_conf=tck.show_conf,
+                    show_conf=False,
                     show_labels=tck.show_labels,
                     verbose=tck.verbose,
-                    show_in=show_in,
-                    show_out=show_out,
+                    show_in=False,
+                    show_out=False,
                     id_timeout=cinfo.id_timeout,
                     min_frames_before_count=cinfo.min_frames_before_count,
                     on_count_callback=lambda data, p=path: self._emit('count', {**data, 'model_path': p})

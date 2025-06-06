@@ -45,9 +45,6 @@
     <!-- Camera List -->
     <section id="camera-list" aria-label="Camera List" class="md:col-span-3 space-y-4">
       <h2 class="font-semibold text-lg mb-2 select-none">Camera List</h2>
-      <button
-        class="mb-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded px-3 py-1"
-        type="button">+ Add</button>
 
       <!-- placeholder iniziale -->
       <article
@@ -207,7 +204,7 @@
             <div id="models-container" class="space-y-4">
               <!-- I blocchi modello verranno inseriti dinamicamente qui -->
             </div>
-            <button id="add-model-btn" type="button" class="text-blue-600 text-base font-semibold">+ Add Model</button>
+            <button id="add-model-btn" type="button" class="text-blue-600 text-base font-semibold disabled:text-gray-400 disabled:cursor-not-allowed" disabled>+ Add Model</button>
           </fieldset>
         </form>
   
@@ -279,11 +276,40 @@
         </div>
   
         <button id="apply-btn"
-          class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-base font-semibold"
-          type="button">Apply</button>
+          class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-base font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
+          type="button" disabled>Apply</button>
       </div>
     </details>
   </section>
+
+  <!-- Custom Confirmation Modal -->
+  <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div class="flex items-center mb-4">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+          <i class="fas fa-exclamation-triangle text-orange-600 text-lg"></i>
+        </div>
+        <div class="ml-3">
+          <h3 id="modal-title" class="text-lg font-semibold text-gray-900">
+            Conferma Azione
+          </h3>
+        </div>
+      </div>
+      <div class="mb-6">
+        <p id="modal-message" class="text-gray-700 text-base">
+          Sei sicuro di voler procedere?
+        </p>
+      </div>
+      <div class="flex space-x-3 justify-end">
+        <button id="modal-cancel" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 font-medium text-sm transition-colors">
+          Annulla
+        </button>
+        <button id="modal-confirm" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-medium text-sm transition-colors">
+          Conferma
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script src="{{ url_for('static', filename='js/ip_camera_monitor.js') }}"></script>
 </body>

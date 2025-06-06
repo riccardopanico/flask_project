@@ -30,81 +30,262 @@ class Config:
     LOG_DIR = os.path.join(DATA_DIR, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "app.log")
 
-    PIPELINE_CONFIGS = {
-        "default": {
-            "source": "http://0.0.0.0:5000/api/irayple/1/stream",
-            "width": 640,
-            "height": 480,
-            "fps": 30,
-            "models": []
-        },
-        "external_rtsp": {
-            "source": "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg",
-            "models": [
-                {
-                    "path": "data/models/yolo11n.pt",
-                    "draw": True,
-                    "confidence": 0.5,
-                    "iou": 0.45
-                }
-            ]
-        },
-        "cam_counting_example": {
-            "source": "0",
-            # "source": "http://192.168.1.118:5000/api/irayple/3/stream",
-            "width": 640,
-            "height": 480,
-            "fps": 30,
-            "prefetch": 10,
-            "skip_on_full_queue": True,
-            "quality": 95,
-            "use_cuda": True,
-            "max_workers": 1,
-            "metrics_enabled": True,
-            "classes_filter": None,
-            "models": [
-                {
-                    "path": "data/models/scarpe_25k_305ep.pt",
-                    "draw": True,
-                    "confidence": 0.1,
-                    "iou": 0.45,
-                    "counting": {
-                        "region": [(100, 0), (100, 480)],
-                        "show_in": True,
-                        "show_out": True,
-                        "show": False,
-                        "tracking": {
-                            "show": False,
-                            "show_labels": True,
-                            "show_conf": True,
-                            "verbose": False
-                        }
-                    }
-                },
-                {
-                    "path": "data/models/yolo11n.pt",
-                    "draw": True,
-                    "confidence": 0.4,
-                    "iou": 0.45,
-                    "counting": {
-                        "region": [(320, 0), (320, 480)],
-                        "show_in": True,
-                        "show_out": True,
-                        "tracking": {
-                            "show": False,
-                            "show_labels": True,
-                            "show_conf": True,
-                            "verbose": False
-                        }
-                    }
-                }
-            ]
-        }
-    }
+    
+
+    # PIPELINE_CONFIGS = {
+    #     "Gianel - Manovia 1": {
+    #         "source": "0",
+    #         "width": 640,
+    #         "height": 480,
+    #         "fps": 30,
+    #         "prefetch": 10,
+    #         "skip_on_full_queue": True,
+    #         "quality": 95,
+    #         "use_cuda": True,
+    #         "max_workers": 1,
+    #         "metrics_enabled": True,
+    #         "classes_filter": None,
+    #         "models": [
+    #             {
+    #                 "path": "data/models/yolo11n.pt",
+    #                 "draw": True,
+    #                 "confidence": 0.4,
+    #                 "iou": 0.45,
+    #                 "counting": {
+    #                     "region": [(320, 0), (320, 480)],
+    #                     "show_in": False,
+    #                     "show_out": False,
+    #                     "tracking": {
+    #                         "show": False,
+    #                         "show_labels": True,
+    #                         "show_conf": True,
+    #                         "verbose": False
+    #                     }
+    #                 }
+    #             },
+    #             {
+    #                 "path": "data/models/GianelModel.pt",
+    #                 "draw": True,
+    #                 "confidence": 0.4,
+    #                 "iou": 0.45,
+    #                 "counting": {
+    #                     "region": [(320, 0), (320, 480)],
+    #                     "show_in": False,
+    #                     "show_out": False,
+    #                     "tracking": {
+    #                         "show": False,
+    #                         "show_labels": True,
+    #                         "show_conf": True,
+    #                         "verbose": False
+    #                     }
+    #                 }
+    #             }
+    #         ]
+    #     },
+    #     "cam_counting_example": {
+    #         "source": "0",
+    #         "width": 640,
+    #         "height": 480,
+    #         "fps": 30,
+    #         "prefetch": 10,
+    #         "skip_on_full_queue": True,
+    #         "quality": 95,
+    #         "use_cuda": True,
+    #         "max_workers": 1,
+    #         "metrics_enabled": True,
+    #         "classes_filter": None,
+    #         "models": [
+    #             {
+    #                 "path": "data/models/yolo11n.pt",
+    #                 "draw": True,
+    #                 "confidence": 0.4,
+    #                 "iou": 0.45,
+    #                 "counting": {
+    #                     "region": [(320, 0), (320, 480)],
+    #                     "show_in": False,
+    #                     "show_out": False,
+    #                     "tracking": {
+    #                         "show": False,
+    #                         "show_labels": True,
+    #                         "show_conf": True,
+    #                         "verbose": False
+    #                     }
+    #                 }
+    #             }
+    #         ]
+    #     }
+    # }
     
     IRAYPLE_CAMERAS = {
         "1": "192.168.1.123",
         "2": "192.168.1.111",
+    }
+
+    COMMESSE = {
+        "053409300172": {
+            "codice_commessa": "053409300172", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053409300189": {
+            "codice_commessa": "053409300189", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053409300110": {
+            "codice_commessa": "053409300110", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053036800137": {
+            "codice_commessa": "053036800137", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053036800113": {
+            "codice_commessa": "053036800113", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053036800144": {
+            "codice_commessa": "053036800144", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "053036800175": {
+            "codice_commessa": "053036800175", 
+            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        },
+        "1234": {
+            "codice_commessa": "1234", 
+            "descrizione": "Produzione Umani",
+            "person": {
+                "codice_articolo": "UMANO",
+                "nome_articolo": "Umano",
+                "totale_da_produrre": 5,
+                "prodotti": 0
+            }
+        }
     }
 
     MODULES = {
@@ -115,7 +296,7 @@ class Config:
             "interval": timedelta(seconds=15),
             "max_instances": 10,
             "modules": [],
-            # "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
+            #"modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
         },
         "threads": {
             "enabled": True,

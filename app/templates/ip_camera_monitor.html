@@ -4,13 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1" name="viewport">
-  <title>IP Camera Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet">
+  <title>Camera Manager</title>
+  <script src="{{ url_for('static', filename='static_library_restart/tailwindcss.js') }}"></script>
+  <link href="{{ url_for('static', filename='static_library_restart/all.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='static_library_restart/css2.css') }}" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/ip_camera_monitor.css') }}">
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"
-    integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='static_library_restart/jquery-3.7.1.min.js.js') }}"></script>
 </head>
 
 <body class="bg-gray-50 text-gray-900">
@@ -18,57 +17,49 @@
     <div class="flex items-center space-x-2">
       <img alt="Icon of a camera with a blue lens and gray body" class="w-6 h-6" height="24"
         src="https://storage.googleapis.com/a1aa/image/9b89db18-8eed-403c-7e08-3d1446d0a210.jpg" width="24">
-      <span class="font-semibold text-sm select-none">IP Camera Manager</span>
+      <span class="font-semibold text-base select-none">Camera Manager</span>
     </div>
     <div class="flex items-center space-x-2 text-sm">
-      <button class="flex items-center space-x-1 border border-gray-300 rounded px-3 py-1 hover:bg-gray-100"
+      <button class="flex items-center space-x-1 border border-gray-300 rounded px-3 py-1 hover:bg-gray-100 text-sm"
         type="button">
         <i class="fas fa-sync-alt text-gray-600"></i>
         <span>Refresh</span>
       </button>
-      <button class="bg-green-600 hover:bg-green-700 text-white rounded px-3 py-1 flex items-center space-x-1"
+      <button class="bg-green-600 hover:bg-green-700 text-white rounded px-3 py-1 flex items-center space-x-1 text-sm"
         type="button">
         <i class="fas fa-play"></i>
         <span>Start All</span>
       </button>
-      <button class="bg-red-600 hover:bg-red-700 text-white rounded px-3 py-1 flex items-center space-x-1"
+      <button class="bg-red-600 hover:bg-red-700 text-white rounded px-3 py-1 flex items-center space-x-1 text-sm"
         type="button">
         <i class="fas fa-stop"></i>
         <span>Stop All</span>
       </button>
-      <button aria-label="Link icon" class="text-gray-600 hover:text-gray-900" type="button">
+      <button aria-label="Link icon" class="text-gray-600 hover:text-gray-900 text-sm" type="button">
         <i class="fas fa-link"></i>
       </button>
     </div>
   </header>
 
-  <main class="px-6 py-6 max-w-[1280px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-6">
+  <main class="px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6 w-full">
     <!-- Camera List -->
     <section id="camera-list" aria-label="Camera List" class="md:col-span-3 space-y-4">
-      <h2 class="font-semibold text-base mb-2 select-none">Camera List</h2>
+      <h2 class="font-semibold text-lg mb-2 select-none">Camera List</h2>
       <button
         class="mb-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded px-3 py-1"
         type="button">+ Add</button>
 
       <!-- placeholder iniziale -->
       <article
-        class="border border-dashed border-gray-300 rounded-md bg-white p-4 text-center text-gray-400 italic">
+        class="border border-dashed border-gray-300 rounded-md bg-white p-4 text-center text-gray-400 italic text-sm">
         Nessuna camera disponibile
       </article>
     </section>
 
     <!-- Camera Stream -->
     <section id="camera-stream" aria-label="Camera Stream"
-      class="md:col-span-6 bg-white rounded-md shadow-sm p-4 flex flex-col">
-      <div class="flex items-center space-x-2 mb-2">
-        <!-- <span
-          class="bg-blue-500 text-white text-[10px] font-semibold rounded-full px-2 py-[2px] select-none flex items-center space-x-1">
-          <span class="w-2 h-2 rounded-full bg-green-400 block"></span>
-          <span>running</span>
-        </span> -->
-        <span
-          class="border border-gray-300 text-xs rounded-full px-2 py-[2px] select-none font-semibold" id="camera-name">—×—</span>
-      </div>
+      class="md:col-span-6 bg-white rounded-md shadow-sm p-4 flex flex-col" style="height: 720px; padding: 0px;">
+
       <div
         class="flex-grow bg-[#1a1c2a] rounded-md flex items-center justify-center text-white font-semibold text-lg select-none h-[480px]">
         Nessuna camera selezionata
@@ -77,35 +68,87 @@
 
     <!-- Metrics -->
     <section id="metrics-panel" class="md:col-span-3 space-y-3" aria-label="Metrics">
-      <div class="flex justify-between items-center text-sm select-none">
-        <h2 class="font-semibold">Metrics</h2>
-        <select aria-label="Refresh interval"
-          class="border border-gray-300 rounded text-xs px-2 py-1">
-          <option>5s Refresh</option>
-        </select>
-      </div>
-      <article aria-label="Camera Metrics"
-        class="bg-white rounded-md p-4 shadow-sm space-y-3 text-sm select-text">
-        <h3 class="font-semibold text-base select-none">Camera Metrics</h3>
-        <div class="text-center text-gray-400 italic">Nessuna metrica disponibile</div>
+      
+      
+      <!-- Commessa Panel -->
+      <article aria-label="Commessa" class="bg-white rounded-md p-0 shadow-sm space-y-3 text-sm">
+        
+        <!-- Commessa Attiva -->
+        <div id="commessa-attiva" class="hidden bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md">
+          <div class="flex justify-between items-center mb-3">
+            <span class="font-black text-blue-900 text-xl">Commessa Attiva:</span>
+            <div class="flex space-x-2">
+              <button id="reset-counters" class="text-orange-600 hover:text-orange-800 text-xl hover:bg-orange-100 rounded-full p-2 transition-all duration-200" title="Reset solo contatori (DEBUG)">
+                <i class="fas fa-undo"></i>
+              </button>
+              <button id="reset-commessa" class="text-red-600 hover:text-red-800 text-xl hover:bg-red-100 rounded-full p-2 transition-all duration-200" title="Reset commessa">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <div class="text-lg space-y-2 mb-4">
+            <div class="bg-white rounded-md p-3 shadow-sm">
+              <div class="mb-2">
+                <span class="font-bold text-gray-700">Codice:</span> 
+                <span id="commessa-codice" class="font-black text-blue-800 text-xl">-</span>
+              </div>
+              <div>
+                <span class="font-bold text-gray-700">Descrizione:</span> 
+                <span id="commessa-descrizione" class="font-bold text-gray-800">-</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- MODELLI YOLO DIRETTI -->
+          <div id="modelli-container" class="space-y-4">
+            <!-- I modelli YOLO verranno inseriti dinamicamente qui -->
+          </div>
+        </div>
+        
+        <!-- Input Commessa -->
+        <div id="commessa-input-section" class="flex space-x-2">
+          <input 
+            type="text" 
+            id="commessa-input" 
+            class="flex-1 rounded border border-gray-300 px-3 py-2 text-base" 
+            placeholder="Inserisci codice commessa"
+          >
+          <button 
+            id="commessa-submit" 
+            type="button" 
+            class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-2 text-base font-semibold whitespace-nowrap"
+          >
+            Invia
+          </button>
+        </div>
+        <div id="commessa-status" class="text-base hidden p-2 rounded border font-medium" 
+             style="min-height: 20px; position: relative; z-index: 1000;">
+          <!-- Status messages will appear here -->
+        </div>
       </article>
-      <div id="health-panel" class="bg-white rounded-md p-4 shadow-sm text-sm select-text">
-        <div class="text-center text-gray-400 italic">Nessun health check disponibile</div>
+      
+      <article aria-label="Camera Metrics"
+        class="bg-white rounded-md p-4 shadow-sm space-y-3 text-sm select-text" style="display: none;">
+        <h3 class="font-semibold text-lg select-none">Camera Metrics</h3>
+        <div class="text-center text-gray-400 italic text-sm">Nessuna metrica disponibile</div>
+      </article>
+      <div id="health-panel" class="hidden bg-white rounded-md p-4 shadow-sm text-sm select-text">
+        <div class="text-center text-gray-400 italic text-sm">Nessun health check disponibile</div>
       </div>
     </section>
   </main>
 
 <!-- Configuration -->
-<section class="max-w-[1280px] mx-auto px-6 pb-6">
+<section class="px-4 pb-6 w-full">
     <details aria-label="Configuration section"
       class="bg-white border border-gray-200 rounded-md shadow-sm" open>
       <summary
-        class="cursor-pointer select-none flex items-center space-x-2 px-4 py-3 font-semibold text-xs text-gray-700">
-        <i class="fas fa-cog text-xs"></i>
+        class="cursor-pointer select-none flex items-center space-x-2 px-4 py-3 font-semibold text-base text-gray-700">
+        <i class="fas fa-cog text-base"></i>
         <span>Configuration</span>
       </summary>
       <div class="px-6 pb-6 space-y-4">
-        <nav class="flex space-x-2 text-xs font-semibold text-gray-600 select-none" role="tablist">
+        <nav class="flex space-x-2 text-base font-semibold text-gray-600 select-none" role="tablist">
           <button aria-selected="true" aria-controls="tab-stream" id="tab-stream-btn"
             class="border border-gray-300 rounded-t-md rounded-b-none px-3 py-1 bg-white"
             role="tab" type="button">Stream</button>
@@ -118,34 +161,34 @@
         </nav>
   
         <!-- Stream Tab -->
-        <form id="tab-stream" class="form-section space-y-4 text-xs text-gray-700" role="tabpanel">
+        <form id="tab-stream" class="form-section space-y-4 text-base text-gray-700" role="tabpanel">
           <div>
-            <label class="block font-semibold mb-1 select-none" for="stream-url">Stream URL</label>
-            <input class="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-xs"
+            <label class="block font-semibold mb-1 select-none text-base" for="stream-url">Stream URL</label>
+            <input class="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-base"
                    id="stream-url" type="text" placeholder="rtsp://...">
-            <p class="text-[10px] text-orange-600 mt-1 select-none">Stop camera to change URL</p>
+            <p class="text-sm text-orange-600 mt-1 select-none">Stop camera to change URL</p>
           </div>
           <div>
-            <label class="block font-semibold mb-1 select-none" for="quality">Quality (<span id="quality-val">–</span>%)</label>
+            <label class="block font-semibold mb-1 select-none text-base" for="quality">Quality (<span id="quality-val">–</span>%)</label>
             <input class="w-full accent-blue-600" id="quality" max="100" min="0" type="range" value="80">
           </div>
           <div>
-            <label class="block font-semibold mb-1 select-none" for="fps">FPS (<span id="fps-val">–</span>)</label>
+            <label class="block font-semibold mb-1 select-none text-base" for="fps">FPS (<span id="fps-val">–</span>)</label>
             <input class="w-full accent-blue-600" id="fps" max="60" min="0" type="range" value="30">
           </div>
           <div class="grid grid-cols-2 gap-x-4">
             <div>
-              <label class="block font-semibold mb-1 select-none" for="width">Width</label>
-              <input class="w-full rounded border border-gray-300 px-3 py-2 text-xs" id="width"
+              <label class="block font-semibold mb-1 select-none text-base" for="width">Width</label>
+              <input class="w-full rounded border border-gray-300 px-3 py-2 text-base" id="width"
                      type="text" placeholder="1280">
             </div>
             <div>
-              <label class="block font-semibold mb-1 select-none" for="height">Height</label>
-              <input class="w-full rounded border border-gray-300 px-3 py-2 text-xs" id="height"
+              <label class="block font-semibold mb-1 select-none text-base" for="height">Height</label>
+              <input class="w-full rounded border border-gray-300 px-3 py-2 text-base" id="height"
                      type="text" placeholder="720">
             </div>
           </div>
-          <div class="flex items-center space-x-6 text-xs font-semibold select-none">
+          <div class="flex items-center space-x-6 text-base font-semibold select-none">
             <label class="flex items-center space-x-2 cursor-pointer">
               <input class="accent-blue-600 w-5 h-5" id="use-cuda" type="checkbox">
               <span>Use CUDA</span>
@@ -158,70 +201,70 @@
         </form>
   
         <!-- Models Tab -->
-        <form id="tab-models" class="form-section space-y-4 text-xs text-gray-700 hidden" role="tabpanel">
+        <form id="tab-models" class="form-section space-y-4 text-base text-gray-700 hidden" role="tabpanel">
           <fieldset>
-            <legend class="font-semibold mb-2 select-none">Models</legend>
+            <legend class="font-semibold mb-2 select-none text-base">Models</legend>
             <div id="models-container" class="space-y-4">
               <!-- I blocchi modello verranno inseriti dinamicamente qui -->
             </div>
-            <button id="add-model-btn" type="button" class="text-blue-600 text-xs font-semibold">+ Add Model</button>
+            <button id="add-model-btn" type="button" class="text-blue-600 text-base font-semibold">+ Add Model</button>
           </fieldset>
         </form>
   
         <template id="model-item-template">
           <div class="border border-gray-300 rounded-md p-3 space-y-2 relative">
-            <button type="button" class="remove-model absolute top-1 right-1 text-red-500 text-xs">✕</button>
+            <button type="button" class="remove-model absolute top-1 right-1 text-red-500 text-base">✕</button>
             <div>
-              <label class="block font-semibold mb-1 select-none">Path</label>
-              <select class="model-path w-full rounded border border-gray-300 px-3 py-2 text-xs">
+              <label class="block font-semibold mb-1 select-none text-base">Path</label>
+              <select class="model-path w-full rounded border border-gray-300 px-3 py-2 text-base">
                 <option value="">Seleziona modello...</option>
               </select>
             </div>
             <div class="grid grid-cols-2 gap-x-4">
-              <label class="flex items-center space-x-2 cursor-pointer select-none">
+              <label class="flex items-center space-x-2 cursor-pointer select-none text-base">
                 <input type="checkbox" class="draw-boxes accent-blue-600 w-5 h-5" checked>
                 <span>Draw boxes</span>
               </label>
-              <label class="flex items-center space-x-2 cursor-pointer select-none">
+              <label class="flex items-center space-x-2 cursor-pointer select-none text-base">
                 <input type="checkbox" class="count-objects accent-blue-600 w-5 h-5">
                 <span>Count objects</span>
               </label>
             </div>
             <div class="grid grid-cols-2 gap-x-4">
               <div>
-                <label class="block font-semibold mb-1 select-none">Confidence</label>
-                <input type="number" step="0.01" min="0" max="1" class="confidence w-full rounded border border-gray-300 px-3 py-2 text-xs" placeholder="0.5" value="0.5">
+                <label class="block font-semibold mb-1 select-none text-base">Confidence</label>
+                <input type="number" step="0.01" min="0" max="1" class="confidence w-full rounded border border-gray-300 px-3 py-2 text-base" placeholder="0.5" value="0.5">
               </div>
               <div>
-                <label class="block font-semibold mb-1 select-none">IoU</label>
-                <input type="number" step="0.01" min="0" max="1" class="iou w-full rounded border border-gray-300 px-3 py-2 text-xs" placeholder="0.45" value="0.45">
+                <label class="block font-semibold mb-1 select-none text-base">IoU</label>
+                <input type="number" step="0.01" min="0" max="1" class="iou w-full rounded border border-gray-300 px-3 py-2 text-base" placeholder="0.45" value="0.45">
               </div>
             </div>
             <div class="count-line-container">
-              <label class="block font-semibold mb-1 select-none">Count Line (x1,y1,x2,y2)</label>
-              <input type="text" class="count-line w-full rounded border border-gray-300 px-3 py-2 text-xs" placeholder="0,0,100,100" value="0,0,100,100">
+              <label class="block font-semibold mb-1 select-none text-base">Count Line (x1,y1,x2,y2)</label>
+              <input type="text" class="count-line w-full rounded border border-gray-300 px-3 py-2 text-base" placeholder="0,0,100,100" value="0,0,100,100">
               <div class="grid grid-cols-2 gap-2 mt-2">
                 <div>
-                  <label class="block text-xs font-semibold">x1</label>
+                  <label class="block text-base font-semibold">x1</label>
                   <input type="range" min="0" max="640" class="count-x1 w-full" value="0" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold">y1</label>
+                  <label class="block text-base font-semibold">y1</label>
                   <input type="range" min="0" max="480" class="count-y1 w-full" value="0" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold">x2</label>
+                  <label class="block text-base font-semibold">x2</label>
                   <input type="range" min="0" max="640" class="count-x2 w-full" value="100" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold">y2</label>
+                  <label class="block text-base font-semibold">y2</label>
                   <input type="range" min="0" max="480" class="count-y2 w-full" value="100" />
                 </div>
               </div>
             </div>
             <div class="classes-filter-container mt-2">
-              <label class="block font-semibold mb-1 select-none">Classes Filter</label>
-              <input type="text" class="classes-filter w-full rounded border border-gray-300 px-3 py-2 text-xs mt-1" placeholder="person,car,bus">
+              <label class="block font-semibold mb-1 select-none text-base">Classes Filter</label>
+              <input type="text" class="classes-filter w-full rounded border border-gray-300 px-3 py-2 text-base mt-1" placeholder="person,car,bus">
             </div>
           </div>
         </template>
@@ -229,14 +272,14 @@
         <!-- Advanced JSON Tab -->
         <div id="tab-advanced-json" class="form-section hidden" role="tabpanel" aria-labelledby="tab-advanced-json-btn">
           <label for="advanced-json-textarea"
-                 class="block font-semibold mb-1 select-none text-xs text-gray-700">Configuration JSON</label>
+                 class="block font-semibold mb-1 select-none text-base text-gray-700">Configuration JSON</label>
           <textarea id="advanced-json-textarea" rows="10"
-                    class="w-full rounded border border-gray-300 bg-gray-50 p-3 text-xs text-gray-900"
+                    class="w-full rounded border border-gray-300 bg-gray-50 p-3 text-base text-gray-900"
                     readonly></textarea>
         </div>
   
         <button id="apply-btn"
-          class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-semibold"
+          class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-base font-semibold"
           type="button">Apply</button>
       </div>
     </details>

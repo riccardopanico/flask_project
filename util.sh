@@ -10,7 +10,7 @@ conda activate flask_project_datacenter
 
 
 which gunicorn
-/home/webserver/miniconda3/envs/flask_project_datacenter/bin/gunicorn --workers 1 --threads 8 --timeout 60 --bind 0.0.0.0:5000 manage:app
+/home/popos_ai2/miniconda3/envs/flask_project_datacenter/bin/gunicorn --workers 1 --threads 8 --timeout 60 --bind 0.0.0.0:5000 manage:app
 
 rm -rf migrations/
 

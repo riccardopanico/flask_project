@@ -62,7 +62,7 @@ def get_logs():
             for log in logs:
                 logs_data.append({
                     **log.to_dict(),
-                    "device_interconnection_id": log.device.interconnection_id if log.device else None,
+                    "interconnection_id":       log.device.interconnection_id if log.device else None,
                     "variable_code":            log.variable.variable_code if log.variable else None,
                     "variable_name":            log.variable.variable_name if log.variable else None,
                 })
@@ -89,7 +89,7 @@ def get_log(log_id):
 
             log_data = {
                 **log.to_dict(),
-                "device_interconnection_id": log.device.interconnection_id if log.device else None,
+                "interconnection_id":       log.device.interconnection_id if log.device else None,
                 "variable_code":            log.variable.variable_code if log.variable else None,
                 "variable_name":            log.variable.variable_name if log.variable else None,
             }

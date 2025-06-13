@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from dotenv import load_dotenv
 from ultralytics import YOLO
+import copy
 
 load_dotenv()
 
@@ -121,169 +122,47 @@ class Config:
         "2": "192.168.1.111",
     }
 
+    COMMESSA_DEFAULT = {
+        "descrizione": "Produzione Calzature Lavoro Autunno 2024",
+        "articoli": {
+            "U_SNK DAY FASTER SC": {
+                "codice_articolo": "U_SNK DAY FASTER SC",
+                "nome_articolo": "Sneaker Day Faster Safety Collection",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "D_SNK P.LIGHT STROBEL": {
+                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
+                "nome_articolo": "Sneaker Pro Light Strobel Construction",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            },
+            "U_PORT.SPOILER": {
+                "codice_articolo": "U_PORT.SPOILER",
+                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
+                "totale_da_produrre": 20,
+                "prodotti": 0
+            }
+        }
+    }
+
     COMMESSE = {
-        "053409300172": {
-            "codice_commessa": "053409300172", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053409300189": {
-            "codice_commessa": "053409300189", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053409300110": {
-            "codice_commessa": "053409300110", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053036800137": {
-            "codice_commessa": "053036800137", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053036800113": {
-            "codice_commessa": "053036800113", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053036800144": {
-            "codice_commessa": "053036800144", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "053036800175": {
-            "codice_commessa": "053036800175", 
-            "descrizione": "Produzione Calzature Lavoro Autunno 2024",
-            "U_SNK DAY FASTER SC": {
-                "codice_articolo": "U_SNK DAY FASTER SC",
-                "nome_articolo": "Sneaker Day Faster Safety Collection",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "D_SNK P.LIGHT STROBEL": {
-                "codice_articolo": "D_SNK P.LIGHT STROBEL", 
-                "nome_articolo": "Sneaker Pro Light Strobel Construction",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            },
-            "U_PORT.SPOILER": {
-                "codice_articolo": "U_PORT.SPOILER",
-                "nome_articolo": "Scarpa Portuale con Spoiler Protettivo",
-                "totale_da_produrre": 20,
-                "prodotti": 0
-            }
-        },
-        "1234": {
-            "codice_commessa": "1234", 
-            "descrizione": "Produzione Umani",
-            "person": {
-                "codice_articolo": "UMANO",
-                "nome_articolo": "Umano",
-                "totale_da_produrre": 5,
-                "prodotti": 0
+        "053409300172" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053409300189" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053409300110" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053036800137" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053036800113" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053036800144" : copy.deepcopy(COMMESSA_DEFAULT),
+        "053036800175" : copy.deepcopy(COMMESSA_DEFAULT),
+        "1234567890" : {
+            "descrizione": "Conteggio Persone",
+            "articoli": {
+                "persona": {
+                    "codice_articolo": "persona",
+                    "nome_articolo": "Persona",
+                    "totale_da_produrre": 100,
+                    "prodotti": 0
+                }
             }
         }
     }
@@ -296,11 +175,11 @@ class Config:
             "interval": timedelta(seconds=15),
             "max_instances": 10,
             "modules": [],
-            #"modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
+            # "modules": ["sync_devices_from_cloud", "sync_logs_to_cloud", "sync_logs_from_device"],
         },
         "threads": {
             "enabled": True,
-            "modules": ["yolo_tools", "websocket"],
+            "modules": ["websocket"],
             "config": {
                 "yolo_tools": {
                     "port": 8505,

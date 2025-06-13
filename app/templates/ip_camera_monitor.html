@@ -70,8 +70,17 @@
       <!-- Commessa Panel -->
       <article aria-label="Commessa" class="bg-white rounded-md p-0 shadow-sm space-y-3 text-sm">
         
+        <!-- Input Commessa -->
+        <div id="commessa-input-section" class="flex space-x-2">
+            <input type="text" id="commessa-input" class="flex-1 rounded border border-gray-300 px-3 py-2 text-base" placeholder="Inserisci codice commessa" >
+            <button id="commessa-submit" type="button" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-2 text-base font-semibold whitespace-nowrap" > Invia </button>
+          </div>
+          <div id="commessa-status" class="text-base hidden p-2 rounded border font-medium" 
+               style="min-height: 20px; position: relative; z-index: 1000;">
+            <!-- Status messages will appear here -->
+          </div>
         <!-- Commessa Attiva -->
-        <div id="commessa-attiva" class="hidden bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md">
+        <div id="commessa-attiva" class="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md">
           <div class="flex justify-between items-center mb-3">
             <span class="font-black text-blue-900 text-xl">Commessa Attiva:</span>
             <div class="flex space-x-2">
@@ -102,26 +111,6 @@
           </div>
         </div>
         
-        <!-- Input Commessa -->
-        <div id="commessa-input-section" class="flex space-x-2">
-          <input 
-            type="text" 
-            id="commessa-input" 
-            class="flex-1 rounded border border-gray-300 px-3 py-2 text-base" 
-            placeholder="Inserisci codice commessa"
-          >
-          <button 
-            id="commessa-submit" 
-            type="button" 
-            class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-2 text-base font-semibold whitespace-nowrap"
-          >
-            Invia
-          </button>
-        </div>
-        <div id="commessa-status" class="text-base hidden p-2 rounded border font-medium" 
-             style="min-height: 20px; position: relative; z-index: 1000;">
-          <!-- Status messages will appear here -->
-        </div>
       </article>
       
       <article aria-label="Camera Metrics"
@@ -311,6 +300,9 @@
     </div>
   </div>
 
+  <script>
+    let commesse = {};
+  </script>
   <script src="{{ url_for('static', filename='js/ip_camera_monitor.js') }}"></script>
 </body>
 

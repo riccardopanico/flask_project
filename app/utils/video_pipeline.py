@@ -76,7 +76,10 @@ class PipelineSettings(BaseModel):
 class SourceHandler:
     def __init__(self, source: str, width=None, height=None, fps=None):
         self.is_http = source.startswith(('http://', 'https://'))
+        self.is_file = (not self.is_http) and os.path.isfile(source)
         self.source = source
+        self.frames_read = 0
+
         if self.is_http:
             self.session = requests.Session()
             self.resp = self.session.get(source, stream=True)
@@ -84,6 +87,7 @@ class SourceHandler:
         else:
             idx = int(source) if source.isdigit() else source
             self.cap = cv2.VideoCapture(idx)
+            
             if width:
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             if height:
@@ -125,6 +129,10 @@ class SourceHandler:
             ok, frame = self.cap.read()
             if not ok:
                 return None
+            
+            if self.is_file:
+                self.frames_read += 1
+            
             _, buf = cv2.imencode('.jpg', frame)
             return buf.tobytes()
 
@@ -355,17 +363,47 @@ class VideoPipeline:
         self._log("Pipeline stopped")
 
     def _ingest_loop(self):
+        last_frame_time = time.time()
+        target_fps = None
+        
+        # Per i file video, usa gli FPS del file o quelli configurati
+        if self.source_handler and getattr(self.source_handler, 'is_file', False):
+            if hasattr(self.source_handler, 'cap'):
+                video_fps = self.source_handler.cap.get(cv2.CAP_PROP_FPS)
+                target_fps = self.config.fps if self.config.fps else video_fps
+        
         while not self._stop.is_set():
-            data = (self.pipeline_source._last_frame if self.pipeline_source else self.source_handler.read())
-            if not data:
+            # Controllo velocità per file video
+            if target_fps and target_fps > 0:
+                current_time = time.time()
+                elapsed = current_time - last_frame_time
+                target_interval = 1.0 / target_fps
+                
+                if elapsed < target_interval:
+                    sleep_time = target_interval - elapsed
+                    time.sleep(sleep_time)
+                
+                last_frame_time = time.time()
+            
+            data = (self.pipeline_source._last_frame if self.pipeline_source
+                    else self.source_handler.read())
+
+            if data is None:
+                if self.source_handler and getattr(self.source_handler, 'is_file', False):
+                    self._log("Fine del file video, stopping pipeline")
+                    self.stop()
+                    break
                 time.sleep(0.005)
                 continue
+
             frm = Frame(data=data, timestamp=time.time(), seq=self._seq)
             self._seq += 1
             self._metrics['frames_received'] += 1
             self._emit('frame', frm)
             try:
-                self._frame_q.put(frm, block=not self.config.skip_on_full_queue, timeout=0.01)
+                self._frame_q.put(frm,
+                    block=not self.config.skip_on_full_queue,
+                    timeout=0.01)
             except queue.Full:
                 if not self.config.skip_on_full_queue:
                     time.sleep(0.005)

@@ -1,4 +1,87 @@
-// static/js/ip_camera_monitor.js
+function showCommessaStatus(message, type = 'success') {
+    const $status = $('#commessa-status');
+    
+    // Rimuovi classi esistenti
+    $status.removeClass('text-green-600 bg-green-50 border-green-200 text-red-600 bg-red-50 border-red-200 text-orange-600 bg-orange-50 border-orange-200');
+    
+    // Aggiungi classi in base al tipo
+    switch(type) {
+        case 'success':
+            $status.addClass('text-green-600 bg-green-50 border-green-200');
+            break;
+        case 'error':
+            $status.addClass('text-red-600 bg-red-50 border-red-200');
+            break;
+        case 'warning':
+            $status.addClass('text-orange-600 bg-orange-50 border-orange-200');
+            break;
+    }
+    
+    // Imposta il messaggio e mostra il div
+    $status.text(message).removeClass('hidden');
+    
+    // Nascondi il messaggio dopo 5 secondi
+    setTimeout(() => {
+        $status.addClass('hidden');
+    }, 5000);
+}
+
+function updateDisplayCommessa(data) {
+    // Gestione centralizzata di tutti gli stati della commessa
+    if (!data || !data.commessa_id || !data.commessa_data) {
+        // CASO RESET/VUOTO: Pulisci completamente l'interfaccia
+        $('#commessa-codice').text('Nessuna');
+        $('#commessa-descrizione').text('Seleziona una commessa per iniziare');
+        $('#modelli-container').empty();
+        showCommessaStatus('Interfaccia commessa resettata', 'success');
+        return;
+    }
+    
+    // CASO COMMESSA ATTIVA: Aggiorna l'interfaccia con i dati
+    const commessaId = data.commessa_id;
+    const commessaData = data.commessa_data;
+    
+    // Aggiorna la variabile globale commesse con i nuovi dati
+    if (!commesse) commesse = {};
+    commesse[commessaId] = commessaData;
+    
+    // Aggiorna i campi della commessa attiva
+    $('#commessa-codice').text(commessaId);
+    $('#commessa-descrizione').text(commessaData.descrizione);
+
+    // Pulisci il container dei modelli
+    $('#modelli-container').empty();
+
+    // Crea una singola sezione per i contatori
+    const contatoriHtml = `
+        <div class="yolo-model-section bg-white rounded-lg border-2 border-gray-300 p-4 shadow-inner mb-4">
+            <h4 class="font-black text-gray-800 text-lg mb-3 text-center uppercase tracking-wide">
+                <i class="fas fa-chart-bar mr-2 text-blue-600"></i>
+                Contatori Articoli
+            </h4>
+
+            <!-- CONTATORI ARTICOLI -->
+            <div class="space-y-3">
+                ${Object.entries(commessaData.articoli).map(([codice, articolo]) => `
+                    <div class="class-counter bg-white border-l-4 border-blue-500 bg-blue-50 rounded-lg p-4 shadow-sm mb-3" data-class="${codice}">
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="font-bold text-lg text-gray-800 mb-1">${codice}</div>
+                                <div class="text-sm text-gray-600">${articolo.nome_articolo}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="counter-value text-5xl font-bold text-blue-600">${articolo.prodotti}/${articolo.totale_da_produrre}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    $('#modelli-container').append(contatoriHtml);
+}
+
+
 $(function() {
     // -------- CONFIG --------
     const WS_URL      = `ws://${window.location.hostname}:8765`;
@@ -20,36 +103,6 @@ $(function() {
       { label: '30s Refresh', value: 30000 },
       { label: '1m Refresh',  value: 60000 }
     ];
-
-    // -------- CUSTOM MODAL FUNCTIONS --------
-    function showCustomConfirm(title, message, onConfirm, onCancel = null) {
-      $('#modal-title').text(title);
-      $('#modal-message').text(message);
-      $('#confirm-modal').removeClass('hidden');
-      
-      // Remove existing event listeners
-      $('#modal-confirm').off('click');
-      $('#modal-cancel').off('click');
-      
-      // Add new event listeners
-      $('#modal-confirm').on('click', function() {
-        $('#confirm-modal').addClass('hidden');
-        if (onConfirm) onConfirm();
-      });
-      
-      $('#modal-cancel').on('click', function() {
-        $('#confirm-modal').addClass('hidden');
-        if (onCancel) onCancel();
-      });
-      
-      // Close modal when clicking outside
-      $('#confirm-modal').on('click', function(e) {
-        if (e.target === this) {
-          $('#confirm-modal').addClass('hidden');
-          if (onCancel) onCancel();
-        }
-      });
-    }
 
     // Carica la lista dei modelli disponibili da data/models e popola tutte le select
     let availableModels = [];
@@ -113,9 +166,9 @@ $(function() {
           if (msg.action === 'get_metrics' && String(msg.source_id) === String(selectedSource)) {
             renderMetrics(msg.source_id, msg.data);
           }
-          // Gestisci aggiornamenti contatori commessa in tempo reale
-          if (msg.action === 'update_commessa_count' && String(msg.source_id) === String(selectedSource)) {
-            updateCommessaCounter(msg.data);
+          // Gestisci tutti gli aggiornamenti delle commesse attraverso updateDisplayCommessa
+          if (msg.action === 'update_commessa' && String(msg.source_id) === String(selectedSource)) {
+            updateDisplayCommessa(msg.data);
           }
         });
         return flushQueue();
@@ -139,13 +192,8 @@ $(function() {
 
       if (!m.success) {
         console.warn(`[WS] error on ${m.action}: ${m.error}`);
-        // Permetti a set_commessa di continuare allo switch anche in caso di errore
-        if (m.action === 'set_commessa') {
-          // Continue to switch for UI feedback
-        } else {
-          if (m.action === 'stop') clearPanels();
-          return flushQueue();
-        }
+        if (m.action === 'stop') clearPanels();
+        return flushQueue();
       }
 
       switch (m.action) {
@@ -153,33 +201,16 @@ $(function() {
           updateCameraUI(sid, 'running');
           if (sid === selectedSource) {
             send({ action:'get_config',  source_id: sid });
-            send({ action:'get_health',  source_id: sid });
-            send({ action:'get_metrics', source_id: sid });
+            // send({ action:'get_health',  source_id: sid });
+            // send({ action:'get_metrics', source_id: sid });
           }
           break;
         case 'stop':
           updateCameraUI(sid, 'stopped');
           break;
         case 'get_config':
-          // Se abbiamo dati di commessa salvati, usiamo la config per costruire la visualizzazione commessa
-          if (window.currentCommessaData) {
-            buildCommessaDisplayByYoloModels(m.data, window.currentCommessaData);
-            window.currentCommessaData = null; // Pulisci dopo l'uso
-          } else {
-            // Controlla se c'è una commessa attiva e dobbiamo ricaricare la sua visualizzazione
-            const currentCommessa = $('#commessa-codice').text();
-            if (currentCommessa && currentCommessa !== '-' && !$('#commessa-attiva').hasClass('hidden')) {
-              // C'è una commessa attiva, richiedi i suoi dati per ricostruire la visualizzazione
-              send({ 
-                action: 'set_commessa', 
-                source_id: String(selectedSource), 
-                data: { commessa: currentCommessa }
-              });
-            } else {
-              // Altrimenti è una richiesta normale di configurazione
-              renderConfig(sid, m.data);
-            }
-          }
+            console.log('[WS] Rendering config for source:', sid, 'data:', m.data); // DEBUG
+            renderConfig(sid, m.data);
           break;
         case 'get_health':
           renderHealth(sid, m.data);
@@ -190,49 +221,14 @@ $(function() {
         case 'update_config':
           showConfigResult(m);
           break;
-        case 'set_commessa':
-          // Riabilita il pulsante
-          $('#commessa-submit').prop('disabled', false).text('Invia');
-          
-          if (m.success) {
-            showCommessaStatus('Commessa impostata con successo', true);
-            // Opzionalmente, svuota il campo
-            $('#commessa-input').val('');
-            
-            // Mostra i dati della commessa attiva
-            if (m.data) {
-              showCommessaAttiva(m.data);
-            }
-          } else {
-            const errorMessage = m.error || 'Errore durante l\'impostazione della commessa';
-            showCommessaStatus(errorMessage, false);
-          }
+        case 'update_commessa':
+          updateDisplayCommessa(m.data);
           break;
-        case 'reset_counters':
-          if (m.success) {
-            const resetCount = m.data ? m.data.reset_count : 0;
-            showCommessaStatus(`Contatori azzerati con successo (${resetCount} resettati)`, true);
-          } else {
-            showCommessaStatus(m.error || 'Errore durante il reset dei contatori', false);
-          }
+        case 'success':
+          showCommessaStatus(m.message, 'success');
           break;
-        case 'reset_commessa':
-          if (m.success) {
-            // Reset completo e immediato della GUI
-            hideCommessaAttiva();
-            
-            // Reset aggiuntivo di emergenza per assicurarsi che tutto sia pulito
-            setTimeout(() => {
-              const $commessaPanel = $('#commessa-attiva');
-              $commessaPanel.removeClass();
-              $commessaPanel.addClass('hidden bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md');
-              $commessaPanel.find('*').removeClass('bg-purple-50 bg-purple-100 border-purple-300 border-purple-400 text-purple-600 text-purple-800 progress-over-target over-target completed');
-            }, 100);
-            
-            showCommessaStatus('Commessa resettata con successo', true);
-          } else {
-            showCommessaStatus(m.error || 'Errore durante il reset della commessa', false);
-          }
+        case 'error':
+          showCommessaStatus(m.message, 'error');
           break;
         default:
           console.warn('[WS] unhandled:', m);
@@ -240,6 +236,36 @@ $(function() {
 
       flushQueue();
     }
+
+    // -------- GESTIONE COMMESSA INPUT --------
+    $('#commessa-submit').on('click', function() {
+        
+        const commessaId = $('#commessa-input').val().trim();
+        $('#commessa-input').val('');
+      if (!commessaId) {
+        showCommessaStatus('Inserisci un codice commessa valido', 'error');
+        return;
+      }
+      
+      if (!selectedSource) {
+        showCommessaStatus('Seleziona prima una camera', 'error');
+        return;
+      }
+      
+      send({ 
+        action: 'set_commessa', 
+        source_id: selectedSource, 
+        commessa_id: commessaId 
+      });
+      showCommessaStatus(`Commessa ${commessaId} impostata con successo`, 'success');
+    });
+
+    // Gestione invio con Enter
+    $('#commessa-input').on('keypress', function(e) {
+      if (e.which === 13) { // Enter key
+        $('#commessa-submit').click();
+      }
+    });
 
     // -------- WS LIFECYCLE --------
     function connect() {
@@ -608,8 +634,8 @@ $(function() {
             clearStream();
             setTimeout(() => loadStream(sourceId), 100);
             send({ action: 'get_config',  source_id: String(sourceId) });
-            send({ action: 'get_health',  source_id: String(sourceId) });
-            send({ action: 'get_metrics', source_id: String(sourceId) });
+            // send({ action: 'get_health',  source_id: String(sourceId) });
+            // send({ action: 'get_metrics', source_id: String(sourceId) });
           } else {
             clearStream();
             clearPanels();
@@ -635,13 +661,6 @@ $(function() {
             .addClass('bg-blue-600').removeClass('bg-green-500');
         }, 1500);
         reloadStream(); // reload stream dopo salvataggio config
-        
-        // Se c'è una commessa attiva, ricarica la visualizzazione conteggi
-        const currentCommessa = $('#commessa-codice').text();
-        if (currentCommessa && currentCommessa !== '-') {
-          // Richiedi la configurazione aggiornata per ricostruire la visualizzazione
-          send({ action: 'get_config', source_id: String(selectedSource) });
-        }
       } else {
         alert('Errore nel salvataggio: ' + m.error);
       }
@@ -670,8 +689,8 @@ $(function() {
         if (isRunning) {
           loadStream(selectedSource);
           send({ action:'get_config',  source_id: selectedSource });
-          send({ action:'get_health',  source_id: selectedSource });
-          send({ action:'get_metrics', source_id: selectedSource });
+          // send({ action:'get_health',  source_id: selectedSource });
+          // send({ action:'get_metrics', source_id: selectedSource });
         } else {
           clearStream();
           clearPanels();
@@ -682,8 +701,6 @@ $(function() {
           switchTab('stream');
         }
         
-        // Aggiorna stato dei bottoni
-        updateButtonStates();
       });
 
     // Gestione pulsanti Add/Remove
@@ -770,8 +787,8 @@ $(function() {
       const ms = parseInt($refreshSelect.val(), 10) || 5000;
       refreshTimer = setInterval(() => {
         if (selectedSource) {
-          send({ action:'get_health',  source_id: selectedSource });
-          send({ action:'get_metrics', source_id: selectedSource });
+          // send({ action:'get_health',  source_id: selectedSource });
+          // send({ action:'get_metrics', source_id: selectedSource });
         }
       }, ms);
     }
@@ -807,375 +824,51 @@ $(function() {
       loadAvailableClassesForModel($m, path, $m.find('.classes-filter').val());
     });
 
-    // -------- COMMESSA MANAGEMENT --------
-    function showCommessaStatus(message, isSuccess = true) {
-      const $status = $('#commessa-status');
-      
-      // Rimuovi tutte le classi di colore e sfondo precedenti
-      $status.removeClass('hidden text-green-600 text-red-600 bg-green-50 bg-red-50 border-green-200 border-red-200');
-      
-      if (isSuccess) {
-        $status.addClass('text-green-600 bg-green-50 border-green-200');
-      } else {
-        $status.addClass('text-red-600 bg-red-50 border-red-200');
-      }
-      
-      $status.text(message);
-      
-      // Auto-hide dopo 5 secondi
-      setTimeout(() => {
-        $status.addClass('hidden');
-      }, 5000);
-    }
-
-    function showCommessaAttiva(data) {
-      // Reset del pannello 
-      const $commessaPanel = $('#commessa-attiva');
-      $commessaPanel.removeClass(); 
-      $commessaPanel.addClass('bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md');
-      
-      // Popola i dati della commessa
-      $('#commessa-codice').text(data.commessa || '-');
-      $('#commessa-descrizione').text(data.descrizione || '-');
-      
-      // DEBUG: Log per verificare i dati ricevuti
-      console.log('showCommessaAttiva - data received:', data);
-      console.log('showCommessaAttiva - modelli:', data.modelli);
-      
-      // Pulisci il container dei modelli
-      const $container = $('#modelli-container');
-      $container.empty();
-      $container.removeClass('grid-cols-1 grid-cols-2 lg:grid-cols-2 md:grid-cols-2 lg:grid-cols-3');
-      
-      // Ottieni la configurazione dei modelli YOLO attivi per raggruppare per modello
-      getActiveYoloModelsForCommessa(data);
-      
-      // Mostra il pannello commessa attiva e nascondi l'input
-      $('#commessa-attiva').removeClass('hidden');
-      $('#commessa-input-section').addClass('hidden');
-    }
-
-    function getActiveYoloModelsForCommessa(commessaData) {
-      if (!selectedSource) return;
-      
-      // Richiedi la configurazione attuale per ottenere i modelli YOLO configurati
-      const message = { 
-        action: 'get_config', 
-        source_id: String(selectedSource)
-      };
-      
-      // Salva i dati della commessa per usarli quando arriva la configurazione
-      window.currentCommessaData = commessaData;
-      send(message);
-      
-      // Timeout di fallback se non arriva risposta in 5 secondi
-      setTimeout(() => {
-        if (window.currentCommessaData) {
-          console.warn('Timeout nella richiesta get_config, mostro visualizzazione fallback');
-          // showCommessaFallbackDisplay(window.currentCommessaData);
-          window.currentCommessaData = null;
-        }
-      }, 5000);
-    }
-
-    function showCommessaFallbackDisplay(commessaData) {
-      const $container = $('#modelli-container');
-      
-      // Visualizzazione di fallback senza raggruppamento per modello YOLO
-      if (commessaData.modelli && Object.keys(commessaData.modelli).length > 0) {
-        let listHtml = '<div class="space-y-4">';
-        listHtml += '<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">';
-        listHtml += '<div class="flex items-center space-x-2">';
-        listHtml += '<i class="fas fa-exclamation-triangle text-yellow-600"></i>';
-        listHtml += '<span class="text-sm text-yellow-800">Impossibile caricare la configurazione YOLO. Visualizzazione semplificata:</span>';
-        listHtml += '</div></div>';
-        
-        Object.entries(commessaData.modelli).forEach(([modelKey, modelData]) => {
-          if (modelData && modelData.nome_articolo) {
-            const displayName = modelKey; // Usa il modelKey così com'è, senza modifiche
-            const prodotti = modelData.prodotti || 0;
-            const totale = modelData.totale_da_produrre || 0;
-            
-            listHtml += `
-              <div class="class-counter bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-class="${modelKey}">
-                <div class="flex justify-between items-center">
-                  <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    <span class="text-lg font-semibold text-gray-800">${displayName}</span>
-                  </div>
-                  <div class="flex items-center space-x-2">
-                    <span class="counter-value text-2xl font-bold text-blue-600">${prodotti}</span>
-                    <span class="text-gray-400 text-lg">/</span>
-                    <span class="total-value text-2xl font-bold text-gray-700">${totale}</span>
-                  </div>
-                </div>
-                <div class="mt-2 text-sm text-gray-600">
-                  <i class="fas fa-tag mr-1"></i>
-                  ${modelData.nome_articolo}
-                </div>
-              </div>
-            `;
-          }
-        });
-        
-        listHtml += '</div>';
-        $container.html(listHtml);
-      } else {
-        $container.html('<div class="text-gray-400 italic text-center py-8 text-lg">Nessun modello configurato</div>');
-      }
-    }
-
-    function buildCommessaDisplayByYoloModels(yoloConfig, commessaData) {
-      const $container = $('#modelli-container');
-      
-      if (!yoloConfig.models || yoloConfig.models.length === 0) {
-        $container.html('<div class="text-gray-400 italic text-center py-8 text-lg">Nessun modello YOLO configurato</div>');
-        return;
-      }
-      
-      let listHtml = '';
-      
-      // Per ogni modello YOLO configurato - crea una sezione diretta (senza wrapper)
-      yoloConfig.models.forEach((yoloModel, index) => {
-        if (!yoloModel.path) return;
-        
-        // Estrai il nome del modello dal path
-        const modelFileName = yoloModel.path.split('/').pop().replace('.pt', '');
-        const modelDisplayName = modelFileName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        
-        listHtml += `
-          <div class="yolo-model-section bg-white rounded-lg border-2 border-gray-300 p-4 shadow-inner mb-4" data-yolo-model="${yoloModel.path}">
-            <h4 class="font-black text-gray-800 text-lg mb-3 text-center uppercase tracking-wide">
-              <i class="fas fa-chart-bar mr-2 text-blue-600"></i>
-              ${modelDisplayName}
-            </h4>
-            
-            <!-- CLASSI RILEVATE DA QUESTO MODELLO -->
-            <div class="space-y-3" data-yolo-classes="${yoloModel.path}">
-              <div class="text-gray-500 italic">Caricamento classi...</div>
-            </div>
-          </div>
-        `;
-      });
-      
-      $container.html(listHtml);
-      
-      // Carica le classi per ogni modello YOLO e mappale ai prodotti della commessa
-      yoloConfig.models.forEach((yoloModel, index) => {
-        if (yoloModel.path) {
-          loadYoloModelClassesAndMapToCommessa(yoloModel.path, commessaData);
-        }
-      });
-    }
-
-    function loadYoloModelClassesAndMapToCommessa(modelPath, commessaData) {
-      const $classesContainer = $(`[data-yolo-classes="${modelPath}"]`);
-      
-      // Ora mostriamo le classi definite nella commessa, non quelle del modello YOLO
-      if (!commessaData.modelli || Object.keys(commessaData.modelli).length === 0) {
-        $classesContainer.html('<div class="text-gray-400 italic">Nessuna classe definita nella commessa</div>');
-        return;
-      }
-      
-      let classesHtml = '';
-      
-      // Per ogni classe definita nella commessa (model_1, model_2, person, etc.)
-      Object.entries(commessaData.modelli).forEach(([modelKey, modelData]) => {
-        if (modelData && modelData.nome_articolo) {
-          // Usa il modelKey così com'è, senza modifiche
-          const displayName = modelKey;
-          const prodotti = modelData.prodotti || 0;
-          const totale = modelData.totale_da_produrre || 0;
-          const isCompleted = prodotti >= totale;
-          
-          classesHtml += `
-            <div class="class-counter ${isCompleted ? 'completed' : ''} bg-white border-l-4 ${isCompleted ? 'border-green-500 bg-green-50' : 'border-blue-500 bg-blue-50'} rounded-lg p-4 shadow-sm mb-3" data-class="${modelKey}">
-              <div class="flex justify-between items-center">
-                <div class="flex-1">
-                  <div class="font-bold text-lg text-gray-800 mb-1">${displayName}</div>
-                  <div class="text-sm text-gray-600">${modelData.nome_articolo}</div>
-                </div>
-                <div class="text-right">
-                  <div class="counter-value text-5xl font-bold ${isCompleted ? 'text-green-600' : 'text-blue-600'}">${prodotti}/${totale}</div>
-                </div>
-              </div>
-            </div>
-          `;
-        }
-      });
-      
-      if (classesHtml === '') {
-        classesHtml = '<div class="text-gray-400 italic">Nessun prodotto configurato nella commessa</div>';
-      }
-      
-      $classesContainer.html(classesHtml);
-    }
-
-    function hideCommessaAttiva() {
-      // Nascondi il pannello commessa attiva e mostra l'input
-      $('#commessa-attiva').addClass('hidden');
-      $('#commessa-input-section').removeClass('hidden');
-      
-      // Reset completo dei valori e degli stili
-      $('#commessa-codice, #commessa-descrizione').text('-');
-      
-      // Pulisci il container dei modelli
-      const $container = $('#modelli-container');
-      $container.empty();
-      $container.removeClass('grid-cols-1 grid-cols-2 lg:grid-cols-2 md:grid-cols-2 lg:grid-cols-3');
-      
-      // Reset del pannello commessa attiva
-      const $commessaPanel = $('#commessa-attiva');
-      $commessaPanel.removeClass(); 
-      $commessaPanel.addClass('hidden bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 shadow-md');
-    }
-
-    function resetCommessa() {
-      if (!selectedSource) {
-        showCommessaStatus('Selezionare prima una camera', false);
-        return;
-      }
-      
-      // Conferma azione prima del reset
-      // if (confirm('Vuoi resettare la commessa attiva? Questo cancellerà la commessa e tutti i contatori associati.')) {
-        // Invia richiesta di reset al server
-        send({ 
-          action: 'reset_commessa', 
-          source_id: String(selectedSource)
-        });
-        
-        showCommessaStatus('Reset della commessa in corso...', true);
-      // }
-    }
-
-    function updateCommessaCounter(data) {
-      if (!data || !data.model_key) {
-        return;
-      }
-      
-      // Verifica che sia la commessa corrente
-      const currentCommessa = $('#commessa-codice').text();
-      if (currentCommessa !== String(data.commessa)) {
-        return;
-      }
-      
-      // Trova l'elemento della classe corrispondente nella nuova struttura class-counter
-      const $classCounter = $(`#modelli-container .class-counter[data-class="${data.model_key}"]`);
-      
-      if ($classCounter.length > 0) {
-        // Aggiorna il valore del contatore nella struttura class-counter
-        const $counterValue = $classCounter.find('.counter-value');
-        if ($counterValue.length > 0) {
-          // Ottieni il totale dalla struttura esistente
-          const currentText = $counterValue.text(); // es. "5/50"
-          const total = currentText.split('/')[1] || '0';
-          
-          // Aggiorna con il nuovo contatore
-          $counterValue.text(`${data.new_count}/${total}`);
-          
-          // Gestisce il completamento - aggiorna sia il colore del testo che dello sfondo
-          const newCount = parseInt(data.new_count) || 0;
-          const totalCount = parseInt(total) || 0;
-          
-          if (newCount >= totalCount && totalCount > 0) {
-            $classCounter.removeClass('border-blue-500 bg-blue-50').addClass('border-green-500 bg-green-50 completed');
-            $counterValue.removeClass('text-blue-600').addClass('text-green-600');
-          } else {
-            $classCounter.removeClass('border-green-500 bg-green-50 completed').addClass('border-blue-500 bg-blue-50');
-            $counterValue.removeClass('text-green-600').addClass('text-blue-600');
-          }
-          
-          // Animazione semplice per evidenziare l'aggiornamento
-          $counterValue.addClass('animate-pulse');
-          setTimeout(() => {
-            $counterValue.removeClass('animate-pulse');
-          }, 1000);
-        }
-      }
-    }
-
-    $('#commessa-submit').on('click', function() {
-      const commessaValue = $('#commessa-input').val().trim();
-      
-      if (!commessaValue) {
-        showCommessaStatus('Inserire un codice di commessa valido', false);
-        return;
-      }
-      
-      if (!selectedSource) {
-        showCommessaStatus('Selezionare prima una camera', false);
-        return;
-      }
-      
-      // Disabilita il pulsante durante l'invio
-      $(this).prop('disabled', true).text('Invio...');
-      
-      const message = { 
-        action: 'set_commessa', 
-        source_id: String(selectedSource), 
-        data: { commessa: commessaValue }
-      };
-      
-      // Timeout di sicurezza per riabilitare il pulsante dopo 10 secondi
-      setTimeout(() => {
-        if ($('#commessa-submit').prop('disabled')) {
-          $('#commessa-submit').prop('disabled', false).text('Invia');
-          showCommessaStatus('Timeout: nessuna risposta dal server, riprova', false);
-        }
-      }, 10000);
-      
-      // Invia tramite websocket
-      send(message);
-    });
-
-    // Supporto per invio con tasto Enter
-    $('#commessa-input').on('keypress', function(e) {
-      if (e.which === 13) { // Enter key
-        $('#commessa-submit').click();
-      }
-    });
-
-    // Gestione reset commessa
-    $('#reset-commessa').on('click', resetCommessa);
-
-    // Gestione reset contatori (DEBUG)
     $('#reset-counters').on('click', function() {
-      if (!selectedSource) {
-        showCommessaStatus('Selezionare prima una camera', false);
-        return;
-      }
-      
-      // Mostra il modal personalizzato invece del brutto confirm
-      showCustomConfirm(
-        'Reset Contatori (DEBUG)',
-        'Vuoi azzerare tutti i contatori della commessa attiva?',
-        function() {
-          // Confermato - Invia richiesta di reset contatori al server
-          send({ 
-            action: 'reset_counters', 
-            source_id: String(selectedSource)
-          });
-          
-          showCommessaStatus('Contatori in fase di reset...', true);
+        if (!selectedSource) {
+            showCommessaStatus('Seleziona prima una camera', 'error');
+            return;
         }
-      );
+        
+        $('#modal-title').text('Reset Contatori');
+        $('#modal-message').text('Sei sicuro di voler azzerare solo i contatori della commessa attiva? La commessa rimarrà selezionata.');
+        $('#modal-confirm').off('click').on('click', function() {
+            send({ action: 'reset_counters', source_id: selectedSource });
+            $('#confirm-modal').addClass('hidden');
+        });
+        $('#confirm-modal').removeClass('hidden');
     });
 
-    // -------- BUTTON STATE MANAGEMENT --------
-    function updateButtonStates() {
-      const hasCameraSelected = selectedSource !== null && selectedSource !== undefined && selectedSource !== '';
-      
-      // Aggiorna stato bottone Add Model
-      $('#add-model-btn').prop('disabled', !hasCameraSelected);
-      
-      // Aggiorna stato bottone Apply
-      $('#apply-btn').prop('disabled', !hasCameraSelected);
-    }
+    $('#reset-commessa').on('click', function() {
+        if (!selectedSource) {
+            showCommessaStatus('Seleziona prima una camera', 'error');
+            return;
+        }
+        
+        $('#modal-title').text('Reset Commessa');
+        $('#modal-message').text('Sei sicuro di voler resettare completamente la commessa? Tutti i contatori verranno azzerati e dovrai selezionare una nuova commessa.');
+        $('#modal-confirm').off('click').on('click', function() {
+            send({ action: 'reset_commessa', source_id: selectedSource });
+            $('#confirm-modal').addClass('hidden');
+        });
+        $('#confirm-modal').removeClass('hidden');
+    });
+
+    // Gestione modal
+    $('#modal-cancel').on('click', function() {
+        $('#confirm-modal').addClass('hidden');
+    });
+
+    // Chiudi modal cliccando fuori
+    $('#confirm-modal').on('click', function(e) {
+        if (e.target === this) {
+            $(this).addClass('hidden');
+        }
+    });
 
     // -------- START --------
     connect();
     scheduleRefresh();  // start auto-refresh
-    updateButtonStates();  // Inizializza stato bottoni
     // Initialize with Stream tab visible by default, but don't force it later
     if ($('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden').length === 0) {
       switchTab('stream');

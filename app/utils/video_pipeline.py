@@ -14,6 +14,7 @@ from ultralytics import YOLO
 # from ultralytics.solutions.object_counter import ObjectCounter
 from app.utils.ObjectCounter import ObjectCounter
 from collections import defaultdict
+import torch
 
 from ultralytics.utils import LOGGER
 LOGGER.setLevel('ERROR')
@@ -50,6 +51,8 @@ class ModelSettings(BaseModel):
     iou: float = 0.45
     classes_filter: Optional[List[str]] = None
     counting: Optional[ModelCountingSettings] = None
+    min_area: Optional[float] = 15000  # Area minima del bounding box (pixels²)
+    max_area: Optional[float] = None  # Area massima del bounding box (pixels²)
 
 
 class PipelineSettings(BaseModel):
@@ -339,6 +342,55 @@ class VideoPipeline:
     def _emit(self, event: str, *args):
         for cb in getattr(self, f"_on_{event}_cb"): cb(*args)
 
+    def _filter_by_area(self, result, min_area=None, max_area=None):
+        """
+        Filtra i risultati YOLO in base all'area dei bounding box.
+        
+        Args:
+            result: Risultato YOLO con boxes
+            min_area: Area minima in pixels² (opzionale)
+            max_area: Area massima in pixels² (opzionale)
+            
+        Returns:
+            Risultato filtrato con solo i box che rispettano i criteri di area
+        """
+        if not hasattr(result, 'boxes') or result.boxes is None:
+            return result
+            
+        if min_area is None and max_area is None:
+            return result
+            
+        boxes = result.boxes
+        if len(boxes) == 0:
+            return result
+            
+        # Calcola le aree dei bounding box
+        xyxy = boxes.xyxy.cpu()  # [x1, y1, x2, y2]
+        areas = (xyxy[:, 2] - xyxy[:, 0]) * (xyxy[:, 3] - xyxy[:, 1])
+        
+        # Crea maschera per il filtro
+        mask = torch.ones(len(areas), dtype=torch.bool)
+        
+        if min_area is not None:
+            mask &= (areas >= min_area)
+            
+        if max_area is not None:
+            mask &= (areas <= max_area)
+        
+        # Se nessun box rispetta i criteri, restituisci risultato vuoto
+        if not mask.any():
+            # Crea un risultato vuoto mantenendo la struttura
+            empty_result = result[0:0]  # Slice che crea un risultato vuoto
+            return empty_result
+            
+        # Filtra tutti gli attributi dei box
+        filtered_boxes = boxes[mask]
+        
+        # Crea nuovo risultato con i box filtrati
+        result.boxes = filtered_boxes
+        
+        return result
+
     def start(self):
         self._stop.clear()
         self._frame_q.queue.clear()
@@ -433,6 +485,10 @@ class VideoPipeline:
                         persist=True,
                         tracker='botsort.yaml'
                     )[0]
+                    
+                    # Applica il filtro per area se specificato
+                    res = self._filter_by_area(res, setting.min_area, setting.max_area)
+                    
                     self._emit('inference', frm, path, res)
                     if path in self.counters:
                         cnt = self.counters[path]

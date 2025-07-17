@@ -1,4 +1,4 @@
-name: flask_project_datacenter
+name: mgm_apps
 channels:
   - defaults
   - https://repo.anaconda.com/pkgs/main
@@ -143,4 +143,4 @@ dependencies:
       - websocket-client==1.8.0
       - websockets==13.1
       - werkzeug==3.0.4
-prefix: /home/popos_ai/anaconda3/envs/flask_project_datacenter
+prefix: /home/popos_ai/anaconda3/envs/mgm_apps

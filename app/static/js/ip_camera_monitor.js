@@ -1,876 +1,770 @@
-function showCommessaStatus(message, type = 'success') {
-    const $status = $('#commessa-status');
+/**
+ * Sistema di Controllo Meccatronico - JavaScript principale
+ * Gestisce l'interfaccia utente per il controllo di piattaforma rotante e fotocamera inclinabile
+ * Design Light con dashboard visuale, filtri log e gestione task strutturata
+ */
+
+$(document).ready(function() {
+    // ========================================
+    // STATO GLOBALE DELL'APPLICAZIONE
+    // ========================================
+
+    const AppState = {
+        platform: { angle: 0 },
+        tilt: { angle: 0 },
+        task: {
+            running: false,
+            current: null,
+            progress: 0,
+            config: {
+                verticalAngles: 3,
+                horizontalStep: 20,
+                movementDelay: 2,
+                operationMode: 'sequential'
+            },
+            presets: [
+                { id: 'quick-scan', name: 'Scansione Rapida 4x90°',
+                  description: 'Scansione veloce con 4 angolazioni verticali e step di 90°',
+                  config: { verticalAngles: 4, horizontalStep: 90, movementDelay: 1, operationMode: 'sequential' }
+                },
+                { id: 'high-def-vertical', name: 'Alta Definizione Verticale',
+                  description: 'Scansione dettagliata con 8 angolazioni verticali e step di 15°',
+                  config: { verticalAngles: 8, horizontalStep: 15, movementDelay: 3, operationMode: 'sequential' }
+                },
+                { id: 'three-level-inspection', name: 'Ispezione a 3 Livelli',
+                  description: 'Ispezione standard con 3 livelli di inclinazione',
+                  config: { verticalAngles: 3, horizontalStep: 30, movementDelay: 2, operationMode: 'alternate' }
+                },
+                { id: 'ultra-fine-scan', name: 'Scansione Ultra Fine',
+                  description: 'Scansione di precisione con step di 5° e 10 angolazioni',
+                  config: { verticalAngles: 10, horizontalStep: 5, movementDelay: 4, operationMode: 'sequential' }
+                }
+            ],
+            custom: []
+        },
+        log: { filters: ['info','success','warning','error'] },
+        ui: { currentSection: 'manual-control' }
+    };
+    // ========================================
+    // UTILITY FUNCTIONS
+    // ========================================
     
-    // Rimuovi classi esistenti
-    $status.removeClass('text-green-600 bg-green-50 border-green-200 text-red-600 bg-red-50 border-red-200 text-orange-600 bg-orange-50 border-orange-200');
-    
-    // Aggiungi classi in base al tipo
-    switch(type) {
-        case 'success':
-            $status.addClass('text-green-600 bg-green-50 border-green-200');
-            break;
-        case 'error':
-            $status.addClass('text-red-600 bg-red-50 border-red-200');
-            break;
-        case 'warning':
-            $status.addClass('text-orange-600 bg-orange-50 border-orange-200');
-            break;
+    /**
+     * Normalizza un angolo nel range 0-360°
+     */
+    function normalizeAngle(angle) {
+        return ((angle % 360) + 360) % 360;
     }
     
-    // Imposta il messaggio e mostra il div
-    $status.text(message).removeClass('hidden');
-    
-    // Nascondi il messaggio dopo 5 secondi
-    setTimeout(() => {
-        $status.addClass('hidden');
-    }, 5000);
-}
-
-function updateDisplayCommessa(data) {
-    // Gestione centralizzata di tutti gli stati della commessa
-    if (!data || !data.commessa_id || !data.commessa_data) {
-        // CASO RESET/VUOTO: Pulisci completamente l'interfaccia
-        $('#commessa-codice').text('Nessuna');
-        $('#commessa-descrizione').text('Seleziona una commessa per iniziare');
-        $('#modelli-container').empty();
-        showCommessaStatus('Interfaccia commessa resettata', 'success');
-        return;
+    /**
+     * Valida un angolo per la piattaforma (0-360°)
+     */
+    function validatePlatformAngle(angle) {
+        const num = parseFloat(angle);
+        return !isNaN(num) && num >= 0 && num <= 360;
     }
     
-    // CASO COMMESSA ATTIVA: Aggiorna l'interfaccia con i dati
-    const commessaId = data.commessa_id;
-    const commessaData = data.commessa_data;
+    /**
+     * Valida un angolo per l'inclinazione (0-90°)
+     */
+    function validateTiltAngle(angle) {
+        const num = parseFloat(angle);
+        return !isNaN(num) && num >= 0 && num <= 90;
+    }
     
-    // Aggiorna la variabile globale commesse con i nuovi dati
-    if (!commesse) commesse = {};
-    commesse[commessaId] = commessaData;
+    /**
+     * Formatta timestamp per i log
+     */
+    function getTimestamp() {
+        const now = new Date();
+        return now.toLocaleTimeString('it-IT');
+    }
     
-    // Aggiorna i campi della commessa attiva
-    $('#commessa-codice').text(commessaId);
-    $('#commessa-descrizione').text(commessaData.descrizione);
-
-    // Pulisci il container dei modelli
-    $('#modelli-container').empty();
-
-    // Crea una singola sezione per i contatori
-    const contatoriHtml = `
-        <div class="yolo-model-section bg-white rounded-lg border-2 border-gray-300 p-4 shadow-inner mb-4">
-            <h4 class="font-black text-gray-800 text-lg mb-3 text-center uppercase tracking-wide">
-                <i class="fas fa-chart-bar mr-2 text-blue-600"></i>
-                Contatori Articoli
-            </h4>
-
-            <!-- CONTATORI ARTICOLI -->
-            <div class="space-y-3">
-                ${Object.entries(commessaData.articoli).map(([codice, articolo]) => `
-                    <div class="class-counter bg-white border-l-4 border-blue-500 bg-blue-50 rounded-lg p-4 shadow-sm mb-3" data-class="${codice}">
-                        <div class="flex justify-between items-center">
-                            <div class="flex-1">
-                                <div class="font-bold text-lg text-gray-800 mb-1">${codice}</div>
-                                <div class="text-sm text-gray-600">${articolo.nome_articolo}</div>
-                            </div>
-                            <div class="text-right">
-                                <div class="counter-value text-5xl font-bold text-blue-600">${articolo.prodotti}/${articolo.totale_da_produrre}</div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    $('#modelli-container').append(contatoriHtml);
-}
-
-
-$(function() {
-    // -------- CONFIG --------
-    const WS_URL      = `ws://${window.location.hostname}:8765`;
-    const RETRY_INIT  = 1000;
-    const RETRY_MAX   = 30000;
-
-    // -------- STATE --------
-    let socket = null;
-    let retryInterval = RETRY_INIT;
-    let waiting = false;
-    const queue = [];
-    let selectedSource = null;
-
-    // auto-refresh
-    let refreshTimer = null;
-    const intervals = [
-      { label: '5s Refresh',  value: 5000  },
-      { label: '10s Refresh', value: 10000 },
-      { label: '30s Refresh', value: 30000 },
-      { label: '1m Refresh',  value: 60000 }
-    ];
-
-    // Carica la lista dei modelli disponibili da data/models e popola tutte le select
-    let availableModels = [];
-    function fetchModelListAndPopulateSelects() {
-      $.get('/api/ip_camera/models/list', function(list) {
-        availableModels = list;
-        // Popola tutte le select già presenti
-        $('#models-container .model-path').each(function() {
-          const current = $(this).val();
-          $(this).empty().append('<option value="">Seleziona modello...</option>');
-          if (availableModels.length) {
-            availableModels.forEach(m => $(this).append(`<option value="${m}">${m}</option>`));
-          } else {
-            $(this).append('<option value="">(Nessun modello trovato)</option>');
-          }
-          if (current) $(this).val(current);
-        });
-        // Forza popolamento hardcoded se la lista è vuota (debug)
-        if (!availableModels.length) {
-          $('#models-container .model-path').each(function() {
-            $(this).append('<option value="data/models/yolo11n.pt">data/models/yolo11n.pt</option>');
-            $(this).append('<option value="data/models/scarpe_25k_305ep.pt">data/models/scarpe_25k_305ep.pt</option>');
-            $(this).append('<option value="data/models/shoes_25k_best_hyp.pt">data/models/shoes_25k_best_hyp.pt</option>');
-          });
-        }
-      });
-    }
-    fetchModelListAndPopulateSelects();
-
-    // -------- UTIL --------
-    function send(msg) {
-      queue.push(msg);
-      flushQueue();
-    }
-    function flushQueue() {
-      if (!waiting && socket && socket.readyState === WebSocket.OPEN && queue.length) {
-        const messageToSend = queue.shift();
-        socket.send(JSON.stringify(messageToSend));
-        waiting = true;
-      }
-    }
-    function debounce(fn, delay) {
-      let timer;
-      return function(...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), delay);
-      };
-    }
-    const liveUpdateConfig = debounce(() => {
-      if (!selectedSource) return;
-      send({ action: 'update_config', source_id: selectedSource, config: buildConfig() });
-    }, 500);
-
-    function onMessage(raw) {
-      waiting = false;
-      const m = JSON.parse(raw);
-      
-      // Se è un array, è un messaggio batch di metriche
-      if (Array.isArray(m)) {
-        m.forEach(msg => {
-          if (msg.action === 'get_metrics' && String(msg.source_id) === String(selectedSource)) {
-            renderMetrics(msg.source_id, msg.data);
-          }
-          // Gestisci tutti gli aggiornamenti delle commesse attraverso updateDisplayCommessa
-          if (msg.action === 'update_commessa' && String(msg.source_id) === String(selectedSource)) {
-            updateDisplayCommessa(msg.data);
-          }
-        });
-        return flushQueue();
-      }
-
-      const sid = String(m.source_id);
-      
-      // Always update camera list (but don't force tab switching)
-      if (m.action === 'list_cameras') {
-        renderCameraList(m.data);
-        return flushQueue();
-      }
-
-      // Ignore messages for other sources, except start/stop for UI badge
-      if (sid && sid !== String(selectedSource)) {
-        if (m.action === 'start' || m.action === 'stop') {
-          updateCameraUI(m.source_id, m.action === 'start' ? 'running' : 'stopped');
-        }
-        return flushQueue();
-      }
-
-      if (!m.success) {
-        console.warn(`[WS] error on ${m.action}: ${m.error}`);
-        if (m.action === 'stop') clearPanels();
-        return flushQueue();
-      }
-
-      switch (m.action) {
-        case 'start':
-          updateCameraUI(sid, 'running');
-          if (sid === selectedSource) {
-            send({ action:'get_config',  source_id: sid });
-            // send({ action:'get_health',  source_id: sid });
-            // send({ action:'get_metrics', source_id: sid });
-          }
-          break;
-        case 'stop':
-          updateCameraUI(sid, 'stopped');
-          break;
-        case 'get_config':
-            console.log('[WS] Rendering config for source:', sid, 'data:', m.data); // DEBUG
-            renderConfig(sid, m.data);
-          break;
-        case 'get_health':
-          renderHealth(sid, m.data);
-          break;
-        case 'get_metrics':
-          renderMetrics(sid, m.data);
-          break;
-        case 'update_config':
-          showConfigResult(m);
-          break;
-        case 'update_commessa':
-          updateDisplayCommessa(m.data);
-          break;
-        case 'success':
-          showCommessaStatus(m.message, 'success');
-          break;
-        case 'error':
-          showCommessaStatus(m.message, 'error');
-          break;
-        default:
-          console.warn('[WS] unhandled:', m);
-      }
-
-      flushQueue();
-    }
-
-    // -------- GESTIONE COMMESSA INPUT --------
-    $('#commessa-submit').on('click', function() {
+    /**
+     * Aggiorna la dashboard visuale
+     */
+    function updateDashboard() {
+        $('#dashboard-platform').text(`${AppState.platform.angle}°`);
+        $('#dashboard-tilt').text(`${AppState.tilt.angle}°`);
+        $('#dashboard-progress').text(`${AppState.task.progress}%`);
         
-        const commessaId = $('#commessa-input').val().trim();
-        $('#commessa-input').val('');
-      if (!commessaId) {
-        showCommessaStatus('Inserisci un codice commessa valido', 'error');
-        return;
-      }
-      
-      if (!selectedSource) {
-        showCommessaStatus('Seleziona prima una camera', 'error');
-        return;
-      }
-      
-      send({ 
-        action: 'set_commessa', 
-        source_id: selectedSource, 
-        commessa_id: commessaId 
-      });
-      showCommessaStatus(`Commessa ${commessaId} impostata con successo`, 'success');
-    });
-
-    // Gestione invio con Enter
-    $('#commessa-input').on('keypress', function(e) {
-      if (e.which === 13) { // Enter key
-        $('#commessa-submit').click();
-      }
-    });
-
-    // -------- WS LIFECYCLE --------
-    function connect() {
-      socket = new WebSocket(WS_URL);
-      socket.onopen    = () => { retryInterval = RETRY_INIT; send({ action:'list_cameras' }); };
-      socket.onmessage = e => onMessage(e.data);
-      socket.onclose   = () => {
-        setTimeout(connect, retryInterval);
-        retryInterval = Math.min(RETRY_MAX, retryInterval * 2);
-      };
-      socket.onerror   = () => socket.close();
-    }
-
-    // -------- RENDER CAMERA LIST --------
-    function renderCameraList(list) {
-      const $sec = $('#camera-list').empty()
-        .append(`<h2 class="font-semibold text-base mb-2 select-none">Camera List</h2>`);
-      if (!list.length) {
-        $sec.append(`<article class="border border-dashed border-gray-300 rounded-md bg-white p-4 text-center text-gray-400 italic">Nessuna camera disponibile</article>`);
-        return;
-      }
-      list.forEach(cam => {
-        const run = cam.status === 'running';
-        const isSel = cam.name === selectedSource;
-        const border = run ? 'border-blue-500' : 'border-gray-300';
-        const selCls = isSel ? 'border-2 border-indigo-600' : '';
-        const $a = $(`
-          <article class="border ${border} ${selCls} rounded-md bg-white p-4 space-y-2">
-            <div class="flex justify-between items-center">
-              <span class="font-semibold text-base">Camera: ${cam.description}</span>
-              <span class="${run ? 'bg-blue-500' : 'bg-red-500'} text-white text-xs font-semibold rounded-full px-2 py-[2px] flex items-center space-x-1">
-                ${run && isSel ? '<span class="w-2 h-2 rounded-full bg-green-400 block"></span>' : ''}
-                <span>${cam.status}</span>
-              </span>
-            </div>
-            <p class="text-sm text-gray-400">${cam.clients} active client${cam.clients!==1?'s':''}</p>
-            <div class="flex space-x-2 text-sm font-semibold">
-              <button data-src="${cam.name}" class="btn-start border rounded px-3 py-1 ${run?'text-gray-400 cursor-not-allowed border-gray-200':'border-gray-300'}" ${run?'disabled':''}>
-                <i class="fas fa-play"></i><span>Start</span>
-              </button>
-              <button data-src="${cam.name}" class="btn-stop border rounded px-3 py-1 ${run?'border-gray-300':'text-gray-400 cursor-not-allowed border-gray-200'}" ${run?'':'disabled'}>
-                <span>Stop</span>
-              </button>
-              <button data-src="${cam.name}" class="btn-select bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1">
-                <i class="fas fa-eye"></i><span>Select</span>
-              </button>
-            </div>
-          </article>`);
-        $sec.append($a);
-      });
-    }
-
-    // -------- STREAM + PANELS --------
-    function loadStream(sid) {
-      console.log('loadStream called with sid:', sid);
-      const streamUrl = `/api/ip_camera/stream/${String(sid)}?_t=${Date.now()}`;
-      console.log('Stream URL:', streamUrl);
-      
-      $('#camera-stream .flex-grow').html(
-        `<img class="w-full h-full object-contain" src="${streamUrl}" onerror="console.error('Image failed to load:', this.src)">`
-      );
-      showConfig();
-    }
-    function clearStream() {
-      $('#camera-stream .flex-grow').html('Nessuna camera selezionata');
-    }
-    function clearPanels() {
-      $('#metrics-panel article[aria-label="Camera Metrics"]').html('<div class="text-center text-gray-400 italic">Nessuna metrica disponibile</div>');
-      $('#health-panel').html('<div class="text-center text-gray-400 italic">Nessun health check disponibile</div>');
-      hideConfig();
-    }
-
-    // -------- RENDER HEALTH & METRICS --------
-    function renderHealth(src, data) {
-      let html = `<h4 class="font-semibold mb-2">Health (${src})</h4><ul class="text-sm space-y-1">`;
-      html += `<li>• Running: ${data.running ? '✅' : '❌'}</li>`;
-      html += `<li>• Received: ${data.frames_received} frames</li>`;
-      html += `<li>• Processed: ${data.frames_processed} frames</li>`;
-      html += `<li>• Avg Inference: ${data.avg_inf_ms.toFixed(2)} ms</li>`;
-      html += `<li>• Clients: ${data.clients_active}</li>`;
-      if (data.last_error) html += `<li class="text-red-500">• Last error: ${data.last_error}</li>`;
-      html += `</ul>`;
-      $('#health-panel').html(html);
-    }
-
-    function renderMetrics(src, data) {
-      const fps = data.frames_received
-        ? (data.frames_processed/data.frames_received*(data.avg_inf_ms?1000/data.avg_inf_ms:0)).toFixed(1)
-        : '–';
-      let html = `
-        <div class="flex justify-between items-center text-sm select-none">
-          <h2 class="font-semibold text-lg">Metrics</h2>
-          <select aria-label="Refresh interval"
-            class="border border-gray-300 rounded text-sm px-2 py-1">
-            <option>5s Refresh</option>
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><p class="text-sm">FPS</p><p class="font-semibold text-lg">${fps}</p></div>
-          <div><p class="text-sm">Frames Served</p><p class="font-semibold text-lg">${data.frames_served}</p></div>
-          <div><p class="text-sm">Data Transferred</p><p class="font-semibold text-lg">${(data.bytes_served/1024/1024).toFixed(2)} MB</p></div>
-          <div><p class="text-sm">Avg Inference</p><p class="font-semibold text-lg">${data.avg_inf_ms.toFixed(2)} ms</p></div>
-        </div>
-        <p class="text-sm mt-2">Total Objects</p>
-        <div class="border border-gray-300 rounded-md p-3 text-sm flex flex-wrap gap-2">` +
-          Object.entries(data.counters||{}).map(([cls,c]) =>
-            `<span class="bg-gray-100 rounded px-2 py-[2px] flex items-center space-x-1">
-               <span>${cls}</span><span class="bg-gray-300 text-gray-700 rounded-full px-2 py-[1px] font-semibold">${c}</span>
-             </span>`
-          ).join('') +
-        `</div>`;
-      // Aggiorna solo l'articolo specifico delle metriche, non tutto il pannello
-      $('#metrics-panel article[aria-label="Camera Metrics"]').html(html);
-    }
-
-    // -------- CONFIG Form & JSON --------
-    function renderConfig(src, cfg) {
-      if (String(src) !== String(selectedSource)) {
-        return;
-      }
-      
-      // Campi base
-      $('#stream-url').val(cfg.source);
-      $('#width').val(cfg.width);
-      $('#height').val(cfg.height);
-      $('#fps').val(cfg.fps);
-      $('#quality').val(cfg.quality);
-      $('#use-cuda').prop('checked', cfg.use_cuda);
-      $('#metrics-enabled').prop('checked', cfg.metrics_enabled);
-      
-      // Gestione classes_filter globale
-      if (cfg.classes_filter) {
-        $('#classes-filter-container input').each(function() {
-          $(this).prop('checked', cfg.classes_filter.includes(parseInt(this.value)));
-        });
-      }
-      
-      // Pulisci container modelli
-      $('#models-container').empty();
-      
-      // Aggiungi blocchi per ogni modello
-      (cfg.models||[]).forEach(m => {
-        const $item = $($('#model-item-template').html()).addClass('model-item');
-        // Popola la select dei modelli
-        const $select = $item.find('.model-path');
-        $select.empty().append('<option value="">Seleziona modello...</option>');
-        availableModels.forEach(opt => $select.append(`<option value="${opt}">${opt}</option>`));
-        if (m.path) $select.val(m.path);
-        $item.find('.draw-boxes').prop('checked', m.draw);
-        $item.find('.confidence').val(m.confidence).trigger('change');
-        $item.find('.iou').val(m.iou).trigger('change');
-        // Gestisci counting
-        if (m.counting) {
-          $item.find('.count-objects').prop('checked', true);
-          if (m.counting.region) {
-            const [[x1, y1], [x2, y2]] = m.counting.region;
-            $item.find('.count-line').val(`${x1},${y1},${x2},${y2}`);
-            $item.find('.count-x1').val(x1);
-            $item.find('.count-y1').val(y1);
-            $item.find('.count-x2').val(x2);
-            $item.find('.count-y2').val(y2);
-          }
-        }
-        // Gestisci classes_filter per modello
-        if (m.classes_filter) {
-          $item.find('.classes-filter').val(m.classes_filter.join(','));
-        } else {
-          $item.find('.classes-filter').val('');
-        }
-        $('#models-container').append($item);
-        setupModelItem($item);
-      });
-      
-      updateJson();
-    }
-
-    function buildConfig() {
-      const pi = v => { let n = parseInt(v,10); return isNaN(n)?null:n };
-      const pf = v => { let f = parseFloat((v||'').replace(',','.')); return isNaN(f)?null:f };
-      
-      // Config base
-      const cfg = {
-        source: $('#stream-url').val(),
-        width: pi($('#width').val()),
-        height: pi($('#height').val()),
-        fps: pi($('#fps').val()),
-        prefetch: 10,
-        skip_on_full_queue: true,
-        quality: pi($('#quality').val()),
-        use_cuda: $('#use-cuda').prop('checked'),
-        max_workers: 1,
-        metrics_enabled: $('#metrics-enabled').prop('checked'),
-        models: []
-      };
-
-      // Gestione classes_filter globale
-      const classes = $('#classes-filter-container input:checked').map((i,e) => parseInt(e.value)).get();
-      if (classes.length) {
-        cfg.classes_filter = classes;
-      }
-
-      // Popola array models SOLO se la select ha un valore
-      $('#models-container .model-item').each((i, el) => {
-        const $m = $(el);
-        const path = $m.find('.model-path').val();
-        if (!path) return; // ignora modelli non selezionati
-        const model = {
-          path: path,
-          draw: $m.find('.draw-boxes').prop('checked'),
-          confidence: pf($m.find('.confidence').val()),
-          iou: pf($m.find('.iou').val())
-        };
-        // Serializza le classi solo se non vuote
-        let classes = $m.find('.classes-filter').val().split(',').map(s => s.trim()).filter(Boolean);
-        if (classes && classes.length) {
-          model.classes_filter = classes;
-        }
-        if ($m.find('.count-objects').prop('checked')) {
-          const countLine = $m.find('.count-line').val();
-          const arr = (countLine||'').split(',').map(Number);
-          if (arr.length === 4 && arr.every(n => !isNaN(n))) {
-            model.counting = {
-              region: [[arr[0], arr[1]], [arr[2], arr[3]]],
-              show_in: true,
-              show_out: true,
-              tracking: {
-                show: false,
-                show_labels: true,
-                show_conf: true,
-                verbose: false
-              }
-            };
-          }
-        }
-        cfg.models.push(model);
-      });
-      return cfg;
-    }
-
-    function updateJson() {
-      $('#advanced-json-textarea').val(JSON.stringify(buildConfig(), null, 2));
-    }
-
-    // Miglioria UX: disabilita count-objects se la count line del modello non è valida
-    function updateCountObjectsAvailability() {
-      $('#models-container .model-item').each((i, el) => {
-        const $m = $(el);
-        const arr = ($m.find('.count-line').val()||'').split(',').map(Number);
-        const valid = arr.length === 4 && arr.every(n => !isNaN(n));
-        $m.find('.count-objects').prop('disabled', !valid);
-        if (!valid) $m.find('.count-objects').prop('checked', false);
-      });
-    }
-    $('#models-container').on('input change', '.count-line', updateCountObjectsAvailability);
-
-    // Sincronizza slider e campo count-line per ogni modello
-    $('#models-container').on('input change', '.count-x1, .count-y1, .count-x2, .count-y2', function() {
-      const $m = $(this).closest('.model-item');
-      const x1 = $m.find('.count-x1').val();
-      const y1 = $m.find('.count-y1').val();
-      const x2 = $m.find('.count-x2').val();
-      const y2 = $m.find('.count-y2').val();
-      $m.find('.count-line').val(`${x1},${y1},${x2},${y2}`).trigger('input');
-    });
-    $('#models-container').on('input change', '.count-line', function() {
-      const $m = $(this).closest('.model-item');
-      const vals = $(this).val().split(',');
-      if (vals.length === 4) {
-        $m.find('.count-x1').val(vals[0]);
-        $m.find('.count-y1').val(vals[1]);
-        $m.find('.count-x2').val(vals[2]);
-        $m.find('.count-y2').val(vals[3]);
-      }
-    });
-
-    // Sincronizzazione tra select multi-tag e campo testo per classes_filter
-    $('#models-container').on('change', '.classes-filter', function() {
-      const $m = $(this).closest('.model-item');
-      const val = $(this).val();
-      $m.find('.classes-filter-text').val(val ? val.join(',') : '');
-    });
-    $('#models-container').on('input', '.classes-filter-text', function() {
-      const $m = $(this).closest('.model-item');
-      const arr = $(this).val().split(',').map(s => s.trim()).filter(Boolean);
-      $m.find('.classes-filter').val(arr).trigger('change');
-    });
-
-    // -------- LIVE CONFIG UPDATES --------
-    $('#stream-url,#width,#height,#fps,#quality,#use-cuda,#metrics-enabled,#classes-filter-container input').on('input change', () => { 
-      updateJson(); 
-      liveUpdateConfig(); 
-    });
-    $('#models-container').on('input change', '.count-line,.count-objects,.model-path,.draw-boxes,.confidence,.iou', function() {
-      updateJson();
-      liveUpdateConfig();
-      updateCountObjectsAvailability();
-    });
-
-    // -------- CONFIG UI Show/Hide & Tabs --------
-    function showConfig() {
-        // Don't force tab switching - let user keep their current tab selection
-        // Only switch to Stream tab if no tab is currently visible
-        const $visibleTab = $('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden');
-        if ($visibleTab.length === 0) {
-          switchTab('stream');
-        }
-    }
-    function hideConfig() {
-        // non nascondiamo nulla più
-    }
-    
-
-    // tabs
-    $('#tab-stream-btn,#tab-models-btn,#tab-advanced-json-btn').on('click', e => {
-      e.preventDefault();
-      switchTab(e.target.id.replace('-btn',''));
-    });
-    function switchTab(name) {
-        // Nascondi subito tutti i pannelli
-        $('#tab-stream, #tab-models, #tab-advanced-json').addClass('hidden');
-      
-        // Dopo un piccolo delay, mostra quello giusto
-        // setTimeout(() => {
-          $(`#${name}`).removeClass('hidden');
-        // }, 10);
-      
-        // Aggiorna lo stile visivo dei bottoni tab
-        ['stream', 'models', 'advanced-json'].forEach(n => {
-          $(`#tab-${n}-btn`)
-            .toggleClass('bg-white', n === name)
-            .toggleClass('bg-gray-100', n !== name)
-            .attr('aria-selected', n === name);
-        });
-      }
-      
-    function updateCameraUI(sourceId, status) {
-        const $article = $(`#camera-list [data-src="${String(sourceId)}"]`).closest('article');
-        const isRunning = status === 'running';
-      
-        // Badge
-        const $badgeWrapper = $article.find('.flex.justify-between > span').last();
-        $badgeWrapper
-          .removeClass('bg-blue-500 bg-red-500')
-          .addClass(isRunning ? 'bg-blue-500' : 'bg-red-500')
-          .html(`
-            ${isRunning ? '<span class="w-2 h-2 rounded-full bg-green-400 block"></span>' : ''}
-            <span>${status}</span>
-          `);
-      
-        // Bottoni
-        $article.find('.btn-start')
-          .prop('disabled', isRunning)
-          .toggleClass('cursor-not-allowed text-gray-400', isRunning)
-          .toggleClass('border-gray-200', isRunning)
-          .toggleClass('border-gray-300', !isRunning);
-      
-        $article.find('.btn-stop')
-          .prop('disabled', !isRunning)
-          .toggleClass('cursor-not-allowed text-gray-400', !isRunning)
-          .toggleClass('border-gray-300', isRunning)
-          .toggleClass('border-gray-200', !isRunning);
-      
-        // Se selezionata, aggiorna contenuti (but don't force tab switching)
-        if (String(sourceId) === String(selectedSource)) {
-          if (isRunning) {
-            clearStream();
-            setTimeout(() => loadStream(sourceId), 100);
-            send({ action: 'get_config',  source_id: String(sourceId) });
-            // send({ action: 'get_health',  source_id: String(sourceId) });
-            // send({ action: 'get_metrics', source_id: String(sourceId) });
-          } else {
-            clearStream();
-            clearPanels();
-          }
-        }
-      }
-      
-    // -------- CONFIG Feedback --------
-    function reloadStream() {
-      if (selectedSource) {
-        $('#camera-stream img').attr('src', `/api/ip_camera/stream/${selectedSource}?_t=${Date.now()}`);
-      }
-    }
-
-    function showConfigResult(m) {
-      if (m.success) {
-        $('#apply-btn')
-          .text('✓ Saved')
-          .addClass('bg-green-500').removeClass('bg-blue-600');
-        setTimeout(() => {
-          $('#apply-btn')
-            .text('Apply')
-            .addClass('bg-blue-600').removeClass('bg-green-500');
-        }, 1500);
-        reloadStream(); // reload stream dopo salvataggio config
-      } else {
-        alert('Errore nel salvataggio: ' + m.error);
-      }
-    }
-
-    // -------- Inputs → update JSON --------
-    $('#quality,#fps').on('input', function(){
-      $(`#${this.id}-val`).text(this.value);
-      updateJson();
-    });
-
-    $('#model-name,#draw-boxes,#count-objects,#confidence,#iou,#count-line,#classes-filter-container input').on('input change', () => { updateJson(); liveUpdateConfig(); });
-    
-
-    // -------- Camera List Buttons --------
-    $('#camera-list')
-      .on('click','.btn-start',  function(){ send({ action:'start',  source_id: String($(this).data('src')) }); })
-      .on('click','.btn-stop',   function(){ send({ action:'stop',   source_id: String($(this).data('src')) }); })
-      .on('click','.btn-select', function(){
-        selectedSource = String($(this).data('src'));
-        $('#camera-name').text('Camera: ' + selectedSource);
-        fetchModelListAndPopulateSelects();
-        send({ action:'list_cameras' });
-        const $art = $(this).closest('article');
-        const isRunning = $art.find('span').text().includes('running');
-        if (isRunning) {
-          loadStream(selectedSource);
-          send({ action:'get_config',  source_id: selectedSource });
-          // send({ action:'get_health',  source_id: selectedSource });
-          // send({ action:'get_metrics', source_id: selectedSource });
-        } else {
-          clearStream();
-          clearPanels();
-        }
-        // Only switch to Stream tab if no tab is currently visible
-        const $visibleTab = $('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden');
-        if ($visibleTab.length === 0) {
-          switchTab('stream');
+        // Aggiorna stato sistema
+        let status = 'Idle';
+        let statusClass = 'idle';
+        
+        if (AppState.task.running) {
+            status = 'In Esecuzione';
+            statusClass = 'running';
+        } else if (AppState.task.progress === 100) {
+            status = 'Completato';
+            statusClass = 'completed';
         }
         
-      });
-
-    // Gestione pulsanti Add/Remove
-    $('#add-model-btn').on('click', () => {
-      // Controlla se c'è una camera selezionata
-      if (!selectedSource) {
-        console.warn('Nessuna camera selezionata');
-        return;
-      }
-      
-      const $item = $($('#model-item-template').html()).addClass('model-item');
-      $('#models-container').append($item);
-      setupModelItem($item);
-      updateCountObjectsAvailability();
-      updateJson();
-      fetchModelListAndPopulateSelects(); // Popola la select dopo aggiunta
-    });
-
-    function setupModelItem($item) {
-      // Gestione visibilità count line
-      $item.find('.count-objects').on('change', function() {
-        $item.find('.count-line-container').toggleClass('hidden', !this.checked);
-      });
-
-      // Gestione visibilità classes filter
-      $item.find('.draw-boxes').on('change', function() {
-        $item.find('.classes-filter-container').toggleClass('hidden', !this.checked);
-      });
-
-      // Inizializza visibilità
-      $item.find('.count-line-container').toggleClass('hidden', !$item.find('.count-objects').prop('checked'));
-      $item.find('.classes-filter-container').toggleClass('hidden', !$item.find('.draw-boxes').prop('checked'));
+        $('#dashboard-status').text(status).removeClass('idle running completed error').addClass(statusClass);
     }
-
-    $('#models-container').on('click', '.remove-model', function() {
-      $(this).closest('.model-item').remove();
-      updateJson();
-      updateCountObjectsAvailability();
-    });
-
-    // Gestione JSON avanzato
-    $('#advanced-json-textarea').on('input', function() {
-      try {
-        const json = JSON.parse(this.value);
-        // Valida la struttura base
-        if (!json.source || !Array.isArray(json.models)) {
-          throw new Error('JSON non valido');
-        }
-        // Aggiorna la configurazione
-        renderConfig(selectedSource, json);
-      } catch (e) {
-        console.warn('JSON non valido:', e);
-      }
-    });
-
-    // Apply config
-    $('#apply-btn').click(() => {
-      // Doppio controllo di sicurezza
-      if (!selectedSource) {
-        console.warn('Nessuna camera selezionata');
-        return;
-      }
-      
-      const config = buildConfig();
-      send({ action: 'update_config', source_id: String(selectedSource), config: config });
-    });
-
-    // header buttons
-    $('button:contains("Refresh")').click(() => send({ action:'list_cameras' }));
-    $('button:contains("Start All")').click(() => $('.btn-start:enabled').click());
-    $('button:contains("Stop All")').click(() => $('.btn-stop:enabled').click());
-
-    // -------- Refresh Interval Setup --------
-    const $refreshSelect = $('select[aria-label="Refresh interval"]');
-    // popola opzioni
-    $refreshSelect.empty();
-    intervals.forEach(it => {
-      $refreshSelect.append(`<option value="${it.value}">${it.label}</option>`);
-    });
-    // gestisce cambio intervallo
-    $refreshSelect.on('change', scheduleRefresh);
-    function scheduleRefresh() {
-      if (refreshTimer) clearInterval(refreshTimer);
-      const ms = parseInt($refreshSelect.val(), 10) || 5000;
-      refreshTimer = setInterval(() => {
-        if (selectedSource) {
-          // send({ action:'get_health',  source_id: selectedSource });
-          // send({ action:'get_metrics', source_id: selectedSource });
-        }
-      }, ms);
+    
+    /**
+     * Aggiunge messaggio alla console log con filtri
+     */
+    function logToConsole(message, type = 'info') {
+        const timestamp = getTimestamp();
+        const logElement = $(`<div class="log-entry log-${type}" data-type="${type}">
+            <span class="text-gray-500">[${timestamp}]</span> ${message}
+        </div>`);
+        
+        $('#console-log').append(logElement);
+        $('#console-log').scrollTop($('#console-log')[0].scrollHeight);
+        
+        // Applica filtri
+        applyLogFilters('#console-log');
+        
+        // Log anche nella console del browser
+        console.log(`[${timestamp}] ${message}`);
     }
-
-    // Aggiorna setupModelItem per i modelli esistenti
-    $('#models-container .model-item').each((i, el) => setupModelItem($(el)));
-
-    // Quando selezioni dalla tendina, aggiorna il valore path
-    $('#models-container').on('change', '.model-path', function() {
-      // Se serve, puoi gestire altro qui
-      updateJson();
-    });
-
-    // Carica le classi disponibili per un modello
-    function loadAvailableClassesForModel($modelItem, modelPath, selected) {
-      if (!modelPath) return;
-      $.get('/api/ip_camera/model_classes?path=' + encodeURIComponent(modelPath), function(classes) {
-        const $select = $modelItem.find('.classes-filter');
-        $select.empty();
-        classes.forEach(cls => {
-          $select.append(`<option value="${cls}">${cls}</option>`);
+    
+    /**
+     * Aggiunge messaggio al registro eventi task con filtri
+     */
+    function logToTaskLog(message, type = 'info') {
+        const timestamp = getTimestamp();
+        const logElement = $(`<div class="log-entry log-${type}" data-type="${type}">
+            <span class="text-gray-500">[${timestamp}]</span> ${message}
+        </div>`);
+        
+        $('#task-log').append(logElement);
+        $('#task-log').scrollTop($('#task-log')[0].scrollHeight);
+        
+        // Applica filtri
+        applyLogFilters('#task-log');
+    }
+    
+    /**
+     * Applica filtri ai log
+     */
+    function applyLogFilters(containerId) {
+        const container = $(containerId);
+        const entries = container.find('.log-entry');
+        
+        entries.each(function() {
+            const entry = $(this);
+            const type = entry.data('type');
+            
+            if (AppState.log.filters.includes(type) || AppState.log.filters.includes('all')) {
+                entry.removeClass('hidden');
+            } else {
+                entry.addClass('hidden');
+            }
         });
-        if (selected && selected.length) {
-          $select.val(selected);
-        }
-      });
+    }
+    
+    /**
+     * Gestisce i filtri dei log
+     */
+    function setupLogFilters() {
+        $(".log-filters").on("click", ".filter-btn", function() {
+            const filter = $(this).data("filter");
+            const button = $(this);
+
+            if (filter === "all") {
+                $(".log-filters .filter-btn").addClass("active");
+                AppState.log.filters = ["info", "success", "warning", "error", "all"];
+            } else if (filter === "clear") {
+                $("#console-log, #task-log").empty();
+                return;
+            } else {
+                if (button.hasClass("active")) {
+                    button.removeClass("active");
+                    AppState.log.filters = AppState.log.filters.filter(f => f !== filter);
+                } else {
+                    button.addClass("active");
+                    AppState.log.filters.push(filter);
+                }
+            }
+            applyLogFilters("#console-log");
+            applyLogFilters("#task-log");
+        });
+    }
+    function showError(message) {
+        logToConsole(`❌ ERRORE: ${message}`, 'error');
     }
 
-    // Quando selezioni un modello, carica le classi
-    $('#models-container').on('change', '.model-path', function() {
-      const $m = $(this).closest('.model-item');
-      const path = $(this).val();
-      loadAvailableClassesForModel($m, path, $m.find('.classes-filter').val());
+    
+    /**
+     * Mostra messaggio di successo
+     */
+    function showSuccess(message) {
+        logToConsole(`✅ ${message}`, 'success');
+    }
+
+    // ========================================
+    // GESTIONE NAVIGAZIONE
+    // ========================================
+    
+    /**
+     * Cambia sezione attiva
+     */
+    function switchSection(sectionId) {
+        // Nasconde tutte le sezioni
+        $('.section-content').addClass('hidden');
+        
+        // Mostra la sezione selezionata
+        $(`#${sectionId}`).removeClass('hidden');
+        
+        // Aggiorna stato pulsanti navigazione
+        $('.nav-btn').removeClass('active');
+        $(`#nav-${sectionId.replace('-', '')}`).addClass('active');
+        
+        // Aggiorna modalità corrente
+        AppState.ui.currentSection = sectionId;
+        const modeName = sectionId === 'manual-control' ? 'Controllo Manuale' : 'Task Automatici';
+        $('#current-mode').text(modeName);
+        
+        logToConsole(`Sezione attivata: ${modeName}`);
+    }
+    
+    // Event listeners per navigazione
+    $('#nav-manual').click(function() {
+        switchSection('manual-control');
+    });
+    
+    $('#nav-automatic').click(function() {
+        switchSection('automatic-tasks');
     });
 
-    $('#reset-counters').on('click', function() {
-        if (!selectedSource) {
-            showCommessaStatus('Seleziona prima una camera', 'error');
+    // ========================================
+    // CONTROLLO PIATTAFORMA ROTANTE
+    // ========================================
+    
+    /**
+     * Aggiorna visualizzazione angolo piattaforma
+     */
+    function updatePlatformDisplay() {
+        $('#platform-angle').text(`${AppState.platform.angle}°`);
+        $('#camera-angle-display').text(`${AppState.platform.angle}°`);
+        updateDashboard();
+    }
+    
+    /**
+     * Ruota la piattaforma di un determinato step
+     */
+    function rotatePlatform(step) {
+        const newAngle = normalizeAngle(AppState.platform.angle + step);
+        AppState.platform.angle = newAngle;
+        updatePlatformDisplay();
+        
+        showSuccess(`Piattaforma ruotata a ${newAngle}°`);
+    }
+    
+    /**
+     * Vai a posizione specifica della piattaforma
+     */
+    function goToPlatformPosition(angle) {
+        if (!validatePlatformAngle(angle)) {
+            showError('Angolo piattaforma non valido. Inserire un valore tra 0 e 360°');
+            return false;
+        }
+        
+        const targetAngle = normalizeAngle(parseFloat(angle));
+        AppState.platform.angle = targetAngle;
+        updatePlatformDisplay();
+        
+        showSuccess(`Piattaforma posizionata a ${targetAngle}°`);
+        return true;
+    }
+    
+    // Event listeners per controllo piattaforma
+$("#manual-control").on('click', '.control-btn[data-action="platform"]', function() {
+        const step = parseInt($(this).data("step"));
+        rotatePlatform(step);
+    });
+    
+    $('#platform-go').click(function() {
+        const angle = $('#platform-input').val();
+        goToPlatformPosition(angle);
+    });
+    
+    $('#platform-input').keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            $('#platform-go').click();
+        }
+    });
+
+    // ========================================
+    // CONTROLLO INCLINAZIONE VERTICALE
+    // ========================================
+    
+    /**
+     * Aggiorna visualizzazione inclinazione
+     */
+    function updateTiltDisplay() {
+        $('#tilt-angle').text(`${AppState.tilt.angle}°`);
+        updateDashboard();
+    }
+    
+    /**
+     * Inclina la fotocamera di un determinato step
+     */
+    function tiltCamera(step) {
+        const newAngle = AppState.tilt.angle + step;
+        
+        if (newAngle < 0 || newAngle > 90) {
+            showError('Inclinazione fuori range. Valore deve essere tra 0° e 90°');
             return;
         }
         
-        $('#modal-title').text('Reset Contatori');
-        $('#modal-message').text('Sei sicuro di voler azzerare solo i contatori della commessa attiva? La commessa rimarrà selezionata.');
-        $('#modal-confirm').off('click').on('click', function() {
-            send({ action: 'reset_counters', source_id: selectedSource });
-            $('#confirm-modal').addClass('hidden');
-        });
-        $('#confirm-modal').removeClass('hidden');
-    });
-
-    $('#reset-commessa').on('click', function() {
-        if (!selectedSource) {
-            showCommessaStatus('Seleziona prima una camera', 'error');
-            return;
+        AppState.tilt.angle = newAngle;
+        updateTiltDisplay();
+        
+        showSuccess(`Fotocamera inclinata a ${newAngle}°`);
+    }
+    
+    /**
+     * Vai a inclinazione specifica
+     */
+    function goToTiltPosition(angle) {
+        if (!validateTiltAngle(angle)) {
+            showError('Angolo inclinazione non valido. Inserire un valore tra 0 e 90°');
+            return false;
         }
         
-        $('#modal-title').text('Reset Commessa');
-        $('#modal-message').text('Sei sicuro di voler resettare completamente la commessa? Tutti i contatori verranno azzerati e dovrai selezionare una nuova commessa.');
-        $('#modal-confirm').off('click').on('click', function() {
-            send({ action: 'reset_commessa', source_id: selectedSource });
-            $('#confirm-modal').addClass('hidden');
-        });
-        $('#confirm-modal').removeClass('hidden');
-    });
-
-    // Gestione modal
-    $('#modal-cancel').on('click', function() {
-        $('#confirm-modal').addClass('hidden');
-    });
-
-    // Chiudi modal cliccando fuori
-    $('#confirm-modal').on('click', function(e) {
-        if (e.target === this) {
-            $(this).addClass('hidden');
-        }
-    });
-
-    // -------- START --------
-    connect();
-    scheduleRefresh();  // start auto-refresh
-    // Initialize with Stream tab visible by default, but don't force it later
-    if ($('#tab-stream, #tab-models, #tab-advanced-json').not('.hidden').length === 0) {
-      switchTab('stream');
-    }
+        const targetAngle = parseFloat(angle);
+        AppState.tilt.angle = targetAngle;
+        updateTiltDisplay();
+        
+        showSuccess(`Fotocamera posizionata a ${targetAngle}°`);
+    return true;
+}
+$("#manual-control").on('click', '.control-btn[data-action="tilt"]', function() {
+    const step = parseInt($(this).data("step"));
+    tiltCamera(step);
 });
+    $('#tilt-go').click(function() {
+        const angle = $('#tilt-input').val();
+        goToTiltPosition(angle);
+    });
+    
+    $('#tilt-input').keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            $('#tilt-go').click();
+        }
+    });
+
+    // ========================================
+    // GESTIONE TASK
+    // ========================================
+    
+    /**
+     * Carica task preimpostati
+     */
+    function loadPresetTasks() {
+        const container = $('#preset-tasks');
+        container.empty();
+        
+        AppState.task.presets.forEach(task => {
+            const taskElement = $(`
+                <div class="task-card" data-task-id="${task.id}">
+                    <div class="task-name">${task.name}</div>
+                    <div class="task-description">${task.description}</div>
+                    <div class="task-params">
+                        ${task.config.verticalAngles} angolazioni, step ${task.config.horizontalStep}°, 
+                        delay ${task.config.movementDelay}s, ${task.config.operationMode}
+                    </div>
+                    <div class="task-actions">
+                        <button class="task-btn primary load-preset" data-task-id="${task.id}">Carica</button>
+                        <button class="task-btn start-preset" data-task-id="${task.id}">Avvia</button>
+                    </div>
+                </div>
+            `);
+            
+            container.append(taskElement);
+        });
+        
+        // Event listeners per task preimpostati
+        $("#preset-tasks").on("click", ".load-preset", function() {
+            const taskId = $(this).data("task-id");
+            loadPresetTask(taskId);
+        });
+
+        $("#preset-tasks").on("click", ".start-preset", function() {
+            const taskId = $(this).data("task-id");
+            loadPresetTask(taskId);
+            setTimeout(() => startAutomaticTask(), 100);
+        });
+    }
+    
+    /**
+     * Carica un task preimpostato
+     */
+    function loadPresetTask(taskId) {
+        const task = AppState.task.presets.find(t => t.id === taskId);
+        if (!task) {
+            showError('Task non trovato');
+            return;
+        }
+        
+        // Aggiorna interfaccia
+        $('#task-name').val(task.name);
+        $('#task-description').val(task.description);
+        $('#vertical-angles').val(task.config.verticalAngles);
+        $('#horizontal-step').val(task.config.horizontalStep);
+        $('#movement-delay').val(task.config.movementDelay);
+        $(`input[name="operation-mode"][value="${task.config.operationMode}"]`).prop('checked', true);
+        
+        // Aggiorna stato
+        AppState.task.config = { ...task.config };
+        
+        // Evidenzia task selezionato
+        $('.task-card').removeClass('selected');
+        $(`.task-card[data-task-id="${taskId}"]`).addClass('selected');
+        
+        logToTaskLog(`Task caricato: ${task.name}`, 'info');
+        showSuccess(`Task "${task.name}" caricato`);
+    }
+    
+    /**
+     * Salva task personalizzato
+     */
+    function saveCustomTask() {
+        const name = $('#task-name').val().trim();
+        const description = $('#task-description').val().trim();
+        
+        if (!name) {
+            showError('Nome task obbligatorio');
+            return;
+        }
+        
+        // Valida configurazione
+        updateTaskConfig();
+        
+        const task = {
+            id: 'custom-' + Date.now(),
+            name: name,
+            description: description,
+            config: { ...AppState.task.config }
+        };
+        
+        // Rimuovi task con stesso nome se esiste
+        AppState.task.custom = AppState.task.custom.filter(t => t.name !== name);
+        AppState.task.custom.push(task);
+        
+        // Salva in localStorage
+        localStorage.setItem('customTasks', JSON.stringify(AppState.task.custom));
+        
+        logToTaskLog(`Task salvato: ${name}`, 'success');
+        showSuccess(`Task "${name}" salvato`);
+    }
+    
+    /**
+     * Carica task personalizzato
+     */
+    function loadCustomTask() {
+        if (AppState.task.custom.length === 0) {
+            showError('Nessun task personalizzato salvato');
+            return;
+        }
+        
+        // Mostra dialog di selezione (semplificato)
+        const taskNames = AppState.task.custom.map(t => t.name);
+        const selectedName = prompt('Seleziona task:\n' + taskNames.join('\n'));
+        
+        if (!selectedName) return;
+        
+        const task = AppState.task.custom.find(t => t.name === selectedName);
+        if (!task) {
+            showError('Task non trovato');
+            return;
+        }
+        
+        // Carica task
+        $('#task-name').val(task.name);
+        $('#task-description').val(task.description);
+        $('#vertical-angles').val(task.config.verticalAngles);
+        $('#horizontal-step').val(task.config.horizontalStep);
+        $('#movement-delay').val(task.config.movementDelay);
+        $(`input[name="operation-mode"][value="${task.config.operationMode}"]`).prop('checked', true);
+        
+        AppState.task.config = { ...task.config };
+        
+        logToTaskLog(`Task personalizzato caricato: ${task.name}`, 'info');
+        showSuccess(`Task "${task.name}" caricato`);
+    }
+    
+    /**
+     * Aggiorna configurazione task
+     */
+    function updateTaskConfig() {
+        AppState.task.config.verticalAngles = parseInt($('#vertical-angles').val()) || 3;
+        AppState.task.config.horizontalStep = parseInt($('#horizontal-step').val()) || 20;
+        AppState.task.config.movementDelay = parseFloat($('#movement-delay').val()) || 2;
+        AppState.task.config.operationMode = $('input[name="operation-mode"]:checked').val();
+        
+        logToTaskLog(`Configurazione aggiornata: ${AppState.task.config.verticalAngles} angolazioni, step ${AppState.task.config.horizontalStep}°, delay ${AppState.task.config.movementDelay}s, modalità ${AppState.task.config.operationMode}`);
+    }
+    
+    /**
+     * Aggiorna stato visuale del task
+     */
+    function updateTaskStatus(status, progress = 0) {
+        $('#task-status').text(status);
+        $('#progress-text').text(`${progress}%`);
+        $('#progress-bar').css('width', `${progress}%`);
+        
+        AppState.task.progress = progress;
+        updateDashboard();
+        
+        // Gestione pulsanti
+        if (AppState.task.running) {
+            $('#start-scan').prop('disabled', true);
+            $('#stop-scan').prop('disabled', false);
+            $('#reset-position').prop('disabled', true);
+        } else {
+            $('#start-scan').prop('disabled', false);
+            $('#stop-scan').prop('disabled', true);
+            $('#reset-position').prop('disabled', false);
+        }
+    }
+    
+    /**
+     * Calcola posizioni per la scansione
+     */
+    function calculateScanPositions() {
+        const config = AppState.task.config;
+        const positions = [];
+        
+        if (config.operationMode === 'sequential') {
+            // Modalità sequenziale: per ogni angolazione, ruota completamente
+            for (let tilt = 0; tilt < config.verticalAngles; tilt++) {
+                const tiltAngle = (90 / (config.verticalAngles - 1)) * tilt;
+                for (let platform = 0; platform < 360; platform += config.horizontalStep) {
+                    positions.push({
+                        platform: platform,
+                        tilt: tiltAngle,
+                        step: positions.length + 1
+                    });
+                }
+            }
+        } else {
+            // Modalità alternata: alterna angolazioni per ogni step orizzontale
+            for (let platform = 0; platform < 360; platform += config.horizontalStep) {
+                for (let tilt = 0; tilt < config.verticalAngles; tilt++) {
+                    const tiltAngle = (90 / (config.verticalAngles - 1)) * tilt;
+                    positions.push({
+                        platform: platform,
+                        tilt: tiltAngle,
+                        step: positions.length + 1
+                    });
+                }
+            }
+        }
+        
+        return positions;
+    }
+    
+    /**
+     * Esegue un singolo movimento
+     */
+    function executeMovement(platformAngle, tiltAngle, stepNumber, totalSteps) {
+        return new Promise((resolve) => {
+            // Simula movimento piattaforma
+            AppState.platform.angle = normalizeAngle(platformAngle);
+            updatePlatformDisplay();
+            
+            // Simula movimento inclinazione
+            AppState.tilt.angle = tiltAngle;
+            updateTiltDisplay();
+            
+            // Aggiorna progresso
+            const progress = Math.round((stepNumber / totalSteps) * 100);
+            updateTaskStatus('In Esecuzione', progress);
+            
+            logToTaskLog(`Step ${stepNumber}/${totalSteps}: Piattaforma ${platformAngle}°, Inclinazione ${tiltAngle}°`);
+            
+            // Simula delay movimento
+            setTimeout(() => {
+                resolve();
+            }, AppState.task.config.movementDelay * 1000);
+        });
+    }
+    
+    /**
+     * Avvia task automatico
+     */
+    async function startAutomaticTask() {
+        if (AppState.task.running) {
+            showError('Task già in esecuzione');
+            return;
+        }
+        
+        // Aggiorna configurazione
+        updateTaskConfig();
+        
+        // Valida configurazione
+        if (AppState.task.config.verticalAngles < 1 || AppState.task.config.verticalAngles > 10) {
+            showError('Numero angolazioni verticali deve essere tra 1 e 10');
+            return;
+        }
+        
+        if (AppState.task.config.horizontalStep < 1 || AppState.task.config.horizontalStep > 90) {
+            showError('Step angolare orizzontale deve essere tra 1° e 90°');
+            return;
+        }
+        
+        if (AppState.task.config.movementDelay < 0.5 || AppState.task.config.movementDelay > 10) {
+            showError('Delay movimento deve essere tra 0.5 e 10 secondi');
+            return;
+        }
+        
+        // Calcola posizioni
+        const positions = calculateScanPositions();
+        const totalSteps = positions.length;
+        
+        if (totalSteps === 0) {
+            showError('Nessuna posizione da scansionare');
+            return;
+        }
+        
+        // Avvia task
+        AppState.task.running = true;
+        AppState.task.current = {
+            positions: positions,
+            currentStep: 0,
+            totalSteps: totalSteps
+        };
+        
+        updateTaskStatus('Inizializzazione', 0);
+        logToTaskLog(`Avvio scansione automatica: ${totalSteps} posizioni totali`);
+        
+        // Esegui movimenti
+        for (let i = 0; i < positions.length; i++) {
+            if (!AppState.task.running) {
+                logToTaskLog('Task interrotto dall\'utente', 'warning');
+                break;
+            }
+            
+            const pos = positions[i];
+            await executeMovement(pos.platform, pos.tilt, i + 1, totalSteps);
+        }
+        
+        // Completamento
+        if (AppState.task.running) {
+            AppState.task.running = false;
+            updateTaskStatus('Completato', 100);
+            logToTaskLog('Scansione automatica completata con successo', 'success');
+            showSuccess('Task automatico completato');
+        }
+    }
+    
+    /**
+     * Interrompe task automatico
+     */
+    function stopAutomaticTask() {
+        if (!AppState.task.running) {
+            showError('Nessun task in esecuzione');
+            return;
+        }
+        
+        AppState.task.running = false;
+        updateTaskStatus('Interrotto', AppState.task.progress);
+        logToTaskLog('Task automatico interrotto dall\'utente', 'warning');
+        showSuccess('Task automatico interrotto');
+    }
+    
+    /**
+     * Reset posizione iniziale
+     */
+    function resetToInitialPosition() {
+        if (AppState.task.running) {
+            showError('Impossibile resettare durante task in esecuzione');
+            return;
+        }
+        
+        AppState.platform.angle = 0;
+        AppState.tilt.angle = 0;
+        updatePlatformDisplay();
+        updateTiltDisplay();
+        
+        updateTaskStatus('Inattivo', 0);
+        logToTaskLog('Posizione resettata a 0°, 0°');
+        showSuccess('Posizione resettata');
+    }
+    
+    // Event listeners per task automatici
+    $('#start-scan').click(startAutomaticTask);
+    $('#stop-scan').click(stopAutomaticTask);
+    $('#reset-position').click(resetToInitialPosition);
+    $('#save-task').click(saveCustomTask);
+    $('#load-task').click(loadCustomTask);
+    
+    // Aggiorna configurazione quando cambiano i valori
+    $('#vertical-angles, #horizontal-step, #movement-delay').on('input', updateTaskConfig);
+    $('input[name="operation-mode"]').change(updateTaskConfig);
+
+    // ========================================
+    // INIZIALIZZAZIONE
+    // ========================================
+    
+    /**
+     * Carica task personalizzati da localStorage
+     */
+    function loadCustomTasksFromStorage() {
+        try {
+            const saved = localStorage.getItem('customTasks');
+            if (saved) {
+                AppState.task.custom = JSON.parse(saved);
+            }
+        } catch (error) {
+            console.warn('Errore nel caricamento task personalizzati:', error);
+        }
+    }
+    
+    /**
+     * Inizializza l'applicazione
+     */
+    function initializeApp() {
+        // Carica task personalizzati
+        loadCustomTasksFromStorage();
+        
+        // Imposta sezione di default
+        switchSection('manual-control');
+        
+        // Carica task preimpostati
+        loadPresetTasks();
+        
+        // Setup filtri log
+        setupLogFilters();
+        
+        // Aggiorna display iniziali
+        updatePlatformDisplay();
+        updateTiltDisplay();
+        updateTaskStatus('Inattivo', 0);
+        
+        // Log inizializzazione
+        logToConsole('Sistema di controllo meccatronico inizializzato');
+        logToConsole('Piattaforma: 0°, Inclinazione: 0°');
+        logToConsole('Pronto per operazioni manuali e automatiche');
+        
+        logToTaskLog('Sistema pronto per task automatici');
+        
+        // Simula connessione hardware
+        setTimeout(() => {
+            logToConsole('Hardware connesso e operativo');
+        }, 1000);
+    }
+    
+    // Avvia applicazione
+    initializeApp();
+    
+    // ========================================
+    // GESTIONE ERRORI GLOBALE
+    // ========================================
+    
+    // Intercetta errori JavaScript
+    window.addEventListener('error', function(e) {
+        showError(`Errore JavaScript: ${e.message}`);
+    });
+    
+    // Intercetta promesse rifiutate
+    window.addEventListener('unhandledrejection', function(e) {
+        showError(`Errore asincrono: ${e.reason}`);
+    });
+}); 

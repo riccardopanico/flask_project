@@ -66,11 +66,12 @@ class IraypleStreamer:
 
         feature = "BalanceWhiteAutoReg"
         value_continuous = 2
+        value_once = 1
 
         if self.cam.IMV_FeatureIsAvailable(feature) and self.cam.IMV_FeatureIsWriteable(feature):
-            ret = self.cam.IMV_SetIntFeatureValue(feature, value_continuous)
+            ret = self.cam.IMV_SetIntFeatureValue(feature, value_once)
             if ret == IMV_OK:
-                self.logger.info(f"{feature} impostato a {value_continuous} (Continuous)")
+                self.logger.info(f"{feature} impostato a {value_once} (Once)")
             else:
                 self.logger.error(f"Errore IMV_SetIntFeatureValue({feature}): {ret}")
         else:

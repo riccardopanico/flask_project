@@ -1,0 +1,515 @@
+/* Stili personalizzati per il Sistema di Controllo Meccatronico - Design Light */
+:root {
+    --color-bg: #ffffff;
+    --color-border: #d1d5db;
+    --color-accent: #1e40af;
+    --color-success: #10b981;
+    --color-error: #ef4444;
+  }
+  
+  
+  /* Reset e base styles */
+  * {
+      box-sizing: border-box;
+  }
+  
+  body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.5;
+      background-color: var(--color-bg);
+      color: #374151;
+  }
+  
+  /* Stili per i pulsanti di navigazione */
+  .nav-btn {
+      background-color: transparent;
+      color: #6b7280;
+      border: 1px solid transparent;
+      border-radius: 0;
+      margin: 0 2px;
+  }
+  
+  .nav-btn:hover {
+      background-color: #f3f4f6;
+      color: #374151;
+  }
+  
+  .nav-btn.active {
+      background-color: #e5e7eb;
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+  }
+  
+  /* Stili per i pulsanti di controllo */
+  .control-btn {
+      padding: 8px 12px;
+      border-radius: 0;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.15s ease-in-out;
+      border: none;
+      cursor: pointer;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 1px;
+  }
+  
+  .control-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .control-btn:active {
+      transform: translateY(0);
+  }
+  
+  /* Stili per le sezioni */
+  .section-content {
+      opacity: 1;
+      transition: opacity 0.2s ease-in-out;
+  }
+  
+  .section-content.hidden {
+      display: none;
+      opacity: 0;
+  }
+  
+  /* Stili per la console log e task log */
+  .log-container {
+      border: 1px solid var(--color-border);
+      background-color: #f9fafb;
+  }
+  
+  .log-filters {
+      background-color: #f3f4f6;
+      border-bottom: 1px solid var(--color-border);
+      padding: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+  }
+  
+  .filter-btn {
+      padding: 4px 8px;
+      border: 1px solid var(--color-border);
+      background-color: #ffffff;
+      color: #6b7280;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border-radius: 0;
+  }
+  
+  .filter-btn:hover {
+      background-color: #f3f4f6;
+  }
+  
+  .filter-btn.active {
+      background-color: var(--color-accent);
+      color: #ffffff;
+      border-color: var(--color-accent);
+  }
+  
+  .filter-btn.info {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+  }
+  
+  .filter-btn.info.active {
+      background-color: var(--color-accent);
+      color: #ffffff;
+  }
+  
+  .filter-btn.success {
+      border-color: var(--color-success);
+      color: var(--color-success);
+  }
+  
+  .filter-btn.success.active {
+      background-color: var(--color-success);
+      color: #ffffff;
+  }
+  
+  .filter-btn.warning {
+      border-color: #f59e0b;
+      color: #f59e0b;
+  }
+  
+  .filter-btn.warning.active {
+      background-color: #f59e0b;
+      color: #ffffff;
+  }
+  
+  .filter-btn.error {
+      border-color: var(--color-error);
+      color: var(--color-error);
+  }
+  
+  .filter-btn.error.active {
+      background-color: var(--color-error);
+      color: #ffffff;
+  }
+  
+  #console-log,
+  #task-log {
+      scrollbar-width: thin;
+      scrollbar-color: #9ca3af #f3f4f6;
+      background-color: #ffffff;
+      border: none;
+  }
+  
+  #console-log::-webkit-scrollbar,
+  #task-log::-webkit-scrollbar {
+      width: 6px;
+  }
+  
+  #console-log::-webkit-scrollbar-track,
+  #task-log::-webkit-scrollbar-track {
+      background: #f3f4f6;
+  }
+  
+  #console-log::-webkit-scrollbar-thumb,
+  #task-log::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+  }
+  
+  #console-log::-webkit-scrollbar-thumb:hover,
+  #task-log::-webkit-scrollbar-thumb:hover {
+      background: #6b7280;
+  }
+  
+  /* Stili per i log entries */
+  .log-entry {
+      padding: 4px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 12px;
+      line-height: 1.4;
+  }
+  
+  .log-entry.log-info {
+      border-left: 3px solid var(--color-accent);
+      background-color: #eff6ff;
+  }
+  
+  .log-entry.log-success {
+      border-left: 3px solid var(--color-success);
+      background-color: #ecfdf5;
+  }
+  
+  .log-entry.log-warning {
+      border-left: 3px solid #f59e0b;
+      background-color: #fffbeb;
+  }
+  
+  .log-entry.log-error {
+      border-left: 3px solid var(--color-error);
+      background-color: #fef2f2;
+  }
+  
+  .log-entry.hidden {
+      display: none;
+  }
+  
+  /* Animazioni per indicatori di stato */
+  @keyframes pulse {
+      0%, 100% {
+          opacity: 1;
+      }
+      50% {
+          opacity: 0.7;
+      }
+  }
+  
+  .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Stili per input numerici */
+  input[type="number"] {
+      -moz-appearance: textfield;
+      border-radius: 0;
+  }
+  
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+  }
+  
+  /* Stili per radio buttons personalizzati */
+  input[type="radio"] {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #9ca3af;
+      border-radius: 0;
+      background-color: #ffffff;
+      position: relative;
+      cursor: pointer;
+  }
+  
+  input[type="radio"]:checked {
+      border-color: var(--color-accent);
+      background-color: var(--color-accent);
+  }
+  
+  input[type="radio"]:checked::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px;
+      height: 4px;
+      background-color: white;
+      border-radius: 0;
+  }
+  
+  /* Stili per pulsanti disabilitati */
+  button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+  }
+  
+  button:disabled:hover {
+      transform: none !important;
+      box-shadow: none !important;
+  }
+  
+  /* Dashboard Visuale */
+  .dashboard-card {
+      background-color: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 0;
+      padding: 12px;
+      margin: 4px 0;
+  }
+  
+  .dashboard-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-accent);
+  }
+  
+  .dashboard-label {
+      font-size: 12px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+  }
+  
+  .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 0;
+  }
+  
+  .status-badge.idle {
+      background-color: #f3f4f6;
+      color: #6b7280;
+  }
+  
+  .status-badge.running {
+      background-color: #dbeafe;
+      color: var(--color-accent);
+      animation: pulse 1.5s infinite;
+  }
+  
+  .status-badge.completed {
+      background-color: #d1fae5;
+      color: #065f46;
+  }
+  
+  .status-badge.error {
+      background-color: #fee2e2;
+      color: #991b1b;
+  }
+  
+  /* Task Management */
+  .task-card {
+      background-color: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 0;
+      padding: 12px;
+      margin: 4px 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+  }
+  
+  .task-card:hover {
+      background-color: #f9fafb;
+      border-color: var(--color-accent);
+  }
+  
+  .task-card.selected {
+      background-color: #eff6ff;
+      border-color: var(--color-accent);
+  }
+  
+  .task-name {
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+  }
+  
+  .task-description {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+  }
+  
+  .task-params {
+      font-size: 11px;
+      color: #9ca3af;
+  }
+  
+  .task-actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 4px;
+  }
+  
+  .task-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      border: 1px solid var(--color-border);
+      background-color: #ffffff;
+      color: #6b7280;
+      cursor: pointer;
+      border-radius: 0;
+      transition: all 0.15s ease;
+  }
+  
+  .task-btn:hover {
+      background-color: #f3f4f6;
+  }
+  
+  .task-btn.primary {
+      background-color: var(--color-accent);
+      color: #ffffff;
+      border-color: var(--color-accent);
+  }
+  
+  .task-btn.primary:hover {
+      background-color: #2563eb;
+  }
+  
+  /* Progress indicators */
+  .progress-ring {
+      transform: rotate(-90deg);
+  }
+  
+  .progress-ring-circle {
+      transition: stroke-dashoffset 0.35s;
+      transform-origin: 50% 50%;
+  }
+  
+  /* Responsive design per tablet e mobile */
+  @media (max-width: 1024px) {
+      .container {
+          padding-left: 8px;
+          padding-right: 8px;
+      }
+      
+      .control-btn {
+          min-height: 36px;
+          font-size: 12px;
+          padding: 6px 10px;
+      }
+  }
+  
+  @media (max-width: 768px) {
+      .grid {
+          grid-template-columns: 1fr;
+      }
+      
+      .control-btn {
+          min-height: 32px;
+          font-size: 11px;
+          padding: 4px 8px;
+      }
+      
+      #console-log,
+      #task-log {
+          height: 180px;
+      }
+      
+      .dashboard-value {
+          font-size: 20px;
+      }
+  }
+  
+  /* Stili per messaggi di errore */
+  .error-message {
+      color: #dc2626;
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      padding: 6px 10px;
+      margin-top: 6px;
+      font-size: 12px;
+      border-radius: 0;
+  }
+  
+  /* Stili per messaggi di successo */
+  .success-message {
+      color: #059669;
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      padding: 6px 10px;
+      margin-top: 6px;
+      font-size: 12px;
+      border-radius: 0;
+  }
+  
+  /* Stili per messaggi informativi */
+  .info-message {
+      color: #2563eb;
+      background-color: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 6px 10px;
+      margin-top: 6px;
+      font-size: 12px;
+      border-radius: 0;
+  }
+  
+  /* Effetti hover per elementi interattivi */
+  .bg-gray-50:hover {
+      background-color: #f3f4f6;
+      transition: background-color 0.15s ease-in-out;
+  }
+  
+  /* Stili per la barra di progresso animata */
+  #progress-bar {
+      transition: width 0.3s ease-in-out;
+      border-radius: 0;
+  }
+  
+  /* Stili per indicatori di stato dinamici */
+  .status-indicator {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 0;
+      margin-right: 6px;
+  }
+  
+  .status-indicator.online {
+      background-color: var(--color-success);
+      animation: pulse 2s infinite;
+  }
+  
+  .status-indicator.offline {
+      background-color: var(--color-error);
+  }
+  
+  .status-indicator.processing {
+      background-color: #f59e0b;
+      animation: pulse 1s infinite;
+  } 

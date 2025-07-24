@@ -2,64 +2,132 @@
 {% block title %}Camera Monitor{% endblock %}
 
 {% block styles %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/scanner.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename = 'css/scanner.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-4">
-    <div class="grid grid-cols-5 gap-4">
-        <!-- Lista telecamere -->
-        <aside id="camera-list" class="col-span-1 bg-white border border-gray-200 p-4 space-y-2 overflow-y-auto"></aside>
-
-        <!-- Stream principale e pannello configurazione -->
-        <section class="col-span-3 space-y-4">
-            <div id="video-container" class="bg-gray-100 border border-gray-200 aspect-video flex items-center justify-center">
-                <p class="text-gray-500">Seleziona una camera</p>
+<div class="container mx-auto px-4 py-4 space-y-4">
+    <!-- Layout flessibile: colonne e pannello config -->
+    <div id="monitor-layout" class="flex flex-col gap-4">
+        <div id="monitor-columns" class="flex gap-4">
+            <aside id="camera-list" class="w-1/5 bg-white border border-gray-200 p-4 space-y-2 overflow-y-auto"></aside>
+            <div class="flex-1" id="video-column">
+                <div id="video-container"
+                    class="bg-gray-100 border border-gray-200 aspect-video flex items-center justify-center">
+                    <p class="text-gray-500">Seleziona una camera</p>
+                </div>
             </div>
-            <div id="config-panel" class="bg-white border border-gray-200 p-4 space-y-4">
-                <h2 class="text-lg font-semibold mb-2">Configurazione Pipeline</h2>
+            <aside id="commessa-panel" class="w-1/5 bg-white border border-gray-200 p-4">
+                <h2 class="text-lg font-semibold mb-2">Commesse</h2>
+                <div id="commessa-info" class="space-y-1"></div>
+                <button id="reset-counters" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white py-1">Reset
+                    Contatori</button>
+            </aside>
+        </div>
+
+        <!-- Configurazione Pipeline -->
+        <div id="config-panel" class="bg-white border border-gray-200 p-4 space-y-4">
+            <!-- Tabs -->
+            <div class="flex space-x-2" id="config-tabs">
+                <button class="tab-btn active-tab" data-target="tab-general">Generale</button>
+                <button class="tab-btn" data-target="tab-models">Modelli YOLO</button>
+                <button class="tab-btn" data-target="tab-counting">Conteggio</button>
+                <button class="tab-btn" data-target="tab-advanced">Avanzate</button>
+                <button class="tab-btn" data-target="tab-console">Console</button>
+            </div>
+            <!-- Sezioni -->
+            <section id="tab-general" class="section-content">
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-sm">Larghezza</label>
-                        <input id="cfg-width" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="Width">
+                        <input id="cfg-width" type="number" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="width">
                     </div>
                     <div>
                         <label class="block text-sm">Altezza</label>
-                        <input id="cfg-height" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="Height">
+                        <input id="cfg-height" type="number" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="height">
                     </div>
                     <div>
                         <label class="block text-sm">FPS</label>
-                        <input id="cfg-fps" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="FPS">
+                        <input id="cfg-fps" type="number" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="fps">
                     </div>
-                    <div class="flex items-center space-x-2 mt-6">
-                        <input id="cfg-cuda" type="checkbox" class="" checked>
-                        <label for="cfg-cuda" class="text-sm">Usa CUDA</label>
-                    </div>
+                    <label class="flex items-center space-x-2 mt-6">
+                        <span class="toggle"><input id="cfg-cuda" type="checkbox" data-field="use_cuda"><span class="slider"></span></span>
+                        <span class="text-sm">Usa CUDA</span>
+                    </label>
                     <div>
                         <label class="block text-sm">Workers</label>
-                        <input id="cfg-workers" type="number" value="1" class="w-full border border-gray-300 px-2 py-1" min="1">
+                        <input id="cfg-workers" type="number" min="1"
+                            class="w-full border border-gray-300 px-2 py-1" data-field="max_workers">
                     </div>
                 </div>
-
-                <div>
-                    <h3 class="font-semibold mb-2">Modelli YOLO</h3>
-                    <div id="models-container" class="space-y-2"></div>
-                    <button id="add-model" class="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white">Aggiungi Modello</button>
+            </section>
+            <section id="tab-models" class="section-content hidden">
+                <datalist id="available-models">
+                    <option value="data/models/yolo11n.pt">
+                    <option value="data/models/yolov8n.pt">
+                    <option value="data/models/yolov8s.pt">
+                </datalist>
+                <div id="models-container" class="space-y-2"></div>
+                <button id="add-model" class="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white">Aggiungi
+                    Modello</button>
+            </section>
+            <section id="tab-counting" class="section-content hidden">
+                <label class="flex items-center space-x-2 mb-2">
+                    <span class="toggle"><input id="count-global-enable" type="checkbox"><span class="slider"></span></span>
+                    <span class="text-sm">Abilita Conteggio</span>
+                </label>
+                <div id="counting-container" class="space-y-4"></div>
+            </section>
+            <section id="tab-advanced" class="section-content hidden">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm">Prefetch</label>
+                        <input id="adv-prefetch" type="number" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="prefetch">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Qualità</label>
+                        <input id="adv-quality" type="number" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="quality">
+                    </div>
+                    <label class="flex items-center space-x-2 mt-6">
+                        <span class="toggle"><input id="adv-skipqueue" type="checkbox" data-field="skip_on_full_queue"><span class="slider"></span></span>
+                        <span class="text-sm">Salta se coda piena</span>
+                    </label>
+                    <div>
+                        <label class="block text-sm">Log Level</label>
+                        <select id="adv-loglevel" class="w-full border border-gray-300 px-2 py-1"
+                            data-field="log_level">
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
                 </div>
-                <button id="send-config" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white">Genera Config</button>
+            </section>
+            <section id="tab-console" class="section-content hidden">
+                <div class="log-filters mb-2">
+                    <button class="filter-btn info" data-filter="info">Info</button>
+                    <button class="filter-btn success" data-filter="success">Success</button>
+                    <button class="filter-btn warning" data-filter="warning">Warning</button>
+                    <button class="filter-btn error" data-filter="error">Error</button>
+                    <button class="filter-btn active" data-filter="all">Mostra Tutti</button>
+                    <button class="filter-btn" data-filter="clear">Pulisci</button>
+                </div>
+                <div id="console-log" class="h-48 overflow-y-auto p-2 log-container"></div>
+            </section>
+            <div class="text-right">
+                <button id="send-config" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white">Genera
+                    Config</button>
             </div>
-        </section>
-
-        <!-- Pannello commesse -->
-        <aside class="col-span-1 bg-white border border-gray-200 p-4" id="commessa-panel">
-            <h2 class="text-lg font-semibold mb-2">Commesse</h2>
-            <div id="commessa-info" class="space-y-1"></div>
-            <button id="reset-counters" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white py-1">Reset Contatori</button>
-        </aside>
+        </div>
     </div>
-</div>
-{% endblock %}
+    {% endblock %}
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
-{% endblock %}
+    {% block scripts %}
+    <script src="{{ url_for('static', filename = 'js/monitor.js') }}"></script>
+    {% endblock %}

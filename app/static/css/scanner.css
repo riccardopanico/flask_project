@@ -19,3 +19,10 @@
     margin-bottom: 4px;
     text-align: center;
 }
+/* Toggle switch */
+.toggle {position:relative;display:inline-block;width:42px;height:20px;}
+.toggle input{display:none;}
+.toggle .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.4s;border-radius:20px;}
+.toggle .slider:before{position:absolute;content:"";height:16px;width:16px;left:2px;bottom:2px;background:white;transition:.4s;border-radius:50%;}
+.toggle input:checked + .slider{background:#4ade80;}
+.toggle input:checked + .slider:before{transform:translateX(22px);}

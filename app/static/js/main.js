@@ -3,7 +3,7 @@
 
     const AppState = {
         ui: { currentApp: 'scanner', currentSection: 'manual-control' },
-        log: { filters: ['info', 'success', 'warning', 'error'] }
+        log: { filter: 'all' }
     };
 
     const Utils = {
@@ -35,13 +35,13 @@
     }
 
     const logToConsole = (m, t = 'info') => logMessage('#console-log', m, t);
-    const logToTaskLog = (m, t = 'info') => logMessage('#task-log', m, t);
 
     function applyLogFilters(containerId){
         const container = $(containerId); if(!container.length) return;
         container.find('.log-entry').each(function(){
-            const entry = $(this); const type = entry.data('type');
-            entry.toggleClass('hidden', !(AppState.log.filters.includes(type) || AppState.log.filters.includes('all')));
+            const entry = $(this);
+            const type = entry.data('type');
+            entry.toggleClass('hidden', !(AppState.log.filter === 'all' || AppState.log.filter === type));
         });
     }
 
@@ -49,20 +49,17 @@
         const box = $(".log-filters"); if(!box.length) return;
         box.on("click", ".filter-btn", function(){
             const btn = $(this), f = btn.data("filter");
-            if(f === 'all'){
-                box.find('.filter-btn').addClass('active');
-                AppState.log.filters = ['info','success','warning','error','all'];
-            }else if(f === 'clear'){
-                $('#console-log, #task-log').empty();
+            if(f === 'clear'){
+                $('#console-log').empty();
+                btn.removeClass('active');
                 return;
-            }else{
-                btn.toggleClass('active');
-                AppState.log.filters = AppState.log.filters.filter(x => x !== f);
-                if(btn.hasClass('active')) AppState.log.filters.push(f);
             }
+            box.find('.filter-btn').removeClass('active');
+            btn.addClass('active');
+            AppState.log.filter = f;
             applyLogFilters('#console-log');
-            applyLogFilters('#task-log');
         });
+        box.find(`.filter-btn[data-filter="${AppState.log.filter}"]`).addClass('active');
     }
 
     const showError = msg => logToConsole(`❌ ERRORE: ${msg}`, 'error');
@@ -72,7 +69,7 @@
 
     $(document).ready(() => {
         initGlobalEvents();
-        Object.assign(window, { AppState, AppUtils: Utils, logToConsole, logToTaskLog, showError, showSuccess, applyLogFilters });
+        Object.assign(window, { AppState, AppUtils: Utils, logToConsole, showError, showSuccess, applyLogFilters });
     });
 
     window.addEventListener('error', e => showError(`Errore JavaScript: ${e.message}`));

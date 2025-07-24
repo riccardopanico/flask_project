@@ -13,8 +13,9 @@
 <main class="container mx-auto px-4 py-4">
     <!-- Tabs (Manuale / Task) -->
     <div class="flex space-x-4 mb-4">
-        <button class="tab-btn active" data-target="manual-control">Controllo Manuale</button>
+        <button class="tab-btn active-tab" data-target="manual-control">Controllo Manuale</button>
         <button class="tab-btn" data-target="automatic-tasks">Task Automatici</button>
+        <button class="tab-btn" data-target="console">Console</button>
     </div>
 
     <!-- Sezione Manuale -->
@@ -155,33 +156,6 @@
             </div>
         </div>
 
-        <!-- Console Log con Filtri -->
-        <div class="mt-4 bg-white border border-gray-200">
-            <h3 class="text-lg font-semibold p-4 border-b border-gray-200 text-blue-600 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                    </path>
-                </svg>
-                Console Log
-            </h3>
-
-            <!-- Filtri Log -->
-            <div class="log-filters">
-                <button class="filter-btn info active" data-filter="info">Info</button>
-                <button class="filter-btn success active" data-filter="success">Success</button>
-                <button class="filter-btn warning active" data-filter="warning">Warning</button>
-                <button class="filter-btn error active" data-filter="error">Error</button>
-                <button class="filter-btn" data-filter="all">Mostra Tutti</button>
-                <button class="filter-btn" data-filter="clear">Pulisci</button>
-            </div>
-
-            <div id="console-log" class="h-48 overflow-y-auto p-2">
-                <div class="log-entry log-info">
-                    <span class="text-gray-500">[Sistema]</span> Sistema di controllo meccatronico inizializzato
-                </div>
-            </div>
-        </div>
     </section>
 
     <!-- Sezione Task Automatici -->
@@ -350,32 +324,28 @@
             </div>
         </div>
 
-        <!-- Registro Eventi con Filtri -->
-        <div class="mt-4 bg-white border border-gray-200">
+    </section>
+
+    <!-- Sezione Console -->
+    <section id="console" class="section-content hidden">
+        <div class="bg-white border border-gray-200">
             <h3 class="text-lg font-semibold p-4 border-b border-gray-200 text-blue-600 flex items-center">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
                     </path>
                 </svg>
-                Registro Eventi
+                Log operativi
             </h3>
-
-            <!-- Filtri Log -->
             <div class="log-filters">
-                <button class="filter-btn info active" data-filter="info">Info</button>
-                <button class="filter-btn success active" data-filter="success">Success</button>
-                <button class="filter-btn warning active" data-filter="warning">Warning</button>
-                <button class="filter-btn error active" data-filter="error">Error</button>
+                <button class="filter-btn" data-filter="info">Info</button>
+                <button class="filter-btn" data-filter="success">Success</button>
+                <button class="filter-btn" data-filter="warning">Warning</button>
+                <button class="filter-btn" data-filter="error">Error</button>
                 <button class="filter-btn" data-filter="all">Mostra Tutti</button>
                 <button class="filter-btn" data-filter="clear">Pulisci</button>
             </div>
-
-            <div id="task-log" class="h-48 overflow-y-auto p-2">
-                <div class="log-entry log-info">
-                    <span class="text-gray-500">[Sistema]</span> Sistema pronto per task automatici
-                </div>
-            </div>
+            <div id="console-log" class="h-48 overflow-y-auto p-2"></div>
         </div>
     </section>
 </main>
@@ -383,5 +353,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename = 'js/ws_manager.js') }}"></script>
 <script src="{{ url_for('static', filename = 'js/scanner.js') }}"></script>
 {% endblock %}

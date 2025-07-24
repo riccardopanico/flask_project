@@ -11,6 +11,10 @@ ip_camera_blueprint = Blueprint('ip_camera', __name__, url_prefix='/api/ip_camer
 def render_monitor():
     return render_template("scanner.html")
 
+@ip_camera_blueprint.route('/line_monitor')
+def render_line_monitor():
+    return render_template("monitor.html")
+
 @ip_camera_blueprint.route('/stream/<source_id>')
 def stream(source_id):
     vp = current_app.video_pipelines.get(source_id)

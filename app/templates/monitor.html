@@ -1,0 +1,65 @@
+{% extends 'layout.html' %}
+{% block title %}Camera Monitor{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/scanner.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-4">
+    <div class="grid grid-cols-5 gap-4">
+        <!-- Lista telecamere -->
+        <aside id="camera-list" class="col-span-1 bg-white border border-gray-200 p-4 space-y-2 overflow-y-auto"></aside>
+
+        <!-- Stream principale e pannello configurazione -->
+        <section class="col-span-3 space-y-4">
+            <div id="video-container" class="bg-gray-100 border border-gray-200 aspect-video flex items-center justify-center">
+                <p class="text-gray-500">Seleziona una camera</p>
+            </div>
+            <div id="config-panel" class="bg-white border border-gray-200 p-4 space-y-4">
+                <h2 class="text-lg font-semibold mb-2">Configurazione Pipeline</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm">Larghezza</label>
+                        <input id="cfg-width" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="Width">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Altezza</label>
+                        <input id="cfg-height" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="Height">
+                    </div>
+                    <div>
+                        <label class="block text-sm">FPS</label>
+                        <input id="cfg-fps" type="number" class="w-full border border-gray-300 px-2 py-1" placeholder="FPS">
+                    </div>
+                    <div class="flex items-center space-x-2 mt-6">
+                        <input id="cfg-cuda" type="checkbox" class="" checked>
+                        <label for="cfg-cuda" class="text-sm">Usa CUDA</label>
+                    </div>
+                    <div>
+                        <label class="block text-sm">Workers</label>
+                        <input id="cfg-workers" type="number" value="1" class="w-full border border-gray-300 px-2 py-1" min="1">
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold mb-2">Modelli YOLO</h3>
+                    <div id="models-container" class="space-y-2"></div>
+                    <button id="add-model" class="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white">Aggiungi Modello</button>
+                </div>
+                <button id="send-config" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white">Genera Config</button>
+            </div>
+        </section>
+
+        <!-- Pannello commesse -->
+        <aside class="col-span-1 bg-white border border-gray-200 p-4" id="commessa-panel">
+            <h2 class="text-lg font-semibold mb-2">Commesse</h2>
+            <div id="commessa-info" class="space-y-1"></div>
+            <button id="reset-counters" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white py-1">Reset Contatori</button>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+{% endblock %}

@@ -152,13 +152,13 @@ $(function(){
     $('#manual-control').on('click', '.control-btn[data-action="platform"]', function(){
         if(manualCommandsAllowed()){
             changeAngle('platform', parseInt($(this).data('step')));
-            WebSocketManager.movePlatform(AppState.platform.angle);
+            SerialManager.movePlatform(AppState.platform.angle);
         }
     });
     $('#platform-go').click(()=>{
         if(manualCommandsAllowed()){
             setAngle('platform', parseFloat($('#platform-input').val()));
-            WebSocketManager.movePlatform(AppState.platform.angle);
+            SerialManager.movePlatform(AppState.platform.angle);
         }
     });
     bindEnter('#platform-input', '#platform-go');
@@ -166,13 +166,13 @@ $(function(){
     $('#manual-control').on('click', '.control-btn[data-action="tilt"]', function(){
         if(manualCommandsAllowed()){
             changeAngle('tilt', parseInt($(this).data('step')));
-            WebSocketManager.moveTilt(AppState.tilt.angle);
+            SerialManager.moveTilt(AppState.tilt.angle);
         }
     });
     $('#tilt-go').click(()=>{
         if(manualCommandsAllowed()){
             setAngle('tilt', parseFloat($('#tilt-input').val()));
-            WebSocketManager.moveTilt(AppState.tilt.angle);
+            SerialManager.moveTilt(AppState.tilt.angle);
         }
     });
     bindEnter('#tilt-input', '#tilt-go');
@@ -310,7 +310,7 @@ $(function(){
         AppState.task.current = { positions, currentStep: 0, totalSteps: total };
         updateTaskUI('Inizializzazione', 0);
         logToConsole(`Avvio scansione automatica: ${total} posizioni totali`);
-        WebSocketManager.startTask(AppState.task.config);
+        SerialManager.startTask(AppState.task.config);
         for(let i=0;i<positions.length;i++){
             if(!AppState.task.running){ logToConsole('Task interrotto dall\'utente','warning'); break; }
             const pos = positions[i];
@@ -330,15 +330,15 @@ $(function(){
         updateTaskUI('Interrotto', AppState.task.progress);
         logToConsole('Task automatico interrotto dall\'utente','warning');
         showSuccess('Task automatico interrotto');
-        WebSocketManager.stopTask();
+        SerialManager.stopTask();
     }
 
     function resetToInitialPosition(){
         if(AppState.task.running){ showError('Impossibile resettare durante task in esecuzione'); return; }
         setAngle('platform', 0, {log:false});
         setAngle('tilt', 0, {log:false});
-        WebSocketManager.movePlatform(0);
-        WebSocketManager.moveTilt(0);
+        SerialManager.movePlatform(0);
+        SerialManager.moveTilt(0);
         updateTaskUI('Inattivo', 0);
         logToConsole('Posizione resettata a 0°, 0°');
         showSuccess('Posizione resettata');
@@ -370,9 +370,9 @@ $(function(){
         logToConsole('Piattaforma: 0°, Inclinazione: 0°');
         logToConsole('Pronto per operazioni manuali e automatiche');
         logToConsole('Sistema pronto per task automatici');
+        $('#connect-serial').on('click', () => SerialManager.connectSerial());
         setTimeout(()=> {
-            logToConsole('Hardware connesso e operativo');
-            WebSocketManager.requestStatus();
+            logToConsole('Hardware pronto');
         }, 1000);
     }
 

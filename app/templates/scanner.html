@@ -12,10 +12,11 @@
 <!-- Controllo Manuale -->
 <main class="container mx-auto px-4 py-4">
     <!-- Tabs (Manuale / Task) -->
-    <div class="flex space-x-4 mb-4">
+    <div class="flex space-x-4 mb-4 items-center">
         <button class="tab-btn active-tab" data-target="manual-control">Controllo Manuale</button>
         <button class="tab-btn" data-target="automatic-tasks">Task Automatici</button>
         <button class="tab-btn" data-target="console">Console</button>
+        <button id="connect-serial" class="ml-auto px-4 py-2 bg-green-600 hover:bg-green-700 text-white">Connetti Seriale</button>
     </div>
 
     <!-- Sezione Manuale -->
@@ -353,6 +354,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename = 'js/ws_manager.js') }}"></script>
+<script src="{{ url_for('static', filename = 'js/serial_manager.js') }}"></script>
 <script src="{{ url_for('static', filename = 'js/scanner.js') }}"></script>
 {% endblock %}

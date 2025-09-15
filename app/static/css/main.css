@@ -131,7 +131,7 @@
       background-color: var(--color-success);
       color: #ffffff;
   }
-  
+
   .filter-btn.warning {
       border-color: #f59e0b;
       color: #f59e0b;
@@ -149,6 +149,47 @@
   
   .filter-btn.error.active {
       background-color: var(--color-error);
+      color: #ffffff;
+  }
+
+  .filter-btn.ok {
+      border-color: var(--color-success);
+      color: var(--color-success);
+  }
+  .filter-btn.ok.active {
+      background-color: var(--color-success);
+      color: #ffffff;
+  }
+  .filter-btn.warn {
+      border-color: #f59e0b;
+      color: #f59e0b;
+  }
+  .filter-btn.warn.active {
+      background-color: #f59e0b;
+      color: #ffffff;
+  }
+  .filter-btn.move_start {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+  }
+  .filter-btn.move_start.active {
+      background-color: var(--color-accent);
+      color: #ffffff;
+  }
+  .filter-btn.move_done {
+      border-color: var(--color-success);
+      color: var(--color-success);
+  }
+  .filter-btn.move_done.active {
+      background-color: var(--color-success);
+      color: #ffffff;
+  }
+  .filter-btn.status {
+      border-color: #6b7280;
+      color: #6b7280;
+  }
+  .filter-btn.status.active {
+      background-color: #6b7280;
       color: #ffffff;
   }
   
@@ -192,20 +233,45 @@
       border-left: 3px solid var(--color-accent);
       background-color: #eff6ff;
   }
-  
+
   .log-entry.log-success {
       border-left: 3px solid var(--color-success);
       background-color: #ecfdf5;
   }
-  
+
   .log-entry.log-warning {
       border-left: 3px solid #f59e0b;
       background-color: #fffbeb;
   }
-  
+
   .log-entry.log-error {
       border-left: 3px solid var(--color-error);
       background-color: #fef2f2;
+  }
+
+  .log-entry.log-ok {
+      border-left: 3px solid var(--color-success);
+      background-color: #ecfdf5;
+  }
+
+  .log-entry.log-warn {
+      border-left: 3px solid #f59e0b;
+      background-color: #fffbeb;
+  }
+
+  .log-entry.log-move_start {
+      border-left: 3px solid var(--color-accent);
+      background-color: #eff6ff;
+  }
+
+  .log-entry.log-move_done {
+      border-left: 3px solid var(--color-success);
+      background-color: #ecfdf5;
+  }
+
+  .log-entry.log-status {
+      border-left: 3px solid #6b7280;
+      background-color: #f3f4f6;
   }
   
   .log-entry.hidden {

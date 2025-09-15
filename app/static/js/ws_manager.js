@@ -19,13 +19,13 @@
             const ws = new WebSocket(this.url);
             this.ws = ws;
             ws.addEventListener('open', () => {
-                logToConsole('WebSocket connesso','success');
+                logToConsole('WebSocket connesso','ok');
                 setSystemStatus('Connesso');
                 this.requestStatus();
             });
             ws.addEventListener('message', e => this.handleMessage(e.data));
             ws.addEventListener('close', () => {
-                logToConsole('WebSocket chiuso','warning');
+                logToConsole('WebSocket chiuso','warn');
                 setSystemStatus('Disconnesso');
                 this.scheduleReconnect();
             });
@@ -38,7 +38,7 @@
             if(this.reconnectTimeout) return;
             this.reconnectTimeout = setTimeout(() => {
                 this.reconnectTimeout = null;
-                logToConsole('Riconnessione WebSocket...','warning');
+                logToConsole('Riconnessione WebSocket...','warn');
                 this.connect();
             }, RECONNECT_DELAY);
         }

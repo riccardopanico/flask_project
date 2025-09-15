@@ -63,7 +63,7 @@
     }
 
     const showError = msg => logToConsole(`❌ ERRORE: ${msg}`, 'error');
-    const showSuccess = msg => logToConsole(`✅ ${msg}`, 'success');
+    const showSuccess = msg => logToConsole(`✅ ${msg}`, 'ok');
 
     const initGlobalEvents = () => setupLogFilters();
 

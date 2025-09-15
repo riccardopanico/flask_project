@@ -162,8 +162,8 @@
     <!-- Sezione Task Automatici -->
     <section id="automatic-tasks" class="section-content hidden">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <!-- Task Preimpostati -->
-            <div class="bg-white border border-gray-200 p-4">
+        <!-- Task Preimpostati -->
+        <div class="bg-white border border-gray-200 p-4">
                 <h2 class="text-lg font-semibold mb-3 text-blue-600 flex items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -178,95 +178,146 @@
                 </div>
             </div>
 
-            <!-- Configurazione Task -->
-            <div class="bg-white border border-gray-200 p-4">
-                <h2 class="text-lg font-semibold mb-3 text-blue-600 flex items-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                        </path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    Configurazione Task
-                </h2>
-
-                <div class="space-y-3">
-                    <!-- Nome Task -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Task</label>
-                        <input type="text" id="task-name" placeholder="Nome del task"
-                            class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
-                    </div>
-
-                    <!-- Descrizione Task -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Descrizione</label>
-                        <textarea id="task-description" placeholder="Descrizione del task" rows="2"
-                            class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500"></textarea>
-                    </div>
-
-                    <!-- Parametri di configurazione -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Angolazioni Verticali</label>
-                            <input type="number" id="vertical-angles" value="3" min="1" max="10"
-                                class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Step Angolare Orizzontale
-                                (°)</label>
-                            <input type="number" id="horizontal-step" value="20" min="1" max="90"
-                                class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Delay tra Movimenti (sec)</label>
-                        <input type="number" id="movement-delay" value="2" min="0.5" max="10"
-                            step="0.5"
-                            class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
-                    </div>
-
-                    <!-- Modalità operative -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Modalità Operativa</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center">
-                                <input type="radio" name="operation-mode" value="sequential" checked>
-                                <span class="text-sm ml-2">Sequenziale (rotazione per ogni angolazione)</span>
-                            </label>
-                            <label class="flex items-center">
-                                <input type="radio" name="operation-mode" value="alternate">
-                                <span class="text-sm ml-2">Alternata (angolazioni alternate per ogni step)</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Azioni Task -->
-                    <div class="flex space-x-2 pt-2">
-                        <button id="save-task"
-                            class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium">
-                            Salva Task
-                        </button>
-                        <button id="load-task"
-                            class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium">
-                            Carica Task
-                        </button>
-                    </div>
+        <!-- Colonna centrale: configurazione -->
+        <div class="bg-white border border-gray-200 p-4">
+            <h2 class="text-lg font-semibold mb-3 text-blue-600 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Configurazione Task
+            </h2>
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nome Task</label>
+                    <input type="text" id="task-name" placeholder="Nome del task"
+                        class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Descrizione</label>
+                    <textarea id="task-description" placeholder="Descrizione del task" rows="2"
+                        class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500"></textarea>
                 </div>
             </div>
+            <div class="flex space-x-2 mb-4">
+                <button class="task-tab-btn active-task-tab" data-target="manual-config">Configurazione Manuale</button>
+                <button class="task-tab-btn" data-target="guided-generator">Generatore Guidato</button>
+            </div>
+            <div id="manual-config" class="task-tab-content">
+                <!-- Libreria comandi riorganizzata -->
+                <div id="command-library" class="space-y-4">
+                        <details open>
+                            <summary class="font-medium text-gray-700 cursor-pointer">Movimento Braccio</summary>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <label class="text-sm self-center">B (°)</label>
+                                <input type="number" id="cmd-B" min="0" max="90" step="0.1" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div class="mt-2 flex space-x-2">
+                                <button class="group-add px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-group="movement">Aggiorna</button>
+                                <button class="action-cmd px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-cmd="HOMING_B">Homing Braccio</button>
+                            </div>
+                        </details>
 
-            <!-- Controlli Operativi -->
-            <div class="bg-white border border-gray-200 p-4">
-                <h2 class="text-lg font-semibold mb-3 text-blue-600 flex items-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    Controlli Operativi
-                </h2>
+                        <details>
+                            <summary class="font-medium text-gray-700 cursor-pointer">Rotazione Piattaforma</summary>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <label class="text-sm self-center">P_OR (°)</label>
+                                <input type="number" id="cmd-P_OR" min="0" step="1" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                <label class="text-sm self-center">P_AN (°)</label>
+                                <input type="number" id="cmd-P_AN" min="0" step="1" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div class="mt-2 flex space-x-2">
+                                <button class="group-add px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-group="rotation">Aggiorna</button>
+                                <button class="action-cmd px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-cmd="RESET_POS">Reset Posizione</button>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary class="font-medium text-gray-700 cursor-pointer">Configurazione</summary>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <label class="text-sm self-center">SPEED_B</label>
+                                <input type="number" id="cmd-SPEED_B" min="50" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                <label class="text-sm self-center">SPEED_P</label>
+                                <input type="number" id="cmd-SPEED_P" min="50" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                <label class="text-sm self-center">MOVE_DELAY</label>
+                                <input type="number" id="cmd-MOVE_DELAY" min="0" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div class="mt-2">
+                                <button class="group-add px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-group="config">Aggiorna</button>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary class="font-medium text-gray-700 cursor-pointer">Limiti</summary>
+                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                <label class="text-sm self-center">SW_B</label>
+                                <select id="cmd-SW_B" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                    <option value="ON">ON</option>
+                                    <option value="OFF">OFF</option>
+                                </select>
+                                <label class="text-sm self-center">HW_B</label>
+                                <select id="cmd-HW_B" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                    <option value="ON">ON</option>
+                                    <option value="OFF">OFF</option>
+                                </select>
+                                <label class="text-sm self-center">SW_P</label>
+                                <select id="cmd-SW_P" class="px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                                    <option value="ON">ON</option>
+                                    <option value="OFF">OFF</option>
+                                </select>
+                            </div>
+                            <div class="mt-2">
+                                <button class="group-add px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white" data-group="limits">Aggiorna</button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            <div id="guided-generator" class="task-tab-content hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Step Tilt</label>
+                        <input type="number" id="gen-tilt-steps" min="1" value="3" class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Giri per Step</label>
+                        <input type="number" id="gen-platform-turns" min="1" value="1" class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Direzione</label>
+                        <select id="gen-direction" class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                            <option value="cw">Oraria</option>
+                            <option value="ccw">Antioraria</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Delay (ms)</label>
+                        <input type="number" id="gen-delay" min="0" class="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button id="generate-advanced" class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white">Genera</button>
+                </div>
+            </div>
+            <div class="pt-2">
+                <button id="save-task"
+                    class="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium">
+                    Salva Task
+                </button>
+            </div>
+        </div>
+
+        <!-- Controlli Operativi -->
+        <div class="bg-white border border-gray-200 p-4">
+            <h2 class="text-lg font-semibold mb-3 text-blue-600 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                </svg>
+                Controlli Operativi
+            </h2>
 
                 <!-- Stato task -->
                 <div class="mb-4 p-3 bg-gray-50 border border-gray-200">
@@ -318,9 +369,17 @@
                         <span id="progress-text">0%</span>
                     </div>
                     <div class="w-full bg-gray-200 h-2">
-                        <div id="progress-bar" class="bg-blue-600 h-2 transition-all duration-300" style="width: 0%">
-                        </div>
+                        <div id="progress-bar" class="bg-blue-600 h-2 transition-all duration-300" style="width: 0%"></div>
                     </div>
+                </div>
+
+                <!-- Sequenza Comandi -->
+                <div class="mt-4">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-sm text-gray-600">Sequenza Comandi</label>
+                        <button id="copy-sequence" class="copy-btn">Copia</button>
+                    </div>
+                    <ul id="command-list" class="border border-gray-300 bg-gray-50 divide-y divide-gray-300"></ul>
                 </div>
             </div>
         </div>
@@ -339,10 +398,13 @@
                 Log operativi
             </h3>
             <div class="log-filters">
-                <button class="filter-btn" data-filter="info">Info</button>
-                <button class="filter-btn" data-filter="success">Success</button>
-                <button class="filter-btn" data-filter="warning">Warning</button>
-                <button class="filter-btn" data-filter="error">Error</button>
+                <button class="filter-btn info" data-filter="info">Info</button>
+                <button class="filter-btn ok" data-filter="ok">OK</button>
+                <button class="filter-btn warn" data-filter="warn">Warn</button>
+                <button class="filter-btn error" data-filter="error">Error</button>
+                <button class="filter-btn move_start" data-filter="move_start">Move Start</button>
+                <button class="filter-btn move_done" data-filter="move_done">Move Done</button>
+                <button class="filter-btn status" data-filter="status">Status</button>
                 <button class="filter-btn" data-filter="all">Mostra Tutti</button>
                 <button class="filter-btn" data-filter="clear">Pulisci</button>
             </div>

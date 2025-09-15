@@ -11,32 +11,27 @@ $(function(){
             running: false,
             current: null,
             progress: 0,
-            config: {
-                verticalAngles: 3,
-                horizontalStep: 20,
-                movementDelay: 2,
-                operationMode: 'sequential'
-            },
+            sequence: [],
             presets: [
                 {
-                    id: 'quick-scan', name: 'Scansione Rapida 4x90°',
-                    description: 'Scansione veloce con 4 angolazioni verticali e step di 90°',
-                    config: { verticalAngles: 4, horizontalStep: 90, movementDelay: 1, operationMode: 'sequential' }
+                    id: 'quick-scan', name: 'Scansione Rapida',
+                    description: '4 livelli verticali, rotazione oraria',
+                    sequence: ['B=0','P_OR=360','B=30','P_OR=360','B=60','P_OR=360','B=90','P_OR=360']
                 },
                 {
                     id: 'high-def-vertical', name: 'Alta Definizione Verticale',
-                    description: 'Scansione dettagliata con 8 angolazioni verticali e step di 15°',
-                    config: { verticalAngles: 8, horizontalStep: 15, movementDelay: 3, operationMode: 'sequential' }
+                    description: '8 livelli verticali, rotazione oraria',
+                    sequence: ['B=0','P_OR=360','B=12.9','P_OR=360','B=25.7','P_OR=360','B=38.6','P_OR=360','B=51.4','P_OR=360','B=64.3','P_OR=360','B=77.1','P_OR=360','B=90','P_OR=360']
                 },
                 {
                     id: 'three-level-inspection', name: 'Ispezione a 3 Livelli',
-                    description: 'Ispezione standard con 3 livelli di inclinazione',
-                    config: { verticalAngles: 3, horizontalStep: 30, movementDelay: 2, operationMode: 'alternate' }
+                    description: '3 livelli verticali, rotazione antioraria',
+                    sequence: ['B=0','P_AN=360','B=45','P_AN=360','B=90','P_AN=360']
                 },
                 {
                     id: 'ultra-fine-scan', name: 'Scansione Ultra Fine',
-                    description: 'Scansione di precisione con step di 5° e 10 angolazioni',
-                    config: { verticalAngles: 10, horizontalStep: 5, movementDelay: 4, operationMode: 'sequential' }
+                    description: '10 livelli verticali, rotazione oraria',
+                    sequence: ['B=0','P_OR=360','B=10','P_OR=360','B=20','P_OR=360','B=30','P_OR=360','B=40','P_OR=360','B=50','P_OR=360','B=60','P_OR=360','B=70','P_OR=360','B=80','P_OR=360','B=90','P_OR=360']
                 }
             ],
             custom: []
@@ -61,31 +56,56 @@ $(function(){
         }
     }
 
+    function renderStatusBadge(){
+        let status = AppState.system.status || 'Idle';
+        if(AppState.task.running){
+            status = 'In Esecuzione';
+        }else if(AppState.task.progress === 100){
+            status = 'Completato';
+        }else if(status === 'STOP'){ // fermato manualmente
+            status = 'Interrotto';
+        }else if(AppState.task.progress > 0 && status !== 'Errore' && status !== 'Disconnesso'){
+            status = 'Interrotto';
+        }
+
+        const classMap = {
+            'Idle': 'idle',
+            'Connesso': 'idle',
+            'In Esecuzione': 'running',
+            'Movimento': 'running',
+            'Completato': 'completed',
+            'Interrotto': 'error',
+            'Errore': 'error',
+            'Disconnesso': 'error'
+        };
+
+        $('#dashboard-status')
+            .text(status)
+            .removeClass('idle running completed error')
+            .addClass(classMap[status] || 'idle');
+    }
+
     function updateDashboard(){
         $('#dashboard-platform').text(`${AppState.platform.angle}°`);
         $('#dashboard-tilt').text(`${AppState.tilt.angle}°`);
         $('#dashboard-progress').text(`${AppState.task.progress}%`);
-
-        let status = AppState.system.status || 'Idle';
-        let statusClass = 'idle';
-        if(AppState.task.running){
-            statusClass = 'running';
-        }else if(AppState.task.progress === 100){
-            statusClass = 'completed';
-        }else if(AppState.task.progress > 0){
-            statusClass = 'error';
-        }
-        $('#dashboard-status').text(status).removeClass('idle running completed error').addClass(statusClass);
+        renderStatusBadge();
         $('#current-mode').text(AppState.ui.currentSection === 'manual-control' ? 'Controllo Manuale' : 'Task Automatici');
     }
 
+    function updateManualInputsState(){
+        const disabled = AppState.task.running || AppState.system.status === 'Movimento';
+        $('#platform-input, #tilt-input').prop('disabled', disabled);
+    }
+
     function setManualControlsEnabled(enabled){
-        $('#manual-control button, #manual-control input').prop('disabled', !enabled);
+        $('#manual-control button').prop('disabled', !enabled);
+        updateManualInputsState();
     }
 
     function manualCommandsAllowed(){
-        if(AppState.task.running){
-            showError('Comando non consentito: task in corso');
+        if(AppState.task.running || AppState.system.status === 'Movimento' || SerialManager.busy){
+            showError('Comando non consentito: movimento in corso');
             return false;
         }
         return true;
@@ -105,8 +125,6 @@ $(function(){
         return true;
     }
 
-    const changeAngle = (type, delta, opts={}) => setAngle(type, AppState[type].angle + delta, opts);
-
     function setTaskProgress(percent){
         const p = Math.max(0, Math.min(100, parseInt(percent)));
         updateTaskUI(AppState.task.running ? 'In Esecuzione' : 'Inattivo', p);
@@ -114,11 +132,15 @@ $(function(){
 
     function setTaskState(running){
         AppState.task.running = running;
+        setManualControlsEnabled(!running && AppState.system.status !== 'Movimento');
         updateTaskUI(running ? 'In Esecuzione' : 'Inattivo', AppState.task.progress);
+        updateManualInputsState();
     }
 
     function setSystemStatus(status){
         AppState.system.status = status;
+        setManualControlsEnabled(!AppState.task.running && status !== 'Movimento');
+        updateManualInputsState();
         updateDashboard();
     }
 
@@ -129,7 +151,8 @@ $(function(){
         $('#progress-bar').css('width', `${progress}%`);
         $('#start-scan').prop('disabled', AppState.task.running);
         $('#stop-scan').prop('disabled', !AppState.task.running);
-        $('#reset-position').prop('disabled', AppState.task.running);
+        const resetDisabled = AppState.task.running || AppState.system.status === 'Movimento';
+        $('#reset-position').prop('disabled', resetDisabled);
         updateDashboard();
     }
 
@@ -148,58 +171,81 @@ $(function(){
         if(target) switchSection(target);
     });
 
+    $('.task-tab-btn').click(function(){
+        const target = $(this).data('target');
+        $('.task-tab-content').addClass('hidden');
+        $(`#${target}`).removeClass('hidden');
+        $('.task-tab-btn').removeClass('active-task-tab');
+        $(this).addClass('active-task-tab');
+    });
+
     // -- Controllo Manuale ----------------------------------------------------
     $('#manual-control').on('click', '.control-btn[data-action="platform"]', function(){
         if(manualCommandsAllowed()){
-            changeAngle('platform', parseInt($(this).data('step')));
-            SerialManager.movePlatform(AppState.platform.angle);
+            const delta = parseInt($(this).data('step'));
+            const target = NORMALIZE(AppState.platform.angle + delta);
+            if(VALIDATORS.platform(target)) SerialManager.movePlatform(target);
+            else showError('Angolo piattaforma non valido');
         }
     });
     $('#platform-go').click(()=>{
         if(manualCommandsAllowed()){
-            setAngle('platform', parseFloat($('#platform-input').val()));
-            SerialManager.movePlatform(AppState.platform.angle);
+            const val = parseFloat($('#platform-input').val());
+            if(VALIDATORS.platform(val)) SerialManager.movePlatform(val);
+            else showError('Angolo piattaforma non valido');
         }
     });
     bindEnter('#platform-input', '#platform-go');
 
     $('#manual-control').on('click', '.control-btn[data-action="tilt"]', function(){
         if(manualCommandsAllowed()){
-            changeAngle('tilt', parseInt($(this).data('step')));
-            SerialManager.moveTilt(AppState.tilt.angle);
+            const delta = parseInt($(this).data('step'));
+            const target = AppState.tilt.angle + delta;
+            if(VALIDATORS.tilt(target)) SerialManager.moveTilt(target);
+            else showError('Angolo inclinazione non valido');
         }
     });
     $('#tilt-go').click(()=>{
         if(manualCommandsAllowed()){
-            setAngle('tilt', parseFloat($('#tilt-input').val()));
-            SerialManager.moveTilt(AppState.tilt.angle);
+            const val = parseFloat($('#tilt-input').val());
+            if(VALIDATORS.tilt(val)) SerialManager.moveTilt(val);
+            else showError('Angolo inclinazione non valido');
         }
     });
     bindEnter('#tilt-input', '#tilt-go');
 
     // -- Task Automatici ------------------------------------------------------
-    function updateTaskConfig(){
-        AppState.task.config.verticalAngles = parseInt($('#vertical-angles').val()) || 3;
-        AppState.task.config.horizontalStep = parseInt($('#horizontal-step').val()) || 20;
-        AppState.task.config.movementDelay = parseFloat($('#movement-delay').val()) || 2;
-        AppState.task.config.operationMode = $('input[name="operation-mode"]:checked').val();
+    function renderCommandList(){
+        const list = $('#command-list');
+        list.empty();
+        AppState.task.sequence.forEach((cmd, idx) => {
+            const item = $(`<li class="flex items-center justify-between px-2 py-1" data-idx="${idx}" draggable="true">
+                    <span>${cmd}</span>
+                    <button class="cmd-remove text-xs px-1 text-red-600" data-idx="${idx}">✕</button>
+                </li>`);
+            list.append(item);
+        });
     }
 
     function loadPresetTasks(){
         const container = $('#preset-tasks');
+        container.off('click', '.load-preset');
+        container.off('click', '.start-preset');
+        container.off('click', '.delete-task');
         container.empty();
-        AppState.task.presets.forEach(task => {
+        const tasks = [...AppState.task.presets, ...AppState.task.custom];
+        tasks.forEach(task => {
+            const isCustom = AppState.task.custom.some(t => t.id === task.id);
+            const deleteBtn = isCustom ? `<button class="task-btn delete-task" data-task-id="${task.id}">Elimina</button>` : '';
             const el = $(
                 `<div class="task-card" data-task-id="${task.id}">
                     <div class="task-name">${task.name}</div>
                     <div class="task-description">${task.description}</div>
-                    <div class="task-params">
-                        ${task.config.verticalAngles} angolazioni, step ${task.config.horizontalStep}°,
-                        delay ${task.config.movementDelay}s, ${task.config.operationMode}
-                    </div>
+                    <div class="task-params">${task.sequence ? task.sequence.length : 0} comandi</div>
                     <div class="task-actions">
                         <button class="task-btn primary load-preset" data-task-id="${task.id}">Carica</button>
                         <button class="task-btn start-preset" data-task-id="${task.id}">Avvia</button>
+                        ${deleteBtn}
                     </div>
                 </div>`);
             container.append(el);
@@ -211,146 +257,205 @@ $(function(){
             loadPresetTask($(this).data('task-id'));
             setTimeout(startAutomaticTask, 100);
         });
+        container.on('click', '.delete-task', function(){
+            const btn = $(this);
+            const taskId = btn.data('task-id');
+            if(!btn.data('confirm')){
+                btn.data('confirm', true).addClass('confirm').text('✅ Conferma');
+                setTimeout(() => {
+                    btn.data('confirm', false).removeClass('confirm').text('��� Elimina');
+                }, 3000);
+            }else{
+                AppState.task.custom = AppState.task.custom.filter(t => t.id !== taskId);
+                localStorage.setItem('customTasks', JSON.stringify(AppState.task.custom));
+                loadPresetTasks();
+                showSuccess('Task eliminato');
+                logToConsole(`Task eliminato: ${taskId}`, 'warn');
+            }
+        });
     }
 
     function loadPresetTask(taskId){
-        const t = AppState.task.presets.find(x => x.id === taskId);
+        const t = [...AppState.task.presets, ...AppState.task.custom].find(x => x.id === taskId);
         if(!t){ showError('Task non trovato'); return; }
         $('#task-name').val(t.name);
         $('#task-description').val(t.description);
-        $('#vertical-angles').val(t.config.verticalAngles);
-        $('#horizontal-step').val(t.config.horizontalStep);
-        $('#movement-delay').val(t.config.movementDelay);
-        $(`input[name="operation-mode"][value="${t.config.operationMode}"]`).prop('checked', true);
-        AppState.task.config = { ...t.config };
+        AppState.task.sequence = [...t.sequence];
         $('.task-card').removeClass('selected');
         $(`.task-card[data-task-id="${taskId}"]`).addClass('selected');
         logToConsole(`Task caricato: ${t.name}`,'info');
         showSuccess(`Task "${t.name}" caricato`);
+        renderCommandList();
     }
 
-    function saveCustomTask(){
+    function saveTask(){
         const name = $('#task-name').val().trim();
         const description = $('#task-description').val().trim();
         if(!name){ showError('Nome task obbligatorio'); return; }
-        updateTaskConfig();
-        const task = { id: 'custom-' + Date.now(), name, description, config: { ...AppState.task.config } };
+        if(AppState.task.sequence.length === 0){ showError('Sequenza vuota'); return; }
+        const task = { id: 'custom-' + Date.now(), name, description, sequence: [...AppState.task.sequence] };
         AppState.task.custom = AppState.task.custom.filter(t => t.name !== name);
         AppState.task.custom.push(task);
         localStorage.setItem('customTasks', JSON.stringify(AppState.task.custom));
-        logToConsole(`Task salvato: ${name}`, 'success');
+        loadPresetTasks();
+        logToConsole(`Task salvato: ${name}`, 'ok');
         showSuccess(`Task "${name}" salvato`);
     }
 
-    function loadCustomTask(){
-        if(AppState.task.custom.length === 0){ showError('Nessun task personalizzato salvato'); return; }
-        const names = AppState.task.custom.map(t => t.name);
-        const selected = prompt('Seleziona task:\n' + names.join('\n'));
-        if(!selected) return;
-        const task = AppState.task.custom.find(t => t.name === selected);
-        if(!task){ showError('Task non trovato'); return; }
-        $('#task-name').val(task.name);
-        $('#task-description').val(task.description);
-        $('#vertical-angles').val(task.config.verticalAngles);
-        $('#horizontal-step').val(task.config.horizontalStep);
-        $('#movement-delay').val(task.config.movementDelay);
-        $(`input[name="operation-mode"][value="${task.config.operationMode}"]`).prop('checked', true);
-        AppState.task.config = { ...task.config };
-        logToConsole(`Task personalizzato caricato: ${task.name}`, 'info');
-        showSuccess(`Task "${task.name}" caricato`);
-    }
-
-    function calculateScanPositions(){
-        const c = AppState.task.config; const p = [];
-        if(c.operationMode === 'sequential'){
-            for(let t=0;t<c.verticalAngles;t++){
-                const tilt = (90 / (c.verticalAngles - 1)) * t;
-                for(let plat=0; plat<360; plat+=c.horizontalStep){
-                    p.push({ platform: plat, tilt, step: p.length + 1 });
-                }
-            }
-        }else{
-            for(let plat=0; plat<360; plat+=c.horizontalStep){
-                for(let t=0;t<c.verticalAngles;t++){
-                    const tilt = (90 / (c.verticalAngles - 1)) * t;
-                    p.push({ platform: plat, tilt, step: p.length + 1 });
-                }
-            }
-        }
-        return p;
-    }
-
-    function executeMovement(platformAngle, tiltAngle, step, total){
-        return new Promise(res => {
-            setAngle('platform', platformAngle, {log:false});
-            setAngle('tilt', tiltAngle, {log:false});
-            const progress = Math.round((step / total) * 100);
-            updateTaskUI('In Esecuzione', progress);
-            logToConsole(`Step ${step}/${total}: Piattaforma ${platformAngle}°, Inclinazione ${tiltAngle}°`);
-            setTimeout(res, AppState.task.config.movementDelay * 1000);
-        });
-    }
-
-    async function startAutomaticTask(){
+    function startAutomaticTask(){
         if(AppState.task.running){ showError('Task già in esecuzione'); return; }
-        updateTaskConfig();
-        if(AppState.task.config.verticalAngles < 1 || AppState.task.config.verticalAngles > 10){
-            showError('Numero angolazioni verticali deve essere tra 1 e 10'); return;
-        }
-        if(AppState.task.config.horizontalStep < 1 || AppState.task.config.horizontalStep > 90){
-            showError('Step angolare orizzontale deve essere tra 1° e 90°'); return;
-        }
-        if(AppState.task.config.movementDelay < 0.5 || AppState.task.config.movementDelay > 10){
-            showError('Delay movimento deve essere tra 0.5 e 10 secondi'); return;
-        }
-        const positions = calculateScanPositions();
-        const total = positions.length;
-        if(total === 0){ showError('Nessuna posizione da scansionare'); return; }
-        AppState.task.running = true;
-        AppState.task.current = { positions, currentStep: 0, totalSteps: total };
-        updateTaskUI('Inizializzazione', 0);
-        logToConsole(`Avvio scansione automatica: ${total} posizioni totali`);
-        SerialManager.startTask(AppState.task.config);
-        for(let i=0;i<positions.length;i++){
-            if(!AppState.task.running){ logToConsole('Task interrotto dall\'utente','warning'); break; }
-            const pos = positions[i];
-            await executeMovement(pos.platform, pos.tilt, i+1, total);
-        }
-        if(AppState.task.running){
-            AppState.task.running = false;
-            updateTaskUI('Completato', 100);
-            logToConsole('Scansione automatica completata con successo','success');
-            showSuccess('Task automatico completato');
-        }
+        if(AppState.task.sequence.length === 0){ showError('Sequenza vuota'); return; }
+        const total = AppState.task.sequence.length;
+        AppState.task.current = { totalSteps: total, completed: 0 };
+        AppState.task.progress = 0;
+        const seq = AppState.task.sequence.join(';');
+        SerialManager.startTask(seq);
+        setTaskState(true);
+        setSystemStatus('Movimento');
+        logToConsole(`Avvio task automatico: ${total} comandi`);
     }
 
     function stopAutomaticTask(){
         if(!AppState.task.running){ showError('Nessun task in esecuzione'); return; }
-        AppState.task.running = false;
-        updateTaskUI('Interrotto', AppState.task.progress);
-        logToConsole('Task automatico interrotto dall\'utente','warning');
-        showSuccess('Task automatico interrotto');
         SerialManager.stopTask();
+        setTaskState(false);
+        setSystemStatus('STOP');
+        logToConsole('Richiesta interruzione task automatico','warn');
     }
 
     function resetToInitialPosition(){
-        if(AppState.task.running){ showError('Impossibile resettare durante task in esecuzione'); return; }
-        setAngle('platform', 0, {log:false});
-        setAngle('tilt', 0, {log:false});
-        SerialManager.movePlatform(0);
-        SerialManager.moveTilt(0);
-        updateTaskUI('Inattivo', 0);
-        logToConsole('Posizione resettata a 0°, 0°');
-        showSuccess('Posizione resettata');
+        if(AppState.task.running || AppState.system.status === 'Movimento' || SerialManager.busy){
+            showError('Impossibile resettare durante movimento in corso');
+            return;
+        }
+        SerialManager.resetPosition();
+        setSystemStatus('Movimento');
+        logToConsole('Reset posizione richiesto');
     }
 
     $('#start-scan').click(startAutomaticTask);
     $('#stop-scan').click(stopAutomaticTask);
     $('#reset-position').click(resetToInitialPosition);
-    $('#save-task').click(saveCustomTask);
-    $('#load-task').click(loadCustomTask);
-    $('#vertical-angles, #horizontal-step, #movement-delay').on('input', updateTaskConfig);
-    $('input[name="operation-mode"]').change(updateTaskConfig);
+    $('#save-task').click(saveTask);
+
+    function addGroupCommands(group){
+        let val;
+        switch(group){
+            case 'movement':
+                val = parseFloat($('#cmd-B').val());
+                if(!isNaN(val) && val >= 0 && val <= 90){
+                    AppState.task.sequence.push(`B=${val.toFixed(1)}`);
+                }
+                break;
+            case 'rotation':
+                val = parseFloat($('#cmd-P_OR').val());
+                if(!isNaN(val) && val >= 0){ AppState.task.sequence.push(`P_OR=${val}`); }
+                val = parseFloat($('#cmd-P_AN').val());
+                if(!isNaN(val) && val >= 0){ AppState.task.sequence.push(`P_AN=${val}`); }
+                break;
+            case 'config':
+                val = parseInt($('#cmd-SPEED_B').val(),10);
+                if(!isNaN(val) && val >= 50){ AppState.task.sequence.push(`SPEED_B=${val}`); }
+                val = parseInt($('#cmd-SPEED_P').val(),10);
+                if(!isNaN(val) && val >= 50){ AppState.task.sequence.push(`SPEED_P=${val}`); }
+                val = parseInt($('#cmd-MOVE_DELAY').val(),10);
+                if(!isNaN(val) && val >= 0){ AppState.task.sequence.push(`MOVE_DELAY=${val}`); }
+                break;
+            case 'limits':
+                val = $('#cmd-SW_B').val();
+                if(val) AppState.task.sequence.push(`SW_B_${val}`);
+                val = $('#cmd-HW_B').val();
+                if(val) AppState.task.sequence.push(`HW_B_${val}`);
+                val = $('#cmd-SW_P').val();
+                if(val) AppState.task.sequence.push(`SW_P_${val}`);
+                break;
+        }
+        renderCommandList();
+    }
+
+    $('#command-library').on('click', '.group-add', function(){
+        const group = $(this).data('group');
+        addGroupCommands(group);
+    });
+
+    $('#command-library').on('click', '.action-cmd', function(){
+        const cmd = $(this).data('cmd');
+        if(cmd){
+            AppState.task.sequence.push(cmd);
+            renderCommandList();
+        }
+    });
+
+    function generateAdvancedSequence(){
+        const steps = parseInt($('#gen-tilt-steps').val(),10);
+        const turns = parseInt($('#gen-platform-turns').val(),10);
+        const direction = $('#gen-direction').val();
+        const delay = parseInt($('#gen-delay').val(),10);
+        if(isNaN(steps) || steps <= 0 || isNaN(turns) || turns <= 0){
+            showError('Parametri generatore non validi');
+            return;
+        }
+        const seq = [];
+        const stepAngle = steps === 1 ? 0 : 90/(steps-1);
+        for(let i=0;i<steps;i++){
+            const angle = (stepAngle*i).toFixed(1);
+            seq.push(`B=${angle}`);
+            for(let r=0;r<turns;r++){
+                seq.push(direction === 'ccw' ? 'P_AN=360' : 'P_OR=360');
+            }
+            if(!isNaN(delay)) seq.push(`MOVE_DELAY=${delay}`);
+        }
+        AppState.task.sequence = seq;
+        renderCommandList();
+    }
+
+    $('#generate-advanced').click(generateAdvancedSequence);
+    $('#gen-tilt-steps, #gen-platform-turns, #gen-direction, #gen-delay').on('input', generateAdvancedSequence);
+    $('#command-list').on('click', '.cmd-remove', function(){
+        const idx = parseInt($(this).data('idx'),10);
+        AppState.task.sequence.splice(idx,1);
+        renderCommandList();
+    });
+
+    function copySequence(){
+        if(AppState.task.sequence.length === 0){ showError('Sequenza vuota'); return; }
+        const seq = `TASK=${AppState.task.sequence.join(';')}`;
+        navigator.clipboard.writeText(seq).then(() => {
+            showSuccess('Comandi copiati negli appunti');
+        }).catch(() => {
+            showError('Copia negli appunti non riuscita');
+        });
+    }
+    $('#copy-sequence').click(copySequence);
+
+    let dragIdx = null;
+    $('#command-list').on('dragstart', 'li', function(){
+        dragIdx = $(this).data('idx');
+        $(this).addClass('dragging');
+    });
+    $('#command-list').on('dragover', 'li', function(e){
+        e.preventDefault();
+        $(this).addClass('drag-over');
+    });
+    $('#command-list').on('dragleave', 'li', function(){
+        $(this).removeClass('drag-over');
+    });
+    $('#command-list').on('drop', 'li', function(e){
+        e.preventDefault();
+        const targetIdx = $(this).data('idx');
+        if(dragIdx !== null && dragIdx !== targetIdx){
+            const seq = AppState.task.sequence;
+            const [moved] = seq.splice(dragIdx,1);
+            seq.splice(targetIdx,0,moved);
+            renderCommandList();
+        }
+    });
+    $('#command-list').on('dragend', 'li', function(){
+        $(this).removeClass('dragging');
+        $('#command-list li').removeClass('drag-over');
+        dragIdx = null;
+    });
+
 
     function loadCustomTasksFromStorage(){
         try{
@@ -363,17 +468,11 @@ $(function(){
         loadCustomTasksFromStorage();
         switchSection('manual-control');
         loadPresetTasks();
-        updateAngleDom('platform');
-        updateAngleDom('tilt');
         updateTaskUI('Inattivo',0);
+        generateAdvancedSequence();
         logToConsole('Sistema di controllo meccatronico inizializzato');
-        logToConsole('Piattaforma: 0°, Inclinazione: 0°');
-        logToConsole('Pronto per operazioni manuali e automatiche');
-        logToConsole('Sistema pronto per task automatici');
         $('#connect-serial').on('click', () => SerialManager.connectSerial());
-        setTimeout(()=> {
-            logToConsole('Hardware pronto');
-        }, 1000);
+        updateManualInputsState();
     }
 
     initializeApp();

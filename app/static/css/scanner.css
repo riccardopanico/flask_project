@@ -26,3 +26,54 @@
 .toggle .slider:before{position:absolute;content:"";height:16px;width:16px;left:2px;bottom:2px;background:white;transition:.4s;border-radius:50%;}
 .toggle input:checked + .slider{background:#4ade80;}
 .toggle input:checked + .slider:before{transform:translateX(22px);}
+
+/* Tabs per configurazione task */
+.task-tab-btn {
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    background: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.task-tab-btn.active-task-tab {
+    background: var(--color-accent);
+    color: #ffffff;
+}
+
+/* Lista comandi con drag & drop */
+#command-list li {
+    cursor: grab;
+    transition: background 0.2s;
+}
+
+#command-list li.dragging {
+    opacity: 0.5;
+}
+
+#command-list li.drag-over {
+    border-top: 2px solid var(--color-accent);
+    background: #f1f5f9;
+}
+
+/* Pulsante copia sequenza */
+.copy-btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    background: var(--color-accent);
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+}
+
+.copy-btn:hover {
+    background: #2563eb;
+}
+
+/* Conferma eliminazione task */
+.task-btn.confirm {
+    background-color: var(--color-success);
+    color: #ffffff;
+    border-color: var(--color-success);
+}

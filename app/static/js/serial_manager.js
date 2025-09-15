@@ -29,7 +29,7 @@
                 this.port.readable.pipeTo(this.decoder.writable);
                 this.reader = this.decoder.readable.getReader();
 
-                window.logToConsole('Porta seriale connessa','success');
+                window.logToConsole('Porta seriale connessa','ok');
                 window.setSystemStatus('Connesso');
 
                 this.readLoop();
@@ -65,15 +65,42 @@
                 return;
             }
             if(line.startsWith('STATUS')){
+                window.logToConsole(`<- ${line}`, 'status');
                 this.statusBuffer = [line.substring(line.indexOf('{'))];
                 if(line.includes('}')) this.finishStatus();
                 return;
             }
-            window.logToConsole(`<- ${line}`);
-            if(line.startsWith('OK')) window.showSuccess(line.substring(3));
-            if(line.startsWith('ERROR')) window.showError(line.substring(6));
-            this.busy = false;
-            this.processQueue();
+
+            let type = 'info';
+            if(line.startsWith('ERROR') || line.startsWith('STOP')) type = 'error';
+            else if(line.startsWith('WARN')) type = 'warn';
+            else if(line.startsWith('OK')) type = 'ok';
+            else if(line.startsWith('MOVE_START')) type = 'move_start';
+            else if(line.startsWith('MOVE_DONE') || line.startsWith('TASK: DONE')) type = 'move_done';
+
+            window.logToConsole(`<- ${line}`, type);
+
+            if(line.startsWith('TASK: STARTED')){
+                window.setTaskState(true);
+                window.setTaskProgress(0);
+                window.setSystemStatus('Movimento');
+                return;
+            }
+            if(line.startsWith('TASK: DONE')){
+                window.setTaskState(false);
+                window.setTaskProgress(100);
+                window.setSystemStatus('Completato');
+                return;
+            }
+            if(line.startsWith('STOP')){
+                window.setTaskState(false);
+                window.setSystemStatus('STOP');
+                window.showError(line.substring(line.indexOf(':')+1).trim());
+                return;
+            }
+            if(line.startsWith('OK')) window.showSuccess(line.substring(3).trim());
+            else if(line.startsWith('ERROR')) window.showError(line.substring(6).trim());
+            // La coda viene sbloccata solo dopo il messaggio STATUS
         },
 
         finishStatus(){
@@ -87,6 +114,20 @@
                     window.setAngle('tilt', parseFloat(data.angle_braccio), {log:false});
                 if(data.is_moving !== undefined)
                     window.setSystemStatus(data.is_moving ? 'Movimento' : 'Idle');
+                if(window.AppState.task.running && data.last_command){
+                    const m = data.last_command.match(/^P_(OR|AN)=(\d+)/);
+                    if(m){
+                        const angle = parseInt(m[2], 10);
+                        if(angle % 360 === 0){
+                            const cur = window.AppState.task.current;
+                            if(cur && cur.totalSteps){
+                                cur.completed = (cur.completed || 0) + angle / 360;
+                                const prog = Math.round((cur.completed / cur.totalSteps) * 100);
+                                window.setTaskProgress(prog);
+                            }
+                        }
+                    }
+                }
             }catch(e){
                 window.showError('Errore parsing STATUS: ' + e.message);
             }
@@ -107,7 +148,8 @@
             try{
                 this.busy = true;
                 await this.writer.write(msg);
-                window.logToConsole(`-> ${msg.trim()}`);
+                const type = msg.trim()==='STOP' ? 'warn' : 'info';
+                window.logToConsole(`-> ${msg.trim()}`, type);
             }catch(e){
                 window.showError('Errore invio: ' + e.message);
                 this.busy = false;
@@ -118,14 +160,22 @@
             this.queue = [];
             this.stopFlag = true;
             if(this.writer) this.writer.write('STOP\n');
-            window.logToConsole('-> STOP');
+            window.logToConsole('-> STOP','warn');
             setTimeout(()=>{ this.stopFlag = false; this.busy = false; this.processQueue(); }, 100);
         },
 
-        movePlatform(angle){ this.sendCommand(`P=${angle}`); },
+        movePlatform(angle, dir){
+            if(angle === 360){
+                const d = dir || (window.AppState?.task?.config?.rotationDirection || 'cw');
+                this.sendCommand(d === 'ccw' ? 'P_AN=360' : 'P_OR=360');
+            }else{
+                this.sendCommand(`P=${angle}`);
+            }
+        },
         moveTilt(angle){ this.sendCommand(`B=${angle}`); },
         startTask(seq){ this.sendCommand(`TASK=${seq}`); },
         stopTask(){ this.handleStop(); },
+        resetPosition(){ this.sendCommand('RESET_POS'); },
         requestStatus(){ this.sendCommand('STATUS'); }
     };
 
